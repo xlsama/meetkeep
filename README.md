@@ -39,6 +39,12 @@
 * 🔌 Optional MCP server so Claude Code and Codex can read your meetings (read-only, text-only, off by default).
 * 🍎 Requires macOS 15+ and Apple Silicon.
 
+## Works with
+
+Zoom · Microsoft Teams · Google Meet · Slack Huddles · Tencent Meeting · Lark · DingTalk
+
+Transcribes offline · no bot joins your call.
+
 ## Privacy
 
 Transcription and speaker ID run on-device. Audio is never uploaded. Aside from these four cases, Kept does not reach the network:

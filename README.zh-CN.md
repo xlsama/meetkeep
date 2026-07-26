@@ -39,6 +39,12 @@
 * 🔌 可选 MCP Server，让 Claude Code、Codex 只读会议文本（默认关闭，纯文本）。
 * 🍎 需要 macOS 15+ 与 Apple Silicon。
 
+## 适配
+
+Zoom · Microsoft Teams · Google Meet · Slack Huddles · 腾讯会议 · 飞书 · 钉钉
+
+转写不联网 · 不用拉机器人进会。
+
 ## 隐私
 
 转写与说话人识别都在本机完成，音频不会上传。除下面四种情况外，Kept 不会访问网络：
