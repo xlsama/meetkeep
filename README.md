@@ -1,93 +1,71 @@
-<div align="center">
+<p align="center">
+  <img src="screenshots/logo.png" alt="Kept" width="96" height="96"/>
+</p>
 
-# Kept
+<p align="center">
+  <strong>Kept</strong><br/>
+  When the meeting's over, you're done.
+</p>
 
-**When the meeting's over, you're done.**
+<p align="center">
+  The meeting notetaker for Apple Silicon Macs. It records, transcribes, and writes down what actually matters — all on your own machine. The audio never leaves.
+</p>
 
-The meeting notetaker for Apple Silicon Macs. It records, transcribes, and writes down what
-actually matters — all on your own machine. The audio never leaves it.
-
-[**kept.lixiaolong.me**](https://kept.lixiaolong.me) · [Changelog](https://kept.lixiaolong.me/changelog/) · [中文说明](./README.zh-CN.md)
-
-</div>
+<p align="center">
+  <a href="https://keptmac.com"><strong>keptmac.com</strong></a>
+  ·
+  <a href="https://keptmac.com/changelog/">Changelog</a>
+  ·
+  <a href="https://github.com/xlsama/kept/issues">Issues</a>
+  ·
+  <a href="./README.zh-CN.md">中文</a>
+</p>
 
 ---
 
-> **This repository is for issues and questions.** Kept's source lives in a private repo — what
-> you'll find here is the README above and the issue tracker below. If something is broken, missing,
-> or confusing, [open an issue](https://github.com/xlsama/kept/issues) and it lands in front of the
-> person who wrote the code.
+<img src="screenshots/en-hero.webp" alt="Kept meeting view: word-level transcript on the left, AI notes on the right" width="100%"/>
 
-## What it does
+<img src="screenshots/en-summary.webp" alt="Kept visual summary: takeaways, decisions, and action items on one page" width="100%"/>
 
-**It starts itself.** Join a call and a small bar appears in the corner. Ten seconds after the last
-person leaves, it stops and starts transcribing. You don't take a single note.
+## Features
 
-**It runs on your Mac.** FireRedASR2 for Chinese, Parakeet for English. Which second each word lands
-on is measured from the audio itself, not estimated from word count — click any word and playback
-jumps there. Mixed Chinese and English stays intact.
-
-**The notes are usable.** Most AI notes just tell you the meeting again; the person receiving them
-ends up asking another AI to shorten it. Kept writes outcomes only: what was decided, who owns it,
-when it's due, what's still open. Don't trust a line? Click it and land on the exact words.
-
-**It knows who is who.** Plenty of tools drop a twenty-person call into one single "speaker". Kept
-separates everyone, and once you enroll a colleague's voice their name shows up in every meeting
-after that. Below the confidence threshold it writes "Speaker 1" rather than guessing.
-
-Also: three recording sources (mic / mic + one app / mic + everything), audio and video import,
-lossless two-track FLAC with echo cancellation, full-text search across every meeting, export to
-Markdown / TXT / mixed m4a, an MCP server so Claude Code and Codex can read your meetings
-(read-only, text-only, off by default), and an ⌥⌘R global hotkey.
+* 💻 Native macOS app. Written in Swift. Built for Apple Silicon.
+* 🎙️ **Starts itself** — Join a call and recording begins. About ten seconds after the last person leaves, it stops and starts transcribing.
+* 🔒 **Runs on your Mac** — FireRedASR2 for Chinese, Parakeet for English. Word-level timestamps from the audio. Mixed Chinese and English stay intact.
+* 📝 **Notes you can use** — Decisions, owners, due dates, open questions. Click any line to hear the original words. One-page visual summary for chat or updates.
+* 👥 **Knows who is who** — Separates speakers; enroll a voice once and names carry across meetings.
+* 🎛️ Three recording sources: mic / mic + one app / mic + system audio. Import audio and video too.
+* 🔍 Full-text search across every meeting. Export to Markdown, TXT, or mixed m4a.
+* 🔌 Optional MCP server so Claude Code and Codex can read your meetings (read-only, text-only, off by default).
+* 🍎 Requires macOS 15+ and Apple Silicon.
 
 ## Privacy
 
-Apart from these four things, nothing goes out. The same list is printed inside the app, so you can
-sit with a firewall and count:
+Transcription and speaker ID run on-device. Audio is never uploaded. Aside from these four cases, Kept does not reach the network:
 
 1. License activation, renewal, deactivation
-2. Checking whether a new version exists
-3. Downloading the speech models (HuggingFace or a mirror)
-4. The AI service *you* configured — text only, and only after you approve it
+2. Checking for updates
+3. Downloading speech models (HuggingFace or a mirror)
+4. The AI provider *you* configure — text only, after you approve
 
-No cloud transcription. No bot joining your call. No telemetry. Audio, voiceprints and screen
-content never leave the machine.
+No cloud transcription. No bot joins your call. No telemetry.
 
-## Accuracy
+## Download
 
-| What | Number | Measured on |
-|---|---|---|
-| Chinese meetings, character error rate | 9.3% | our own set of real meetings |
-| Speaker attribution accuracy | 88.0% (en) / 82.2% (zh) | 25 sessions, 15.2 h, hand-labelled (AMI / AISHELL-4) |
-| Speaker verification EER | 0.26% | VoxCeleb1-O |
+* [Download for Mac](https://keptmac.com)
 
-Every release is measured again, and the method, definitions and raw results are published with it.
-A new model only ships when it wins on two independent measures — one is not enough.
+## Issues
 
-A one-hour meeting takes about 12 minutes to process, speakers included, without going online.
+This public repo is for [issues and questions](https://github.com/xlsama/kept/issues). Source lives elsewhere.
 
-## Requirements
+Useful context for a bug report:
 
-- macOS 15 or later
-- Apple Silicon (no Intel Mac or Windows build — on-device transcription leans on the Neural Engine
-  and unified memory, and we'd rather not ship a version that technically runs but is miserable)
-- ~1 GB for the speech models, downloaded on first launch
+* Kept version (Settings › General) and macOS version
+* What you did, what you expected, what happened
+* For transcription or notes: language and roughly how long the meeting was
 
-## Pricing
+Please don't paste private meeting content — this tracker is public. Sensitive matters: <im.xlsama@gmail.com>
 
-$49.9 once — 12 months of updates, your own 2 Macs, 30-day refund, every feature in one edition.
-From month 13 renewal is optional and only affects access to new versions; skip it and your build
-keeps working forever. AI notes run on your own API key, so that cost goes straight to the provider.
+---
 
-Payments and invoicing are handled by Creem as merchant of record.
-
-## Reporting something
-
-[Open an issue.](https://github.com/xlsama/kept/issues) Useful things to include for a bug:
-
-- Kept version (Settings › General › Current version) and your macOS version
-- What you did, what you expected, what happened instead
-- If it's about transcription or notes: which language, roughly how long the meeting was
-
-Please don't paste meeting content you'd rather not make public — this tracker is world-readable.
-If something is sensitive, mail <im.xlsama@gmail.com> instead.
+Kept is built for people who sit in too many meetings and still want the notes to be useful. If it saves you a few hours a week, a license keeps the work going ❤️
