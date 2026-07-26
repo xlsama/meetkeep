@@ -64,8 +64,6 @@ Useful context for a bug report:
 * What you did, what you expected, what happened
 * For transcription or notes: language and roughly how long the meeting was
 
-Please don't paste private meeting content — this tracker is public. Sensitive matters: <im.xlsama@gmail.com>
-
 ---
 
 Kept is built for people who sit in too many meetings and still want the notes to be useful. If it saves you a few hours a week, a license keeps the work going ❤️
