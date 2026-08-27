@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="screenshots/logo.png" alt="Kept" width="96" height="96"/>
+  <img src="screenshots/logo.png" alt="MeetKeep" width="96" height="96"/>
 </p>
 
 <p align="center">
-  <strong>Kept</strong><br/>
+  <strong>MeetKeep</strong><br/>
   When the meeting's over, you're done.
 </p>
 
@@ -12,26 +12,26 @@
 </p>
 
 <p align="center">
-  <a href="https://keptmac.com"><strong>keptmac.com</strong></a>
+  <a href="https://meetkeep.app"><strong>meetkeep.app</strong></a>
   ·
-  <a href="https://keptmac.com/changelog/">Changelog</a>
+  <a href="https://meetkeep.app/changelog/">Changelog</a>
   ·
-  <a href="https://github.com/xlsama/kept/issues">Issues</a>
+  <a href="https://github.com/xlsama/meetkeep/issues">Issues</a>
   ·
   <a href="./README.zh-CN.md">中文</a>
 </p>
 
 ---
 
-<img src="screenshots/en-hero.webp" alt="Kept meeting view: word-level transcript on the left, AI notes on the right" width="100%"/>
+<img src="screenshots/en-hero.webp" alt="MeetKeep meeting view: word-level transcript on the left, AI notes on the right" width="100%"/>
 
-<img src="screenshots/en-summary.webp" alt="Kept visual summary: takeaways, decisions, and action items on one page" width="100%"/>
+<img src="screenshots/en-summary.webp" alt="MeetKeep visual summary: takeaways, decisions, and action items on one page" width="100%"/>
 
 ## Features
 
 * 💻 Native macOS app. Written in Swift. Built for Apple Silicon.
 * 🎙️ **Starts itself** — Join a call and recording begins. About ten seconds after the last person leaves, it stops and starts transcribing.
-* 🔒 **Runs on your Mac** — FireRedASR2 for Chinese, Parakeet for English. Word-level timestamps from the audio. Mixed Chinese and English stay intact.
+* 🔒 **Runs on your Mac** — Qwen3-ASR for Chinese, Parakeet for English. Word-level timestamps from the audio. Mixed Chinese and English stay intact.
 * 📝 **Notes you can use** — Decisions, owners, due dates, open questions. Click any line to hear the original words. One-page visual summary for chat or updates.
 * 👥 **Knows who is who** — Separates speakers; enroll a voice once and names carry across meetings.
 * 🎛️ Three recording sources: mic / mic + one app / mic + system audio. Import audio and video too.
@@ -47,7 +47,7 @@ Transcribes offline · no bot joins your call.
 
 ## Privacy
 
-Transcription and speaker ID run on-device. Audio is never uploaded. Aside from these four cases, Kept does not reach the network:
+Transcription and speaker ID run on-device. Audio is never uploaded. Aside from these four cases, MeetKeep does not reach the network:
 
 1. License activation, renewal, deactivation
 2. Checking for updates
@@ -58,18 +58,18 @@ No cloud transcription. No bot joins your call. No telemetry.
 
 ## Download
 
-* [Download for Mac](https://keptmac.com)
+* [Download for Mac](https://meetkeep.app)
 
 ## Issues
 
-This public repo is for [issues and questions](https://github.com/xlsama/kept/issues). Source lives elsewhere.
+This public repo is for [issues and questions](https://github.com/xlsama/meetkeep/issues). Source lives elsewhere.
 
 Useful context for a bug report:
 
-* Kept version (Settings › General) and macOS version
+* MeetKeep version (Settings › General) and macOS version
 * What you did, what you expected, what happened
 * For transcription or notes: language and roughly how long the meeting was
 
 ---
 
-Kept is built for people who sit in too many meetings and still want the notes to be useful. If it saves you a few hours a week, a license keeps the work going ❤️
+MeetKeep is built for people who sit in too many meetings and still want the notes to be useful. If it saves you a few hours a week, a license keeps the work going ❤️
