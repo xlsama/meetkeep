@@ -25,8 +25,6 @@
 
 <img src="screenshots/zh-hero.webp" alt="MeetKeep 会议详情：左侧逐字转写，右侧 AI 纪要" width="100%"/>
 
-<img src="screenshots/zh-summary.webp" alt="MeetKeep 可视化纪要：要点、决策与待办一页呈现" width="100%"/>
-
 ## 功能
 
 * 💻 原生 macOS 应用，Swift 编写，专为 Apple Silicon 打造。

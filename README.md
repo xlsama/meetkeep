@@ -25,8 +25,6 @@
 
 <img src="screenshots/en-hero.webp" alt="MeetKeep meeting view: word-level transcript on the left, AI notes on the right" width="100%"/>
 
-<img src="screenshots/en-summary.webp" alt="MeetKeep visual summary: takeaways, decisions, and action items on one page" width="100%"/>
-
 ## Features
 
 * 💻 Native macOS app. Written in Swift. Built for Apple Silicon.
