@@ -7,6 +7,7 @@ import (
 )
 
 func main() {
+	loadDotEnv(".env")
 	mygo.Bind(newSession())
 
 	mygo.App.WhenReady(func() {
