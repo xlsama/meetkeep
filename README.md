@@ -4,7 +4,8 @@ MyGo 0.10 上的会议转写 POC：Swift native module 采麦克风和系统音�
 
 ```sh
 bun install
-bun run dev      # key 经 op run 从 1Password 取（.env.op）
+cp .env.example .env   # 填 Azure Speech 与 DeepSeek 的 key
+bun run dev
 bun run check && bun run test
 ```
 
