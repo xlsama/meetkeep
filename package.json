@@ -1,0 +1,36 @@
+{
+  "name": "meetkeep-poc",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "mygo dev",
+    "dev:op": "op run --env-file=.env.op -- mygo dev",
+    "build": "mygo build",
+    "generate": "mygo generate",
+    "dev:web": "vite",
+    "build:web": "vite build",
+    "check": "TSRS_FAST=1 oxlint",
+    "test": "go test ./..."
+  },
+  "dependencies": {
+    "@tanstack/react-virtual": "^3.14.26",
+    "lucide-react": "^1.77.0",
+    "mygo-runtime": "^0.10.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zustand": "^5.1.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "mygo-cli": "^0.10.0",
+    "oxc-transform-react": "^0.158.0",
+    "oxlint": "^1.94.0",
+    "oxlint-tsgolint": "^7.0.2007",
+    "tailwindcss": "^4.3.5",
+    "typescript": "^7",
+    "vite": "^8"
+  }
+}
