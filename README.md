@@ -4,8 +4,7 @@ MyGo 0.10 上的会议转写 POC：Swift native module 采麦克风和系统音�
 
 ```sh
 bun install
-AZURE_SPEECH_ENDPOINT=https://<resource>.cognitiveservices.azure.com AZURE_SPEECH_KEY=<key> bun run dev
-bun run dev:op   # 或者从 1Password 取 key
+bun run dev      # key 经 op run 从 1Password 取（.env.op）
 bun run check && bun run test
 ```
 

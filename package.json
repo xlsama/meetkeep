@@ -3,8 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "mygo dev",
-    "dev:op": "op run --env-file=.env.op -- mygo dev",
+    "dev": "OP_SERVICE_ACCOUNT_TOKEN=${OP_SERVICE_ACCOUNT_TOKEN:-$(cat ~/.config/op/agent-token)} op run --env-file=.env.op -- mygo dev",
     "build": "mygo build",
     "generate": "mygo generate",
     "dev:web": "vite",
