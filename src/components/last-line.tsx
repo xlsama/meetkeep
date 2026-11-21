@@ -1,5 +1,3 @@
-import type { Track } from "@/mygo";
-import { speaker } from "@/lib/format";
 import { useTranscript } from "@/lib/transcript";
 
 export function LastLine({
@@ -8,16 +6,16 @@ export function LastLine({
   className,
 }: {
   meetingId: string;
-  speakerClassName: Record<Track, string>;
+  speakerClassName: { self: string; other: string };
   className?: string;
 }) {
   const { last } = useTranscript(meetingId, true);
   if (!last) return null;
   return (
     <span data-testid="last-line" data-selectable className={className}>
-      <span className={speakerClassName[last.track]}>{speaker[last.track]}</span>
+      <span className={last.voice.self ? speakerClassName.self : speakerClassName.other}>{last.voice.name}</span>
       {"　"}
-      {last.text}
+      {last.line.text}
     </span>
   );
 }

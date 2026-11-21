@@ -87,6 +87,10 @@ func (fakeTranscriber) Transcribe(_ context.Context, pcm []int16) (string, error
 	return "你好", nil
 }
 
+func (fakeTranscriber) TranscribeFile(context.Context, string) ([]asr.Phrase, error) {
+	return nil, nil
+}
+
 type sink struct {
 	mu         sync.Mutex
 	statuses   []Status
@@ -185,7 +189,7 @@ func TestRecordsBothTracks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if done.Status != store.Done || done.DurationMs <= 0 {
+	if done.Status != store.Processing || done.DurationMs <= 0 {
 		t.Errorf("stopped as %+v", done)
 	}
 	if got := r.Status().Phase; got != Idle {

@@ -4,9 +4,7 @@ package recorder
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -177,12 +175,6 @@ func (s *session) status() Status {
 	return Status{Phase: s.phase, Meeting: &meeting, ElapsedMs: elapsed.Milliseconds(), At: time.Now().UnixMilli()}
 }
 
-func newID(now time.Time) string {
-	var suffix [2]byte
-	_, _ = rand.Read(suffix[:])
-	return fmt.Sprintf("%s-%x", now.Format("20060102-150405"), suffix)
-}
-
 // Start begins a meeting. It returns once every source delivers audio, or
 // the first of them fails.
 func (r *Recorder) Start(ctx context.Context, o Options) (store.Meeting, error) {
@@ -201,7 +193,7 @@ func (r *Recorder) Start(ctx context.Context, o Options) (store.Meeting, error) 
 	}
 
 	now := time.Now()
-	id := newID(now)
+	id := store.NewID(now)
 	directory := filepath.Join(config.Expand(settings.Recording.Directory), id)
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return store.Meeting{}, err
@@ -369,8 +361,8 @@ func (r *Recorder) Resume() error {
 	return nil
 }
 
-// Stop ends the meeting. It waits up to grace for the utterances still
-// being transcribed.
+// Stop ends the meeting, which is then to be processed. It waits up to
+// grace for the utterances still being transcribed.
 func (r *Recorder) Stop(grace time.Duration) (store.Meeting, error) {
 	s, err := r.active()
 	if err != nil {
@@ -404,7 +396,7 @@ func (r *Recorder) Stop(grace time.Duration) (store.Meeting, error) {
 	}
 
 	s.mu.Lock()
-	s.meeting.Status = store.Done
+	s.meeting.Status = store.Processing
 	s.meeting.DurationMs = s.elapsed.Milliseconds()
 	meeting := s.meeting
 	s.mu.Unlock()

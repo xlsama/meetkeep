@@ -15,6 +15,7 @@ ort = "=2.0.0-rc.15"
 rayon = "1.12.0"
 ropus = "0.12.18"
 rustfft = "6.4.1"
+symphonia = { version = "0.6.1", features = ["all"] }
 
 [profile.release.build-override]
 strip = false

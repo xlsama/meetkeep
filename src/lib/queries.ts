@@ -1,5 +1,6 @@
 import { QueryClient, queryOptions } from "@tanstack/react-query";
 import { Config, events, Library, Sources } from "@/mygo";
+import { applyProgress } from "@/lib/progress";
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,6 +29,12 @@ export const meetingQuery = (id: string) =>
     queryFn: () => Library.get(id),
   });
 
+export const searchQuery = (query: string) =>
+  queryOptions({
+    queryKey: ["search", query],
+    queryFn: () => Library.search(query),
+  });
+
 export const microphoneQuery = queryOptions({
   queryKey: ["microphone"],
   queryFn: () => Sources.microphone(),
@@ -48,7 +55,9 @@ export function syncQueries() {
   events.library.on(() => {
     void queryClient.invalidateQueries({ queryKey: ["meetings"] });
     void queryClient.invalidateQueries({ queryKey: ["meeting"] });
+    void queryClient.invalidateQueries({ queryKey: ["search"] });
   });
+  events.processing.on(applyProgress);
   events.settings.on((settings) => {
     queryClient.setQueryData(settingsQuery.queryKey, settings);
   });

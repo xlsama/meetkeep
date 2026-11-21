@@ -24,6 +24,8 @@ export interface Fault {
   message: string;
 }
 
+export type Format = "markdown" | "text" | "srt";
+
 export interface LLMSettings {
   baseUrl: string;
   key: string;
@@ -61,23 +63,114 @@ export interface Meeting {
   microphone: boolean;
   system: boolean;
   apps: AppRef[];
+  /** Error tells why Status is failed. */
+  error: string;
+  /**
+   * Audio names the file in Directory to play the meeting from, once it
+   * is processed.
+   */
+  audio: string;
 }
 
-/** MeetingDetail is a meeting with what was said in it. */
+/** MeetingDetail is a meeting with what was said in it and by whom. */
 export interface MeetingDetail {
   meeting: Meeting;
   utterances: Utterance[];
+  speakers: Speaker[];
+  /**
+   * Progress is how far processing the meeting got, while its status is
+   * processing.
+   */
+  progress: Progress | null;
 }
 
-export type MeetingStatus = "recording" | "done";
+export type MeetingStatus = "recording" | "processing" | "done" | "failed";
+
+/** Notes are the notes of a meeting. */
+export interface Notes {
+  /**
+   * Final tells the notes written after the meeting from those that
+   * grow during it.
+   */
+  final: boolean;
+  /** Headline says in a sentence what the meeting settled, in final notes. */
+  headline: string;
+  /** CoveredMs is how far into the meeting the notes reach. */
+  coveredMs: number;
+  topics: Topic[];
+  todos: Todo[];
+  /** Open are the matters left undecided, in final notes. */
+  open: Point[];
+}
+
+/** NotesState is what is known of a meeting's notes. */
+export interface NotesState {
+  meetingId: string;
+  /** Notes are nil while the meeting has none. */
+  notes: Notes | null;
+  /** Error tells why the last attempt to write them failed. */
+  error: string;
+  /** Working is true while the model writes them. */
+  working: boolean;
+}
 
 export type Phase = "idle" | "recording" | "paused" | "stopping";
+
+/** Point is a line of the notes with the utterance it rests on. */
+export interface Point {
+  text: string;
+  seq: number;
+  atMs: number;
+  /** Uncertain marks what was said without being settled. */
+  uncertain: boolean;
+}
+
+/** Progress is how far the processing of a meeting got. */
+export interface Progress {
+  meetingId: string;
+  step: Step;
+  percent: number;
+}
 
 export interface RecordingSettings {
   directory: string;
   detectMeetings: boolean;
   showPanel: boolean;
   echoCancellation: EchoCancellation;
+}
+
+/**
+ * SearchHit is a meeting whose title, transcript or notes contain what was
+ * searched for.
+ */
+export interface SearchHit {
+  meeting: Meeting;
+  titleMatch: boolean;
+  lines: SearchLine[];
+  notes: SearchNote[];
+}
+
+/** SearchLine is an utterance that contains what was searched for. */
+export interface SearchLine {
+  seq: number;
+  startMs: number;
+  /**
+   * Speaker is the name of who says it and SpeakerID their ID in the
+   * meeting, 0 before the meeting is processed. Self marks the user.
+   */
+  speaker: string;
+  speakerId: number;
+  self: boolean;
+  text: string;
+}
+
+/**
+ * SearchNote is a line of a meeting's notes that contains what was
+ * searched for.
+ */
+export interface SearchNote {
+  text: string;
+  atMs: number;
 }
 
 export interface Settings {
@@ -111,6 +204,15 @@ export interface SourceSettings {
   apps: AppRef[];
 }
 
+/** Speaker is someone who talks in a meeting. */
+export interface Speaker {
+  id: number;
+  name: string;
+  /** Self marks the user. */
+  self: boolean;
+  durationMs: number;
+}
+
 /** StartOptions say what to record and what to show meanwhile. */
 export interface StartOptions {
   title: string;
@@ -131,7 +233,31 @@ export interface Status {
   at: number;
 }
 
-export type Track = "mic" | "system";
+export type Step = "import" | "transcribe" | "speakers" | "summary";
+
+export interface Todo {
+  text: string;
+  owner: string;
+  due: string;
+  seq: number;
+  atMs: number;
+}
+
+export interface Topic {
+  id: string;
+  title: string;
+  atMs: number;
+  /** Updating marks the topics that the next update may still rewrite. */
+  updating: boolean;
+  points: Point[];
+  /**
+   * Nodes are what the topic branches into on the whiteboard: its
+   * points, cut into short phrases.
+   */
+  nodes: Point[];
+}
+
+export type Track = "mic" | "system" | "file";
 
 export interface Utterance {
   seq: number;
@@ -139,6 +265,13 @@ export interface Utterance {
   startMs: number;
   endMs: number;
   text: string;
+  /**
+   * Speaker is the ID of who says it, or 0 before the meeting is
+   * processed.
+   */
+  speaker: number;
+  /** Uncertain marks a guess at the speaker. */
+  uncertain: boolean;
 }
 
 export type UtteranceState = "speaking" | "transcribing" | "done" | "dropped" | "failed";
@@ -195,28 +328,80 @@ export const Recorder = {
   snapshot: bind<[], Snapshot>("Recorder.Snapshot", () => []),
   /** Start begins a meeting and remembers the choices for the next one. */
   start: bind<[StartOptions], Meeting>("Recorder.Start", (o: StartOptions) => [o]),
-  /** Stop ends the meeting and returns it. */
+  /** Stop ends the meeting and returns it. The meeting is then processed. */
   stop: bind<[], Meeting>("Recorder.Stop", () => []),
 } as const;
 
 /** Library keeps the meetings. */
 export const Library = {
+  /**
+   * Board returns the scene of a meeting's whiteboard as SaveBoard took it,
+   * or "" when it has none.
+   */
+  board: bind<[string], string>("Library.Board", (id: string) => [id]),
   /** Delete removes a meeting and moves its recordings to the trash. */
   delete: bind<[string], void>("Library.Delete", (id: string) => [id]),
+  /**
+   * Export asks where to save a meeting's transcript in format and returns
+   * where it went, or "" when the user canceled.
+   */
+  export: bind<[string, Format], string>("Library.Export", (id: string, format: Format) => [id, format]),
   /** Get returns a meeting with what was said in it. */
   get: bind<[string], MeetingDetail>("Library.Get", (id: string) => [id]),
+  /**
+   * Import asks for an audio or video file and makes a meeting of it, which
+   * is then processed. It returns nil when the user canceled.
+   */
+  import: bind<[], Meeting | null>("Library.Import", () => []),
+  /**
+   * ImportFile makes a meeting of the audio or video file at path, which is
+   * then processed.
+   */
+  importFile: bind<[string], Meeting>("Library.ImportFile", (path: string) => [path]),
   /** List returns the meetings, the newest first. */
   list: bind<[], Meeting[]>("Library.List", () => []),
+  /** MergeSpeakers gives what one speaker of a meeting says to another. */
+  mergeSpeakers: bind<[string, number, number], void>("Library.MergeSpeakers", (id: string, from: number, into: number) => [id, from, into]),
+  /** Notes returns what is known of a meeting's notes. */
+  notes: bind<[string], NotesState>("Library.Notes", (id: string) => [id]),
+  /** RegenerateNotes writes the final notes of a processed meeting again. */
+  regenerateNotes: bind<[string], void>("Library.RegenerateNotes", (id: string) => [id]),
+  /**
+   * Reidentify tells the speakers of a meeting apart again: count of them, or
+   * as many as are found when count is 0.
+   */
+  reidentify: bind<[string, number], void>("Library.Reidentify", (id: string, count: number) => [id, count]),
   /** Rename gives a meeting another title. */
   rename: bind<[string, string], void>("Library.Rename", (id: string, title: string) => [id, title]),
+  /** RenameSpeaker gives a speaker of a meeting another name. */
+  renameSpeaker: bind<[string, number, string], void>("Library.RenameSpeaker", (id: string, speaker: number, name: string) => [id, speaker, name]),
+  /**
+   * Reprocess transcribes a meeting's recording again and tells its speakers
+   * apart.
+   */
+  reprocess: bind<[string], void>("Library.Reprocess", (id: string) => [id]),
   /** Reveal shows a meeting's recordings in the file manager. */
   reveal: bind<[string], void>("Library.Reveal", (id: string) => [id]),
+  /** SaveBoard stores the scene of a meeting's whiteboard. */
+  saveBoard: bind<[string, string], void>("Library.SaveBoard", (id: string, scene: string) => [id, scene]),
+  /**
+   * SaveRecording asks where to save a copy of a meeting's recording and
+   * returns where it went, or "" when the user canceled.
+   */
+  saveRecording: bind<[string], string>("Library.SaveRecording", (id: string) => [id]),
+  /**
+   * Search finds the meetings whose titles or transcripts contain query, the
+   * newest first.
+   */
+  search: bind<[string], SearchHit[]>("Library.Search", (query: string) => [query]),
 } as const;
 
 /** Windows shows and hides the app's windows. */
 export const Windows = {
   /** CloseMenu closes the panel of the menu bar item. */
   closeMenu: bind<[], void>("Windows.CloseMenu", () => []),
+  /** CloseToast closes the notice that a meeting's notes are ready. */
+  closeToast: bind<[], void>("Windows.CloseToast", () => []),
   /** CollapsePanel shrinks the side panel to a strip. */
   collapsePanel: bind<[], void>("Windows.CollapsePanel", () => []),
   /** HidePanel hides the side panel and its strip. */
@@ -243,6 +428,10 @@ export const events = {
   levels: event<Levels>("levels"),
   /** faulted tells of something that went wrong while recording goes on. */
   fault: event<Fault>("fault"),
+  /** processing tells how far the processing of a meeting got. */
+  processing: event<Progress>("processing"),
+  /** notesChanged carries a meeting's notes as they are written. */
+  notes: event<NotesState>("notes"),
   /** libraryChanged tells that the meetings changed. */
   library: event<string>("library"),
   /** settingsChanged carries the settings after they were saved. */

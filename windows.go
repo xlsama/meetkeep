@@ -3,12 +3,15 @@ package main
 import (
 	_ "embed"
 	"fmt"
+	"net/url"
 	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
 
+	"github.com/xlsama/meetkeep/internal/notes"
 	"github.com/xlsama/meetkeep/internal/recorder"
+	"github.com/xlsama/meetkeep/internal/store"
 )
 
 //go:embed assets/tray.png
@@ -25,6 +28,9 @@ const (
 	miniHeight    = 44
 	miniMargin    = 16
 	panelShortcut = "Alt+Cmd+M"
+	toastWidth    = 380
+	toastHeight   = 96
+	toastStays    = 10 * time.Second
 )
 
 type panelMode int
@@ -46,6 +52,7 @@ type windows struct {
 	panel  *mygo.Window
 	mini   *mygo.Window
 	menu   *mygo.Window
+	toast  *mygo.Window
 	mode   panelMode
 	width  int
 	active bool
@@ -69,7 +76,7 @@ func (w *windows) start() error {
 		return err
 	}
 	go w.clock()
-	w.showMain("")
+	w.openMain("/")
 	return nil
 }
 
@@ -89,7 +96,12 @@ func (w *windows) showMain(route string) {
 	if route == "" {
 		route = "/"
 	}
-	win = mygo.NewWindow(mygo.WindowOptions{
+	w.openMain(route)
+	mygo.App.Focus()
+}
+
+func (w *windows) openMain(route string) {
+	win := mygo.NewWindow(mygo.WindowOptions{
 		Title:           "MeetKeep",
 		URL:             route,
 		Width:           1120,
@@ -108,7 +120,6 @@ func (w *windows) showMain(route string) {
 	w.mu.Lock()
 	w.main = win
 	w.mu.Unlock()
-	mygo.App.Focus()
 }
 
 func (w *windows) toggleMenu() {
@@ -259,6 +270,70 @@ func (w *windows) follow(s recorder.Status) {
 		_ = w.tray.SetIcon(trayIcon, true)
 		w.tray.SetTitle("")
 		w.setMode(panelHidden)
+	}
+}
+
+// notesReady tells the user that a meeting's notes are written, unless
+// the main window shows and has the keyboard.
+func (w *windows) notesReady(meeting store.Meeting, written notes.Notes) {
+	w.mu.Lock()
+	main, old := w.main, w.toast
+	w.mu.Unlock()
+	if main != nil && main.IsVisible() && main.IsFocused() {
+		return
+	}
+	if old != nil {
+		old.Close()
+	}
+	area := mygo.Screen.PrimaryDisplay().WorkArea
+	toast := mygo.NewWindow(mygo.WindowOptions{
+		Title:             "MeetKeep",
+		URL:               "/toast?meeting=" + url.QueryEscape(meeting.ID),
+		Width:             toastWidth,
+		Height:            toastHeight,
+		Frameless:         true,
+		Panel:             true,
+		AlwaysOnTop:       true,
+		Hidden:            true,
+		SkipTaskbar:       true,
+		Transparent:       true,
+		CornerRadius:      16,
+		DisableResize:     true,
+		DisableMinimize:   true,
+		DisableMaximize:   true,
+		DisableFullScreen: true,
+	})
+	toast.SetBounds(mygo.Rectangle{
+		X: area.X + area.Width - toastWidth - miniMargin, Y: area.Y + miniMargin,
+		Width: toastWidth, Height: toastHeight,
+	})
+	toast.ShowInactive()
+	toast.OnClosed(func() {
+		w.mu.Lock()
+		if w.toast == toast {
+			w.toast = nil
+		}
+		w.mu.Unlock()
+	})
+	w.mu.Lock()
+	w.toast = toast
+	w.mu.Unlock()
+	time.AfterFunc(toastStays, func() {
+		w.mu.Lock()
+		current := w.toast == toast
+		w.mu.Unlock()
+		if current {
+			toast.Close()
+		}
+	})
+}
+
+func (w *windows) closeToast() {
+	w.mu.Lock()
+	toast := w.toast
+	w.mu.Unlock()
+	if toast != nil {
+		toast.Close()
 	}
 }
 

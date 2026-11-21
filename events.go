@@ -4,6 +4,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"github.com/xlsama/meetkeep/internal/config"
+	"github.com/xlsama/meetkeep/internal/processor"
 	"github.com/xlsama/meetkeep/internal/recorder"
 )
 
@@ -16,6 +17,10 @@ var (
 	levelsChanged = mygo.NewEvent[recorder.Levels]("levels")
 	// faulted tells of something that went wrong while recording goes on.
 	faulted = mygo.NewEvent[recorder.Fault]("fault")
+	// processing tells how far the processing of a meeting got.
+	processing = mygo.NewEvent[processor.Progress]("processing")
+	// notesChanged carries a meeting's notes as they are written.
+	notesChanged = mygo.NewEvent[NotesState]("notes")
 	// libraryChanged tells that the meetings changed.
 	libraryChanged = mygo.NewEvent[string]("library")
 	// settingsChanged carries the settings after they were saved.
@@ -27,6 +32,7 @@ var (
 func (a *app) Status(s recorder.Status) {
 	_ = statusChanged.Broadcast(s)
 	a.windows.follow(s)
+	a.notes.follow(s)
 	if s.Phase == recorder.Idle || s.Phase == recorder.Recording && s.ElapsedMs < 1000 {
 		_ = libraryChanged.Broadcast("")
 	}

@@ -31,8 +31,15 @@ type Engine interface {
 	Detector() (Detector, error)
 	// Record creates an Ogg Opus file at path and returns what writes it.
 	Record(path string) (Recording, error)
-	// Separate returns who speaks when in the 16 kHz mono 16-bit WAV file at
-	// path. speakers is how many people talk, or 0 to estimate it.
+	// Mix writes the sum of the Ogg Opus files to output, as Ogg Opus.
+	Mix(ctx context.Context, inputs []string, output string) error
+	// Import decodes the audio of the media file at input and writes it to
+	// output as Ogg Opus. It returns how long the audio lasts, in
+	// milliseconds.
+	Import(ctx context.Context, input string, output string) (int, error)
+	// Separate returns who speaks when in the audio at path: an Ogg Opus
+	// file, or a 16 kHz mono 16-bit WAV file. speakers is how many people
+	// talk, or 0 to estimate it.
 	Separate(ctx context.Context, path string, models Models, speakers int) ([]Segment, error)
 }
 

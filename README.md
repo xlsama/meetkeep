@@ -20,16 +20,22 @@ bun run check && bun run test
 |---|---|
 | `main.go`、`windows.go`、`services.go`、`events.go` | 应用入口、窗口和菜单栏、给界面调用的服务和事件 |
 | `internal/recorder` | 录制流程：采集、切句、转写、入库 |
+| `internal/processor` | 会后流程：整段重新转写、区分说话人、混音 |
 | `internal/audio` | 降采样、按语音概率切句 |
 | `internal/asr`、`internal/llm` | 转写服务和模型服务的客户端 |
-| `internal/store`、`internal/config` | SQLite 存储、设置文件 |
+| `internal/store`、`internal/config`、`internal/export` | SQLite 存储、设置文件、导出 |
 | `modules/capture` | 原生模块：麦克风和系统声音采集（macOS 用 Swift，Windows 用 Rust） |
-| `modules/speech` | 原生模块（Rust）：语音检测、录音编码、说话人识别 |
+| `modules/speech` | 原生模块（Rust）：语音检测、录音编解码、导入音视频、说话人识别 |
+| `resources/models` | 说话人识别用的两个 ONNX 模型 |
 | `src` | 界面 |
 
 ## 录制
 
 每个来源一条轨：麦克风是「我」，电脑里的声音是「对方」。采集 48kHz 单声道，边录边编码成 Ogg Opus 落盘（每条轨 32kbps）。同时降到 16kHz 送 silero-vad，按停顿切成句子，逐句送去转写。
+
+## 会后
+
+停止录制后（或导入一个音视频文件后）在后台整理：每条轨整段重新送去转写，拿到按句子切分、带时间的定稿；多人说话的那条轨在本地做说话人识别；两条轨混成一个文件供回放。失败时保留会中转写的文字稿，可以重试。
 
 ## 说话人识别
 
@@ -43,8 +49,8 @@ bun run check && bun run test
 | 4. 算声音向量 | 每个小窗变成一个 192 维向量，同一个人的向量彼此接近 | 模型：CAM++（ONNX，28 MB，用 `scripts/export_campplus.py` 导出） | 已实现 |
 | 5. 聚类 | 把所有向量分成若干组，一组就是一个人，人数自动估计 | 代码：谱聚类（faer 做特征分解） | 已实现 |
 | 6. 拼成时间段 | 相邻同组的小窗合并成「某人从几分几秒说到几分几秒」，按说话时长排序编号 | 代码 | 已实现 |
-| 7. 句子归属 | 转写里的每句话，归给时间重叠最多的那个人 | 代码 | 未实现 |
-| 8. 跨会议认人 | 给每个人算一个声纹，和本地声纹库比对，认出这是谁 | 模型：专门的声纹模型（Kept 用 ReDimNet2 b6，53 MB） | 未实现，第二版 |
+| 7. 句子归属 | 转写里的每句话，归给时间重叠最多的那个人；重叠不到六成的标「存疑」 | 代码（Go，`internal/processor`） | 已实现 |
+| 8. 跨会议认人 | 给每个人算一个声纹，和本地声纹库比对，认出这是谁 | 模型：专门的声纹模型（Kept 用 ReDimNet2 b6，53 MB） | 未实现 |
 
 两个模型都由 ONNX Runtime 运行（`ort` 2.0.0-rc.15）。
 

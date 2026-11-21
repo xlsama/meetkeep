@@ -1,13 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link, Outlet, useRouter } from "@tanstack/react-router";
+import { Link, Outlet, useNavigate, useRouter, useRouterState, useSearch } from "@tanstack/react-router";
 import { Plus, Search, Settings, Users } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { isMyGo } from "mygo-runtime";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RecDot } from "@/components/rec-dot";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { events, type Meeting, type Status } from "@/mygo";
 import { clock, dayGroup, listDate, minutes, type DayGroup } from "@/lib/format";
+import { useProgress } from "@/lib/progress";
 import { meetingsQuery, settingsQuery } from "@/lib/queries";
 import { useElapsed, useRecorder } from "@/lib/recorder";
 import { useSheet } from "@/lib/ui";
@@ -52,17 +53,7 @@ function Sidebar() {
   return (
     <nav aria-label="会议" className="flex w-[232px] shrink-0 flex-col border-r border-line bg-sidebar">
       <div className="flex items-center gap-1.5 px-2.5 py-3">
-        <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-[9px] bg-line px-2.5 text-muted-foreground">
-          <Search className="size-3.5 shrink-0" />
-          <input
-            type="search"
-            placeholder="搜索"
-            aria-label="搜索会议"
-            disabled
-            data-testid="search"
-            className="min-w-0 flex-1 border-0 bg-transparent text-ui text-foreground outline-none"
-          />
-        </label>
+        <SearchBox />
         <button
           type="button"
           aria-label="新录制"
@@ -123,8 +114,70 @@ function Sidebar() {
   );
 }
 
+function SearchBox() {
+  const router = useRouter();
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const href = useRouterState({ select: (s) => s.location.href });
+  const { q } = useSearch({ strict: false });
+  const searching = pathname === "/search";
+  const [value, setValue] = useState(() => (searching ? (q ?? "") : ""));
+  const back = useRef("/");
+  const timer = useRef(0);
+
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+
+  const go = (text: string) => {
+    window.clearTimeout(timer.current);
+    const query = text.trim();
+    if (query === "") {
+      if (searching) router.history.push(back.current);
+      return;
+    }
+    if (!searching) back.current = href;
+    void navigate({ to: "/search", search: { q: query }, replace: searching });
+  };
+
+  return (
+    <label
+      className={cn(
+        "flex h-8 min-w-0 flex-1 items-center gap-2 rounded-[9px] bg-line px-2.5 text-muted-foreground transition-[background-color,box-shadow]",
+        "focus-within:bg-background focus-within:shadow-[inset_0_0_0_1px_var(--color-border-strong)]",
+        value !== "" && "bg-background shadow-[inset_0_0_0_1px_var(--color-border-strong)]",
+      )}
+    >
+      <Search className="size-3.5 shrink-0" />
+      <input
+        type="search"
+        placeholder="搜索"
+        aria-label="搜索会议"
+        data-testid="search"
+        spellCheck={false}
+        autoComplete="off"
+        value={value}
+        onChange={(event) => {
+          const next = event.target.value;
+          setValue(next);
+          window.clearTimeout(timer.current);
+          if (next.trim() === "") go(next);
+          else timer.current = window.setTimeout(() => go(next), 300);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") go(value);
+          if (event.key === "Escape" && value !== "") {
+            setValue("");
+            go("");
+          }
+        }}
+        className="min-w-0 flex-1 border-0 bg-transparent text-ui text-foreground outline-none"
+      />
+    </label>
+  );
+}
+
 function MeetingItem({ meeting, status, now }: { meeting: Meeting; status: Status; now: Date }) {
   const recording = meeting.status === "recording";
+  const progress = useProgress((s) => s.items[meeting.id]);
   return (
     <Link
       to="/meetings/$id"
@@ -137,8 +190,20 @@ function MeetingItem({ meeting, status, now }: { meeting: Meeting; status: Statu
       {recording ? (
         <RecordingLabel status={status.meeting?.id === meeting.id ? status : null} />
       ) : (
-        <span className="text-meta leading-normal text-muted-foreground tabular-nums">
-          {listDate(meeting.startedAt, now)} · {minutes(meeting.durationMs)}
+        <span
+          className={cn(
+            "text-meta leading-normal tabular-nums",
+            meeting.status === "failed" ? "text-destructive" : "text-muted-foreground",
+          )}
+        >
+          {listDate(meeting.startedAt, now)} ·{" "}
+          {meeting.status === "processing"
+            ? progress
+              ? `整理中 ${progress.percent}%`
+              : "整理中"
+            : meeting.status === "failed"
+              ? "转写失败"
+              : minutes(meeting.durationMs)}
         </span>
       )}
     </Link>

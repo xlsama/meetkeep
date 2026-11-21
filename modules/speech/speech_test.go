@@ -90,6 +90,85 @@ func TestRecordWritesOggOpus(t *testing.T) {
 	}
 }
 
+func duration(t *testing.T, path string) float64 {
+	t.Helper()
+	ffprobe, err := exec.LookPath("ffprobe")
+	if err != nil {
+		t.Skip("ffprobe is not installed")
+	}
+	out, err := exec.Command(ffprobe, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path).Output()
+	if err != nil {
+		t.Fatalf("ffprobe: %v", err)
+	}
+	seconds, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
+	if err != nil {
+		t.Fatalf("ffprobe read %q", out)
+	}
+	return seconds
+}
+
+func TestImportAndMix(t *testing.T) {
+	e := engine(t)
+	dir := t.TempDir()
+	tone := filepath.Join(dir, "tone.opus")
+	ms, err := e.Import(t.Context(), filepath.Join("..", "capture", "testdata", "tone.wav"), tone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ms < 2900 || ms > 3100 {
+		t.Errorf("a 3 s file was imported as %d ms", ms)
+	}
+	if got := duration(t, tone); math.Abs(got-3) > 0.1 {
+		t.Errorf("the imported file lasts %v s, want 3", got)
+	}
+
+	long := filepath.Join(dir, "long.opus")
+	recording, err := e.Record(long)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 50 {
+		if err := recording.Write(make([]byte, 9600)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	recording.Close()
+
+	mixed := filepath.Join(dir, "mixed.opus")
+	if err := e.Mix(t.Context(), []string{tone, long}, mixed); err != nil {
+		t.Fatal(err)
+	}
+	if got := duration(t, mixed); math.Abs(got-5) > 0.1 {
+		t.Errorf("the mix lasts %v s, want the longer input's 5", got)
+	}
+	if _, err := e.Import(t.Context(), "speech_test.go", filepath.Join(dir, "no.opus")); err == nil {
+		t.Error("a Go file was imported as audio")
+	}
+}
+
+func TestSeparateReadsOggOpus(t *testing.T) {
+	dir := fixtures(t)
+	e := engine(t)
+	path := filepath.Join(t.TempDir(), "meeting.opus")
+	if _, err := e.Import(t.Context(), filepath.Join(dir, "0-four-speakers-zh.wav"), path); err != nil {
+		t.Fatal(err)
+	}
+	segments, err := e.Separate(t.Context(), path, speech.Models{
+		Segmentation: filepath.Join(dir, "segmentation.onnx"),
+		Embedding:    filepath.Join(dir, "embedding.onnx"),
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	speakers := map[int]bool{}
+	for _, s := range segments {
+		speakers[s.Speaker] = true
+	}
+	if len(speakers) != 4 {
+		t.Errorf("found %d speakers in the Ogg Opus copy, want 4", len(speakers))
+	}
+}
+
 func TestDetectorStaysQuietOnSilence(t *testing.T) {
 	detector, err := engine(t).Detector()
 	if err != nil {

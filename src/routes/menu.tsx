@@ -6,7 +6,7 @@ import { LevelMeter } from "@/components/level-meter";
 import { RecDot } from "@/components/rec-dot";
 import { SourceSummary } from "@/components/source-summary";
 import { Button } from "@/components/ui/button";
-import { Recorder, Windows, type Meeting } from "@/mygo";
+import { Library, Recorder, Windows, type Meeting } from "@/mygo";
 import { useControls } from "@/lib/controls";
 import { clock, dayLabel } from "@/lib/format";
 import { errorMessage, meetingQuery, meetingsQuery, settingsQuery } from "@/lib/queries";
@@ -16,6 +16,24 @@ import { cn } from "@/lib/utils";
 export function MenuPage() {
   const status = useRecorder((s) => s.status);
   const active = isActive(status);
+  const [importing, setImporting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const importFile = async () => {
+    setImporting(true);
+    setError(null);
+    try {
+      const meeting = await Library.import();
+      if (meeting) {
+        await Windows.showMain(`/meetings/${meeting.id}`);
+        await Windows.closeMenu();
+      }
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setImporting(false);
+    }
+  };
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -47,9 +65,19 @@ export function MenuPage() {
         </>
       ) : (
         <>
-          <Item testId="menu-import" icon={<Upload />} disabled>
+          <Item
+            testId="menu-import"
+            icon={importing ? <LoaderCircle className="animate-spin" /> : <Upload />}
+            disabled={importing}
+            onClick={() => void importFile()}
+          >
             导入录音或视频…
           </Item>
+          {error && (
+            <p role="alert" data-testid="menu-import-error" data-selectable className="m-0 px-2.5 py-1 text-label break-words text-destructive">
+              {error}
+            </p>
+          )}
           <Item testId="menu-open-main" icon={<AppWindow />} onClick={() => void Windows.showMain("")}>
             打开 MeetKeep
           </Item>
@@ -171,7 +199,7 @@ function RecordingTop({ meeting }: { meeting: Meeting }) {
       </div>
       <LastLine
         meetingId={meeting.id}
-        speakerClassName={{ mic: "font-semibold", system: "font-semibold" }}
+        speakerClassName={{ self: "font-semibold", other: "font-semibold" }}
         className="line-clamp-2 rounded-sm bg-muted px-2.5 py-2 text-label leading-[1.6] text-secondary-foreground"
       />
       {controls.error && (

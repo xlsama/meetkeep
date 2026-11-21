@@ -1,7 +1,7 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { motion } from "motion/react";
 import { useEffect, useRef } from "react";
-import { clock, speaker } from "@/lib/format";
+import { clock } from "@/lib/format";
 import { useTranscript, type Group, type Line } from "@/lib/transcript";
 import { cn } from "@/lib/utils";
 
@@ -37,12 +37,18 @@ export function Transcript({
   live,
   variant,
   paddingEnd,
+  activeSeq = null,
+  revealSeq = null,
+  onSelect,
   className,
 }: {
   meetingId: string;
   live: boolean;
   variant: Variant;
   paddingEnd: number;
+  activeSeq?: number | null;
+  revealSeq?: number | null;
+  onSelect?: (line: Line) => void;
   className?: string;
 }) {
   "use no memo";
@@ -69,6 +75,19 @@ export function Transcript({
     virtualizer.scrollToEnd();
   }, [live, groups.length, virtualizer]);
 
+  const indexOf = (seq: number | null) =>
+    seq === null ? -1 : groups.findIndex((g) => g.lines.some((l) => l.seq === seq));
+  const activeIndex = indexOf(activeSeq);
+  const revealIndex = indexOf(revealSeq);
+
+  useEffect(() => {
+    if (activeIndex >= 0) virtualizer.scrollToIndex(activeIndex, { align: "auto" });
+  }, [activeIndex, virtualizer]);
+
+  useEffect(() => {
+    if (revealIndex >= 0) virtualizer.scrollToIndex(revealIndex, { align: "center" });
+  }, [revealIndex, virtualizer]);
+
   return (
     <div
       ref={scrollRef}
@@ -87,7 +106,7 @@ export function Transcript({
               className={cn("absolute top-0 left-0 w-full", style.inset)}
               style={{ transform: `translateY(${item.start}px)` }}
             >
-              <GroupView group={group} variant={variant} />
+              <GroupView group={group} variant={variant} activeSeq={activeSeq} onSelect={onSelect} />
             </div>
           );
         })}
@@ -96,35 +115,86 @@ export function Transcript({
   );
 }
 
-function GroupView({ group, variant }: { group: Group; variant: Variant }) {
+function GroupView({
+  group,
+  variant,
+  activeSeq,
+  onSelect,
+}: {
+  group: Group;
+  variant: Variant;
+  activeSeq: number | null;
+  onSelect: ((line: Line) => void) | undefined;
+}) {
   const style = styles[variant];
   return (
     <div className={cn("flex flex-col", style.group)}>
       <div className={cn("flex items-center", style.head)}>
-        <span
-          aria-hidden
-          className={cn("size-1.5 shrink-0 rounded-full", group.track === "mic" ? "bg-foreground" : "bg-them")}
-        />
-        <span className={cn("font-semibold text-foreground", style.name)}>{speaker[group.track]}</span>
+        <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", group.voice.tone)} />
+        <span className={cn("font-semibold text-foreground", style.name)}>{group.voice.name}</span>
         <span className={cn("font-mono text-muted-foreground tabular-nums", style.stamp)}>{clock(group.startMs)}</span>
+        {group.uncertain && <Badge>存疑</Badge>}
       </div>
-      <div data-selectable className={cn("m-0 text-prose", style.text)}>
+      <div data-selectable className={cn("m-0", group.uncertain ? "text-subtle" : "text-prose", style.text)}>
         {group.lines.map((line) => (
-          <LineView key={line.seq} line={line} caret={style.caret} />
+          <LineView
+            key={line.seq}
+            line={line}
+            caret={style.caret}
+            active={line.seq === activeSeq}
+            onSelect={onSelect}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function LineView({ line, caret }: { line: Line; caret: string }) {
-  if (line.state === "done") return <span className="block">{line.text}</span>;
+function Badge({ children }: { children: string }) {
+  return (
+    <span className="inline-flex h-[18px] shrink-0 items-center self-center rounded-[5px] border border-warning-border bg-warning-bg px-1.5 text-micro font-semibold text-warning">
+      {children}
+    </span>
+  );
+}
+
+function LineView({
+  line,
+  caret,
+  active,
+  onSelect,
+}: {
+  line: Line;
+  caret: string;
+  active: boolean;
+  onSelect: ((line: Line) => void) | undefined;
+}) {
+  if (line.state === "done") {
+    return (
+      <span
+        data-testid={`line-${line.seq}`}
+        aria-current={active || undefined}
+        onClick={
+          onSelect &&
+          (() => {
+            if (window.getSelection()?.isCollapsed === false) return;
+            onSelect(line);
+          })
+        }
+        className={cn(
+          "-mx-1.5 block rounded-[6px] px-1.5 transition-colors",
+          onSelect && "cursor-pointer",
+          active && "bg-hover",
+        )}
+      >
+        {line.text}
+      </span>
+    );
+  }
   if (line.state === "failed") {
     return (
       <span className="flex items-baseline gap-2 py-0.5">
-        <span className="inline-flex h-[18px] shrink-0 items-center self-center rounded-[5px] border border-warning-border bg-warning-bg px-1.5 text-micro font-semibold text-warning">
-          转写失败
-        </span>
+        <Badge>转写失败</Badge>
         <span className="min-w-0 text-label leading-normal break-words text-destructive">{line.error}</span>
       </span>
     );

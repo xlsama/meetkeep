@@ -1,5 +1,7 @@
+mod decode;
 mod detector;
 mod fbank;
+mod media;
 mod mygo;
 mod recording;
 mod regions;
@@ -37,8 +39,16 @@ impl Engine for NativeEngine {
         Ok(Arc::new(recording::OggOpus::create(&path)?))
     }
 
+    fn mix(&self, ctx: &Context, inputs: Vec<String>, output: String) -> Result<(), Error> {
+        media::mix(ctx, &inputs, &output)
+    }
+
+    fn import(&self, ctx: &Context, input: String, output: String) -> Result<i64, Error> {
+        media::import(ctx, &input, &output)
+    }
+
     fn separate(&self, ctx: &Context, path: String, models: Models, speakers: i64) -> Result<Vec<Segment>, Error> {
-        let samples = read_wav(&path)?;
+        let samples = read_audio(&path)?;
         if samples.len() < RATE as usize {
             return Err(Error::other("the audio is too short"));
         }
@@ -73,6 +83,14 @@ pub(crate) fn builder(threads: usize) -> Result<SessionBuilder, Error> {
 pub(crate) fn session(model: &str) -> Result<Session, Error> {
     let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
     builder(threads)?.commit_from_file(model).map_err(fail)
+}
+
+fn read_audio(path: &str) -> Result<Vec<f32>, Error> {
+    if path.ends_with(".wav") {
+        return read_wav(path);
+    }
+    let samples = decode::OpusFile::open(path, RATE as u32)?.all()?;
+    Ok(samples.into_iter().map(|v| v as f32 / 32768.0).collect())
 }
 
 fn read_wav(path: &str) -> Result<Vec<f32>, Error> {

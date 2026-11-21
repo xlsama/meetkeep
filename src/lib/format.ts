@@ -1,6 +1,6 @@
 import { format, isSameWeek, isSameYear, isToday, isYesterday } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import type { AppRef, Track } from "@/mygo";
+import type { AppRef } from "@/mygo";
 
 export function clock(ms: number) {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -9,6 +9,14 @@ export function clock(ms: number) {
   const s = total % 60;
   const pad = (n: number) => String(n).padStart(2, "0");
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+export function span(ms: number) {
+  const total = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = String(total % 60).padStart(2, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
 }
 
 export function minutes(ms: number) {
@@ -40,8 +48,6 @@ export function listDate(at: number, now = new Date()) {
 export function meetingDate(at: number) {
   return `${dayLabel(at)} ${format(at, "HH:mm")}`;
 }
-
-export const speaker: Record<Track, string> = { mic: "我", system: "对方" };
 
 export function systemLabel(apps: AppRef[]) {
   return apps.length > 0 ? apps.map((app) => app.name).join("、") : "全部系统声音";

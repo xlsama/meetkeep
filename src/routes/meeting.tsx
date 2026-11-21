@@ -1,10 +1,24 @@
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate, useParams } from "@tanstack/react-router";
-import { Ellipsis, FolderOpen, LoaderCircle, Mic, Pause, Play, Trash2, Volume2 } from "lucide-react";
+import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import {
+  Check,
+  Download,
+  Ellipsis,
+  FolderOpen,
+  LoaderCircle,
+  Mic,
+  Pause,
+  Play,
+  RotateCcw,
+  Trash2,
+  Upload,
+  Volume2,
+} from "lucide-react";
 import { isMyGo } from "mygo-runtime";
 import { useEffect, useState } from "react";
 import { LevelMeter } from "@/components/level-meter";
 import { FaultNotice, Notice } from "@/components/notice";
+import { PlayerBar } from "@/components/player-bar";
 import { RecDot } from "@/components/rec-dot";
 import { SourceSummary } from "@/components/source-summary";
 import { TitleInput } from "@/components/title-input";
@@ -28,15 +42,22 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Library, type Meeting } from "@/mygo";
+import { Library, type Format, type Meeting, type Progress, type Speaker, type Step } from "@/mygo";
 import { useControls } from "@/lib/controls";
 import { clock, meetingDate, minutes, systemLabel } from "@/lib/format";
+import { resetPlayback, seek, togglePlayback, usePlayback } from "@/lib/player";
+import { clearProgress, useProgress } from "@/lib/progress";
 import { errorMessage, meetingQuery } from "@/lib/queries";
 import { useElapsed, useRecorder } from "@/lib/recorder";
+import { initial, speakerVoice } from "@/lib/speakers";
+import { lineAt, useTranscript } from "@/lib/transcript";
 import { useWindowTitle } from "@/lib/ui";
+import { cn } from "@/lib/utils";
+import { SpeakersSheet } from "@/routes/speakers-sheet";
 
 export function MeetingPage() {
   const { id = "" } = useParams({ strict: false });
+  const { t } = useSearch({ strict: false });
   const navigate = useNavigate();
   const status = useRecorder((s) => s.status);
   const ready = useRecorder((s) => s.ready) || !isMyGo();
@@ -51,7 +72,7 @@ export function MeetingPage() {
   }, [detail.isError, live, navigate]);
 
   if (!ready || !meeting) return null;
-  return live ? <LiveView key={id} meeting={meeting} /> : <DetailView key={id} meeting={meeting} />;
+  return live ? <LiveView key={id} meeting={meeting} /> : <MeetingView key={id} meeting={meeting} t={t} />;
 }
 
 function LiveView({ meeting }: { meeting: Meeting }) {
@@ -148,8 +169,60 @@ function RecordingBar({ meeting }: { meeting: Meeting }) {
   );
 }
 
-function DetailView({ meeting }: { meeting: Meeting }) {
+async function run(onError: (error: string | null) => void, action: () => Promise<unknown>) {
+  onError(null);
+  try {
+    await action();
+  } catch (err) {
+    onError(errorMessage(err));
+  }
+}
+
+function reprocess(id: string, onError: (error: string | null) => void) {
+  return run(onError, () => {
+    clearProgress(id);
+    return Library.reprocess(id);
+  });
+}
+
+const typing = "input, textarea, select, button, a[href], [contenteditable], [role=dialog], [role=menu], [role=menuitem]";
+
+function MeetingView({ meeting, t }: { meeting: Meeting; t: number | undefined }) {
+  const detail = useQuery(meetingQuery(meeting.id));
+  const speakers = detail.data?.speakers ?? [];
+  const { groups, lines } = useTranscript(meeting.id, false);
+  const tracked = useProgress((s) => s.items[meeting.id]);
+  const progress = tracked ?? detail.data?.progress ?? null;
+  const processing = meeting.status === "processing";
+  const playable = meeting.audio !== "" && !processing;
+  const [error, setError] = useState<string | null>(null);
+  const [speakersOpen, setSpeakersOpen] = useState(false);
+  const playError = usePlayback((s) => s.error);
+  const activeSeq = usePlayback((s) => (s.engaged ? (lineAt(lines, s.current)?.seq ?? null) : null));
+  const revealSeq = t === undefined ? null : (lineAt(lines, t)?.seq ?? null);
   const sources = [meeting.microphone && "麦克风", meeting.system && systemLabel(meeting.apps)].filter(Boolean);
+
+  useEffect(() => {
+    resetPlayback();
+  }, [meeting.id]);
+
+  useEffect(() => {
+    if (t !== undefined) seek(t);
+  }, [t]);
+
+  useEffect(() => {
+    if (!playable) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== " " || event.repeat || event.defaultPrevented) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.target instanceof Element && event.target.closest(typing)) return;
+      event.preventDefault();
+      togglePlayback();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [playable]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex h-[60px] shrink-0 items-center gap-2.5 border-b border-divider pr-5 pl-8">
@@ -159,19 +232,178 @@ function DetailView({ meeting }: { meeting: Meeting }) {
             {[meetingDate(meeting.startedAt), minutes(meeting.durationMs), sources.join(" + ")].filter(Boolean).join(" · ")}
           </span>
         </div>
-        <MoreMenu meeting={meeting} />
+        {meeting.status === "done" && speakers.length > 0 && (
+          <SpeakersButton speakers={speakers} onClick={() => setSpeakersOpen(true)} />
+        )}
+        <ExportMenu meetingId={meeting.id} onError={setError} />
+        <MoreMenu meeting={meeting} onError={setError} />
       </header>
+      {processing && <ProgressBand meeting={meeting} progress={progress} />}
       <div className="flex min-h-0 flex-1">
         <section aria-label="文字稿" className="flex min-w-0 flex-[1.15_1_0] flex-col">
-          <Transcript meetingId={meeting.id} live={false} variant="main" paddingEnd={28} />
+          {meeting.status === "failed" && (
+            <Notice
+              testId="meeting-failed"
+              message={meeting.error || "转写失败"}
+              className="mx-8 mt-4"
+              action={
+                <button
+                  type="button"
+                  data-testid="reprocess"
+                  onClick={() => void reprocess(meeting.id, setError)}
+                  className="-my-0.5 inline-flex h-[22px] shrink-0 items-center rounded-xs px-2 text-label font-semibold text-warning transition-colors hover:bg-warning-border/50"
+                >
+                  重新转写
+                </button>
+              }
+            />
+          )}
+          <Notice
+            testId="meeting-error"
+            message={error ?? playError}
+            onDismiss={() => {
+              setError(null);
+              usePlayback.setState({ error: null });
+            }}
+            className="mx-8 mt-4"
+          />
+          <Transcript
+            meetingId={meeting.id}
+            live={false}
+            variant="main"
+            paddingEnd={28}
+            activeSeq={activeSeq}
+            revealSeq={revealSeq}
+            onSelect={playable ? (line) => seek(line.startMs, true) : undefined}
+          />
         </section>
         <SummaryAside />
       </div>
+      {playable && <PlayerBar meetingId={meeting.id} durationMs={meeting.durationMs} groups={groups} />}
+      {meeting.status === "done" && (
+        <SpeakersSheet
+          meetingId={meeting.id}
+          speakers={speakers}
+          open={speakersOpen && speakers.length > 0}
+          onOpenChange={setSpeakersOpen}
+        />
+      )}
     </div>
   );
 }
 
-function MoreMenu({ meeting }: { meeting: Meeting }) {
+function SpeakersButton({ speakers, onClick }: { speakers: Speaker[]; onClick: () => void }) {
+  const others = speakers.filter((s) => !s.self);
+  const self = speakers.filter((s) => s.self);
+  const shown = [...others.slice(0, 4 - self.length), ...self];
+  return (
+    <button
+      type="button"
+      aria-label={`说话人：${speakers.length} 人`}
+      data-testid="meeting-speakers"
+      onClick={onClick}
+      className="inline-flex h-8 shrink-0 items-center gap-2 rounded-full border border-input pr-3 pl-1.5 text-ui font-medium whitespace-nowrap text-secondary-foreground transition-colors outline-none hover:bg-hover focus-visible:ring-[3px] focus-visible:ring-black/10"
+    >
+      <span className="inline-flex">
+        {shown.map((speaker, index) => (
+          <span
+            key={speaker.id}
+            aria-hidden
+            className={cn(
+              "inline-flex size-[22px] items-center justify-center rounded-full text-micro font-semibold text-white shadow-[0_0_0_2px_#ffffff]",
+              index > 0 && "-ml-1.5",
+              speakerVoice(speaker, speakers).avatar,
+            )}
+          >
+            {initial(speaker.name)}
+          </span>
+        ))}
+      </span>
+      {speakers.length} 人
+    </button>
+  );
+}
+
+const formats: { format: Format; label: string; testId: string }[] = [
+  { format: "markdown", label: "Markdown", testId: "export-markdown" },
+  { format: "text", label: "纯文本", testId: "export-text" },
+  { format: "srt", label: "SRT 字幕", testId: "export-srt" },
+];
+
+function ExportMenu({ meetingId, onError }: { meetingId: string; onError: (error: string | null) => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="md" data-testid="meeting-export" className="pr-[13px] pl-[11px]">
+          <Upload className="size-[15px]" />
+          导出
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {formats.map((item) => (
+          <DropdownMenuItem
+            key={item.format}
+            data-testid={item.testId}
+            onSelect={() => void run(onError, () => Library.export(meetingId, item.format))}
+          >
+            {item.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+const stepLabel: Record<Step, string> = {
+  import: "导入",
+  transcribe: "重新转写",
+  speakers: "区分说话人",
+  summary: "生成纪要",
+};
+
+function ProgressBand({ meeting, progress }: { meeting: Meeting; progress: Progress | null }) {
+  const imported = !meeting.microphone && !meeting.system;
+  const steps: Step[] = imported
+    ? ["import", "transcribe", "speakers", "summary"]
+    : ["transcribe", "speakers", "summary"];
+  const current = Math.max(0, progress ? steps.indexOf(progress.step) : 0);
+
+  return (
+    <div className="flex shrink-0 gap-1.5 border-b border-divider px-8 py-3.5" data-testid="processing">
+      {steps.map((step, index) => {
+        const done = index < current;
+        const active = index === current;
+        const width = done ? 100 : active ? (progress?.percent ?? 0) : 0;
+        return (
+          <div key={step} className="flex flex-1 flex-col gap-1.5" data-testid={`processing-${step}`}>
+            <span
+              className={cn(
+                "flex items-center gap-1.5 text-label",
+                active ? "font-semibold text-foreground" : done ? "text-foreground" : "text-muted-foreground",
+              )}
+            >
+              {done && <Check className="size-[13px]" />}
+              {stepLabel[step]}
+              {active && progress && (
+                <span className="font-normal text-muted-foreground tabular-nums" data-testid="processing-percent">
+                  {progress.percent}%
+                </span>
+              )}
+            </span>
+            <span className="h-[3px] overflow-hidden rounded-[2px] bg-line">
+              <span
+                className="block h-full bg-foreground transition-[width] duration-300"
+                style={{ width: `${width}%` }}
+              />
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MoreMenu({ meeting, onError }: { meeting: Meeting; onError: (error: string | null) => void }) {
   const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -191,6 +423,8 @@ function MoreMenu({ meeting }: { meeting: Meeting }) {
     }
   };
 
+  const processing = meeting.status === "processing";
+
   return (
     <>
       <DropdownMenu>
@@ -205,7 +439,23 @@ function MoreMenu({ meeting }: { meeting: Meeting }) {
           <TooltipContent>更多</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem data-testid="meeting-reveal" onSelect={() => void Library.reveal(meeting.id)}>
+          <DropdownMenuItem
+            data-testid="more-save-recording"
+            disabled={meeting.audio === "" || processing}
+            onSelect={() => void run(onError, () => Library.saveRecording(meeting.id))}
+          >
+            <Download />
+            保存录音
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            data-testid="more-reprocess"
+            disabled={processing}
+            onSelect={() => void reprocess(meeting.id, onError)}
+          >
+            <RotateCcw />
+            重新转写
+          </DropdownMenuItem>
+          <DropdownMenuItem data-testid="meeting-reveal" onSelect={() => void run(onError, () => Library.reveal(meeting.id))}>
             <FolderOpen />
             在访达中显示
           </DropdownMenuItem>

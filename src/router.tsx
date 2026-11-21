@@ -5,6 +5,7 @@ import { MeetingPage } from "@/routes/meeting";
 import { MenuPage } from "@/routes/menu";
 import { MiniPage } from "@/routes/mini";
 import { PanelPage } from "@/routes/panel";
+import { SearchPage } from "@/routes/search";
 import { SettingsPage } from "@/routes/settings";
 
 const rootRoute = createRootRoute({ component: Outlet });
@@ -22,7 +23,20 @@ const homeRoute = createRoute({
 const meetingRoute = createRoute({
   getParentRoute: () => mainRoute,
   path: "/meetings/$id",
+  validateSearch: (search: Record<string, unknown>): { t?: number } => {
+    const t = Number(search.t);
+    return search.t !== undefined && Number.isFinite(t) && t >= 0 ? { t } : {};
+  },
   component: MeetingPage,
+});
+
+const searchRoute = createRoute({
+  getParentRoute: () => mainRoute,
+  path: "/search",
+  validateSearch: (search: Record<string, unknown>): { q: string } => ({
+    q: typeof search.q === "string" ? search.q : typeof search.q === "number" ? String(search.q) : "",
+  }),
+  component: SearchPage,
 });
 
 const settingsRoute = createRoute({ getParentRoute: () => mainRoute, path: "/settings", component: SettingsPage });
@@ -32,7 +46,7 @@ const miniRoute = createRoute({ getParentRoute: () => rootRoute, path: "/mini", 
 const menuRoute = createRoute({ getParentRoute: () => rootRoute, path: "/menu", component: MenuPage });
 
 const routeTree = rootRoute.addChildren([
-  mainRoute.addChildren([homeRoute, meetingRoute, settingsRoute]),
+  mainRoute.addChildren([homeRoute, meetingRoute, searchRoute, settingsRoute]),
   panelRoute,
   miniRoute,
   menuRoute,

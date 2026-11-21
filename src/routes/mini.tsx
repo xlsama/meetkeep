@@ -24,7 +24,7 @@ export function MiniPage() {
       </span>
       <span className="min-w-0 flex-1 truncate text-ui text-ink-muted">
         {meeting && (
-          <LastLine meetingId={meeting.id} speakerClassName={{ mic: "text-ink-foreground", system: "text-them-soft" }} />
+          <LastLine meetingId={meeting.id} speakerClassName={{ self: "text-ink-foreground", other: "text-them-soft" }} />
         )}
       </span>
       <button

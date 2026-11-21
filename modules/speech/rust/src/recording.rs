@@ -90,11 +90,11 @@ impl State {
     }
 }
 
-impl Recording for OggOpus {
-    fn write(&self, pcm: Vec<u8>) -> Result<(), Error> {
+impl OggOpus {
+    pub fn push(&self, samples: &[i16]) -> Result<(), Error> {
         let mut guard = self.0.lock().map_err(fail)?;
         let state = guard.as_mut().ok_or(Error::Closed)?;
-        state.pending.extend(pcm.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])));
+        state.pending.extend_from_slice(samples);
         let mut used = 0;
         while state.pending.len() - used >= FRAME {
             let frame: Vec<i16> = state.pending[used..used + FRAME].to_vec();
@@ -105,7 +105,7 @@ impl Recording for OggOpus {
         Ok(())
     }
 
-    fn close(&self) -> Result<(), Error> {
+    pub fn finish(&self) -> Result<(), Error> {
         let Some(mut state) = self.0.lock().map_err(fail)?.take() else { return Ok(()) };
         if !state.pending.is_empty() || state.held.is_none() {
             let mut frame = std::mem::take(&mut state.pending);
@@ -116,5 +116,16 @@ impl Recording for OggOpus {
             state.emit(last, true)?;
         }
         state.writer.inner_mut().flush().map_err(fail)
+    }
+}
+
+impl Recording for OggOpus {
+    fn write(&self, pcm: Vec<u8>) -> Result<(), Error> {
+        let samples: Vec<i16> = pcm.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect();
+        self.push(&samples)
+    }
+
+    fn close(&self) -> Result<(), Error> {
+        self.finish()
     }
 }

@@ -30,7 +30,7 @@ func New(baseURL, key, model string) (*Client, error) {
 		BaseURL: strings.TrimRight(baseURL, "/"),
 		Key:     key,
 		Model:   model,
-		HTTP:    &http.Client{Timeout: 120 * time.Second},
+		HTTP:    &http.Client{Timeout: 5 * time.Minute},
 	}, nil
 }
 
@@ -40,14 +40,36 @@ type Message struct {
 }
 
 type request struct {
-	Model     string    `json:"model"`
-	Messages  []Message `json:"messages"`
-	MaxTokens int       `json:"max_tokens,omitempty"`
+	Model          string    `json:"model"`
+	Messages       []Message `json:"messages"`
+	MaxTokens      int       `json:"max_tokens,omitempty"`
+	Temperature    *float64  `json:"temperature,omitempty"`
+	ResponseFormat *format   `json:"response_format,omitempty"`
+}
+
+type format struct {
+	Type string `json:"type"`
 }
 
 // Complete returns the model's answer to messages.
 func (c *Client) Complete(ctx context.Context, messages []Message, maxTokens int) (string, error) {
-	body, err := json.Marshal(request{Model: c.Model, Messages: messages, MaxTokens: maxTokens})
+	return c.send(ctx, request{Model: c.Model, Messages: messages, MaxTokens: maxTokens})
+}
+
+// CompleteJSON returns the model's answer to user under the instructions of
+// system, which ask for a JSON object.
+func (c *Client) CompleteJSON(ctx context.Context, system, user string) (string, error) {
+	temperature := 0.2
+	return c.send(ctx, request{
+		Model:          c.Model,
+		Messages:       []Message{{Role: "system", Content: system}, {Role: "user", Content: user}},
+		Temperature:    &temperature,
+		ResponseFormat: &format{Type: "json_object"},
+	})
+}
+
+func (c *Client) send(ctx context.Context, r request) (string, error) {
+	body, err := json.Marshal(r)
 	if err != nil {
 		return "", err
 	}

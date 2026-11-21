@@ -1,18 +1,22 @@
 import { TriangleAlert, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import type { ReactNode } from "react";
+import type { Track } from "@/mygo";
 import { useRecorder } from "@/lib/recorder";
 import { cn } from "@/lib/utils";
 
-const trackLabel = { mic: "麦克风", system: "电脑里的声音" } as const;
+const trackLabel: Record<Track, string> = { mic: "麦克风", system: "电脑里的声音", file: "导入的文件" };
 
 export function Notice({
   message,
   onDismiss,
+  action,
   className,
   testId,
 }: {
   message: string | null;
-  onDismiss: () => void;
+  onDismiss?: () => void;
+  action?: ReactNode;
   className?: string;
   testId: string;
 }) {
@@ -39,15 +43,18 @@ export function Notice({
             <span data-selectable className="min-w-0 flex-1 break-words">
               {message}
             </span>
-            <button
-              type="button"
-              aria-label="关闭"
-              data-testid={`${testId}-dismiss`}
-              onClick={onDismiss}
-              className="no-drag -my-0.5 inline-flex size-[22px] shrink-0 items-center justify-center rounded-xs text-warning transition-colors hover:bg-warning-border/50"
-            >
-              <X className="size-[13px]" />
-            </button>
+            {action}
+            {onDismiss && (
+              <button
+                type="button"
+                aria-label="关闭"
+                data-testid={`${testId}-dismiss`}
+                onClick={onDismiss}
+                className="no-drag -my-0.5 inline-flex size-[22px] shrink-0 items-center justify-center rounded-xs text-warning transition-colors hover:bg-warning-border/50"
+              >
+                <X className="size-[13px]" />
+              </button>
+            )}
           </div>
         </motion.div>
       )}
