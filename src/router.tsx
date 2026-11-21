@@ -1,7 +1,6 @@
-import { createRootRoute, createRoute, createRouter, Navigate, Outlet } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Navigate, Outlet } from "@tanstack/react-router";
 import { Home } from "@/routes/home";
 import { MainLayout } from "@/routes/main-layout";
-import { MeetingPage } from "@/routes/meeting";
 import { MenuPage } from "@/routes/menu";
 import { MiniPage } from "@/routes/mini";
 import { PanelPage } from "@/routes/panel";
@@ -33,7 +32,7 @@ const meetingRoute = createRoute({
       ...(search.tab === "board" && { tab: "board" as const }),
     };
   },
-  component: MeetingPage,
+  component: lazyRouteComponent(() => import("@/routes/meeting"), "MeetingPage"),
 });
 
 const searchRoute = createRoute({

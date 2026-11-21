@@ -133,17 +133,23 @@ func (a *app) start() error {
 	return a.windows.start()
 }
 
-// serveRecording serves recording://localhost/<meeting>/audio, the file a
-// meeting is played from.
+// serveRecording serves what a meeting is played from:
+// recording://localhost/<meeting>/audio, and /video for the picture of an
+// imported video.
 func (a *app) serveRecording(w http.ResponseWriter, r *http.Request) {
 	id, name, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/"), "/")
 	meeting, err := a.store.Meeting(r.Context(), id)
-	if err != nil || name != "audio" || meeting.Audio == "" {
+	switch {
+	case err == nil && name == "audio" && meeting.Audio != "":
+		w.Header().Set("Content-Type", processor.Playable[filepath.Ext(meeting.Audio)])
+		http.ServeFile(w, r, filepath.Join(meeting.Directory, filepath.Base(meeting.Audio)))
+	case err == nil && name == "video" && meeting.Video != "":
+		kinds := map[string]string{".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm"}
+		w.Header().Set("Content-Type", kinds[filepath.Ext(meeting.Video)])
+		http.ServeFile(w, r, filepath.Join(meeting.Directory, filepath.Base(meeting.Video)))
+	default:
 		http.NotFound(w, r)
-		return
 	}
-	w.Header().Set("Content-Type", "audio/ogg")
-	http.ServeFile(w, r, filepath.Join(meeting.Directory, filepath.Base(meeting.Audio)))
 }
 
 // alone reports whether this is the only instance of the app. A development

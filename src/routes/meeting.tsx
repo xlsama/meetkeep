@@ -20,7 +20,7 @@ import { useEffect, useState } from "react";
 import { LevelMeter } from "@/components/level-meter";
 import { MeetingAside, type AsideTab } from "@/components/meeting-aside";
 import { FaultNotice, Notice } from "@/components/notice";
-import { PlayerBar } from "@/components/player-bar";
+import { AudioBar, PlayerProvider, usePlayback, VideoStage } from "@/components/player";
 import { RecDot } from "@/components/rec-dot";
 import { SourceSummary } from "@/components/source-summary";
 import { TitleInput } from "@/components/title-input";
@@ -46,7 +46,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Library, type Format, type Meeting, type Progress, type Speaker, type Step } from "@/mygo";
 import { useControls } from "@/lib/controls";
 import { clock, meetingDate, minutes, systemLabel } from "@/lib/format";
-import { resetPlayback, seek, togglePlayback, usePlayback } from "@/lib/player";
 import { clearProgress, useProgress } from "@/lib/progress";
 import { seqOf, type Jump } from "@/lib/notes";
 import { errorMessage, meetingQuery } from "@/lib/queries";
@@ -217,10 +216,18 @@ function reprocess(id: string, onError: (error: string | null) => void) {
   });
 }
 
-const typing =
-  "input, textarea, select, button, a[href], [contenteditable], [role=dialog], [role=menu], [role=menuitem], .excalidraw";
+type ViewProps = { meeting: Meeting; t: number | undefined } & TabProps;
 
-function MeetingView({ meeting, t, tab, onTabChange }: { meeting: Meeting; t: number | undefined } & TabProps) {
+function MeetingView(props: ViewProps) {
+  const { meeting } = props;
+  return (
+    <PlayerProvider video={meeting.video !== "" && meeting.status !== "processing"}>
+      <MeetingBody {...props} />
+    </PlayerProvider>
+  );
+}
+
+function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
   const navigate = useNavigate();
   const detail = useQuery(meetingQuery(meeting.id));
   const speakers = detail.data?.speakers ?? [];
@@ -228,34 +235,19 @@ function MeetingView({ meeting, t, tab, onTabChange }: { meeting: Meeting; t: nu
   const tracked = useProgress((s) => s.items[meeting.id]);
   const progress = tracked ?? detail.data?.progress ?? null;
   const processing = meeting.status === "processing";
-  const playable = meeting.audio !== "" && !processing;
+  const video = meeting.video !== "" && !processing;
+  const playable = (meeting.audio !== "" || meeting.video !== "") && !processing;
   const [error, setError] = useState<string | null>(null);
   const [speakersOpen, setSpeakersOpen] = useState(false);
-  const playError = usePlayback((s) => s.error);
-  const activeSeq = usePlayback((s) => (s.engaged ? (lineAt(lines, s.current)?.seq ?? null) : null));
+  const playback = usePlayback();
+  const activeSeq = playback.started ? (lineAt(lines, playback.currentMs)?.seq ?? null) : null;
   const revealSeq = t === undefined ? null : (lineAt(lines, t)?.seq ?? null);
+  const { seek, ready } = playback;
   const sources = [meeting.microphone && "麦克风", meeting.system && systemLabel(meeting.apps)].filter(Boolean);
 
   useEffect(() => {
-    resetPlayback();
-  }, [meeting.id]);
-
-  useEffect(() => {
-    if (t !== undefined) seek(t);
-  }, [t]);
-
-  useEffect(() => {
-    if (!playable) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== " " || event.repeat || event.defaultPrevented) return;
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      if (event.target instanceof Element && event.target.closest(typing)) return;
-      event.preventDefault();
-      togglePlayback();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [playable]);
+    if (t !== undefined && ready) seek(t);
+  }, [t, ready, seek]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -274,7 +266,7 @@ function MeetingView({ meeting, t, tab, onTabChange }: { meeting: Meeting; t: nu
       </header>
       {processing && <ProgressBand meeting={meeting} progress={progress} />}
       <div className="flex min-h-0 flex-1">
-        <section aria-label="文字稿" className="flex min-w-0 flex-[1.15_1_0] flex-col">
+        <section aria-label="文字稿" className="flex min-w-0 flex-[1.15_1_0] flex-col [container-type:size]">
           {meeting.status === "failed" && (
             <Notice
               testId="meeting-failed"
@@ -292,15 +284,15 @@ function MeetingView({ meeting, t, tab, onTabChange }: { meeting: Meeting; t: nu
               }
             />
           )}
-          <Notice
-            testId="meeting-error"
-            message={error ?? playError}
-            onDismiss={() => {
-              setError(null);
-              usePlayback.setState({ error: null });
-            }}
-            className="mx-8 mt-4"
-          />
+          <Notice testId="meeting-error" message={error} onDismiss={() => setError(null)} className="mx-8 mt-4" />
+          {video && (
+            <VideoStage
+              meetingId={meeting.id}
+              durationMs={meeting.durationMs}
+              groups={groups}
+              spaceDisabled={tab === "board"}
+            />
+          )}
           <Transcript
             meetingId={meeting.id}
             live={false}
@@ -328,7 +320,9 @@ function MeetingView({ meeting, t, tab, onTabChange }: { meeting: Meeting; t: nu
           onRetry={meeting.status === "done" ? () => void run(setError, () => Library.regenerateNotes(meeting.id)) : undefined}
         />
       </div>
-      {playable && <PlayerBar meetingId={meeting.id} durationMs={meeting.durationMs} groups={groups} />}
+      {playable && !video && (
+        <AudioBar meetingId={meeting.id} durationMs={meeting.durationMs} groups={groups} spaceDisabled={tab === "board"} />
+      )}
       {meeting.status === "done" && (
         <SpeakersSheet
           meetingId={meeting.id}

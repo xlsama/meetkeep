@@ -82,6 +82,11 @@ export interface Meeting {
    * is processed.
    */
   audio: string;
+  /**
+   * Video names the file in Directory that holds the picture of an
+   * imported video, or is "".
+   */
+  video: string;
 }
 
 /** MeetingDetail is a meeting with what was said in it and by whom. */

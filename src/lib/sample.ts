@@ -1,9 +1,17 @@
 import { create } from "zustand";
-import { usePlayback } from "@/lib/player";
 
 export const useSample = create<{ playing: string | null }>()(() => ({ playing: null }));
 
 let audio: HTMLAudioElement | null = null;
+let pauseMain: (() => void) | null = null;
+
+export function bindMain(pause: () => void) {
+  pauseMain = pause;
+  return () => {
+    if (pauseMain === pause) pauseMain = null;
+  };
+}
+
 let frame = 0;
 
 export function stopSample() {
@@ -36,7 +44,7 @@ export async function toggleSample(key: string, meetingId: string, startMs: numb
     return;
   }
   stopSample();
-  usePlayback.getState().audio?.pause();
+  pauseMain?.();
   audio ??= new Audio();
   const el = audio;
   const src = `recording://localhost/${meetingId}/audio`;
@@ -66,6 +74,3 @@ export async function toggleSample(key: string, meetingId: string, startMs: numb
   frame = requestAnimationFrame(tick);
 }
 
-usePlayback.subscribe((state, prev) => {
-  if (state.playing && !prev.playing) stopSample();
-});

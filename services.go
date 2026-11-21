@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -492,7 +493,53 @@ func (l *Library) SaveRecording(ctx context.Context, id string) (string, error) 
 	if meeting.Audio == "" {
 		return "", errors.New("录音还在整理")
 	}
-	return mygo.Dialog.SaveCopy(filepath.Join(meeting.Directory, meeting.Audio), fileName(meeting.Title)+".opus")
+	return mygo.Dialog.SaveCopy(filepath.Join(meeting.Directory, meeting.Audio), fileName(meeting.Title)+filepath.Ext(meeting.Audio))
+}
+
+// playable are the kinds of video a web view plays as they are.
+var playable = map[string]bool{".mp4": true, ".m4v": true, ".mov": true, ".webm": true}
+
+// keepVideo keeps the file at path in directory when it is a video the app
+// can play, and returns the name it has there, or "". A link to the file
+// takes no room; where the file system makes none, the file is copied.
+func keepVideo(path, directory string) string {
+	extension := strings.ToLower(filepath.Ext(path))
+	if !playable[extension] {
+		return ""
+	}
+	name := "video" + extension
+	kept := filepath.Join(directory, name)
+	if os.Link(path, kept) == nil {
+		return name
+	}
+	source, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer source.Close()
+	target, err := os.Create(kept)
+	if err != nil {
+		return ""
+	}
+	if _, err := io.Copy(target, source); err != nil {
+		target.Close()
+		os.Remove(kept)
+		return ""
+	}
+	if target.Close() != nil {
+		return ""
+	}
+	return name
+}
+
+// keepAudio links the audio file at path into directory as the file the
+// meeting is played from, when the app can play it as it is. Where the
+// file system makes no link, the meeting is played from what processing
+// makes of the file.
+func keepAudio(path, directory string) {
+	if extension := strings.ToLower(filepath.Ext(path)); processor.Playable[extension] != "" {
+		_ = os.Link(path, filepath.Join(directory, processor.Original+extension))
+	}
 }
 
 var unsafeInFileNames = strings.NewReplacer("/", "-", "\\", "-", ":", "-", "*", "-", "?", "-", "\"", "-", "<", "-", ">", "-", "|", "-")
@@ -538,7 +585,9 @@ func (l *Library) ImportFile(ctx context.Context, path string) (store.Meeting, e
 		Status:    store.Processing,
 		Directory: directory,
 		Apps:      []config.AppRef{},
+		Video:     keepVideo(path, directory),
 	}
+	keepAudio(path, directory)
 	if err := l.app.store.CreateMeeting(ctx, meeting); err != nil {
 		return store.Meeting{}, err
 	}

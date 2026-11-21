@@ -38,6 +38,28 @@ type Progress struct {
 // and the audio of an imported file.
 const audioFile = "audio.opus"
 
+// Original names, without its extension, the imported audio file kept
+// beside what was made of it, to play the meeting from.
+const Original = "original"
+
+// Playable are the kinds of audio a web view plays as they are, with their
+// media types.
+var Playable = map[string]string{
+	".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".aac": "audio/aac", ".wav": "audio/wav",
+	".flac": "audio/flac", ".ogg": "audio/ogg", ".opus": "audio/ogg",
+}
+
+// original returns the name of the imported audio file kept in directory,
+// or "".
+func original(directory string) string {
+	for extension := range Playable {
+		if _, err := os.Stat(filepath.Join(directory, Original+extension)); err == nil {
+			return Original + extension
+		}
+	}
+	return ""
+}
+
 type Processor struct {
 	Speech      speech.Engine
 	Store       *store.Store
@@ -254,6 +276,9 @@ func (p *Processor) process(ctx context.Context, j job) error {
 
 	p.report(j.id, Separating, 60)
 	audio := filepath.Base(found[0].path)
+	if kept := original(meeting.Directory); kept != "" && found[0].name == store.File {
+		audio = kept
+	}
 	if len(found) > 1 {
 		paths := make([]string, len(found))
 		for i, t := range found {

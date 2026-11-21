@@ -51,6 +51,9 @@ type Meeting struct {
 	// Audio names the file in Directory to play the meeting from, once it
 	// is processed.
 	Audio string `json:"audio"`
+	// Video names the file in Directory that holds the picture of an
+	// imported video, or is "".
+	Video string `json:"video"`
 }
 
 // Speaker is someone who talks in a meeting.
@@ -182,6 +185,9 @@ var migrations = [][]string{
 		`ALTER TABLE speakers ADD COLUMN sample_start INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE speakers ADD COLUMN sample_end INTEGER NOT NULL DEFAULT 0`,
 	},
+	{
+		`ALTER TABLE meetings ADD COLUMN video TEXT NOT NULL DEFAULT ''`,
+	},
 }
 
 type Store struct {
@@ -251,9 +257,9 @@ func (s *Store) CreateMeeting(ctx context.Context, m Meeting) error {
 		return err
 	}
 	_, err = s.db.Execute(ctx, `INSERT INTO meetings
-		(id, title, started_at, duration_ms, status, directory, microphone, system, apps)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		m.ID, m.Title, m.StartedAt, m.DurationMs, string(m.Status), m.Directory, m.Microphone, m.System, string(apps))
+		(id, title, started_at, duration_ms, status, directory, microphone, system, apps, video)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		m.ID, m.Title, m.StartedAt, m.DurationMs, string(m.Status), m.Directory, m.Microphone, m.System, string(apps), m.Video)
 	return err
 }
 
@@ -615,7 +621,7 @@ func (s *Store) changed(result sqlite.Result, err error) error {
 	return err
 }
 
-const meetingColumns = "id, title, started_at, duration_ms, status, directory, microphone, system, apps, error, audio"
+const meetingColumns = "id, title, started_at, duration_ms, status, directory, microphone, system, apps, error, audio, video"
 
 func (s *Store) Meetings(ctx context.Context) ([]Meeting, error) {
 	rows, err := s.db.Query(ctx, "SELECT "+meetingColumns+" FROM meetings ORDER BY started_at DESC")
@@ -653,6 +659,7 @@ func meeting(row []any) Meeting {
 		Apps:       []config.AppRef{},
 		Error:      row[9].(string),
 		Audio:      row[10].(string),
+		Video:      row[11].(string),
 	}
 	_ = json.Unmarshal([]byte(row[8].(string)), &m.Apps)
 	return m

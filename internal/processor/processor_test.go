@@ -289,6 +289,12 @@ func TestProcessesOneTrackAndImports(t *testing.T) {
 	if m.Status != store.Done || m.Audio != audioFile || m.DurationMs != 90000 {
 		t.Fatalf("imported as %+v", m)
 	}
+
+	h.meeting(t, "song", Original+".m4a")
+	h.p.Import("song", "/tmp/song.m4a")
+	if m := h.wait(t, "song"); m.Audio != Original+".m4a" {
+		t.Errorf("a meeting with its original audio kept is played from %q", m.Audio)
+	}
 	utterances, _ := h.db.Utterances(ctx, "file")
 	if len(utterances) != 3 || utterances[0].Track != store.File || utterances[1].Speaker != 2 {
 		t.Errorf("stored %+v", utterances)
