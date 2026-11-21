@@ -71,3 +71,19 @@ strip = false
 ## 顺带测到的：MAI-Transcribe-2 说话人分离的时长限制
 
 Azure 直连，一场中文 6 人会议：10 分钟 93.8%、20 分钟 86.0%，两个 38 分钟文件都在 10 分钟内没有返回。
+
+## 上传音视频的解码：纯 Rust，不打包 ffmpeg
+
+用 `symphonia` 0.6.1（纯 Rust）解码，Opus 另接纯 Rust 的 `opus-decoder` 0.1.1。把同一段 57 秒语音编码成 23 种常见录音格式，逐个解码后和 ffmpeg 的解码结果做互相关：
+
+| 结果 | 格式 |
+|---|---|
+| 正确（相关系数 ≥ 0.999，共 22 种） | mp4 / mov / mkv 里的 AAC（含 moov 在尾部、faststart、分片 mp4）；m4a 的 AAC-LC、HE-AAC、HE-AAC v2、ALAC；裸 AAC；mp3（CBR、VBR、16 kHz 单声道）；wav（16 位、24 位、浮点）；flac；aiff；ogg vorbis；ogg opus；webm opus |
+| 不支持 | wma |
+| 没测 | amr（本机没有编码器生成样本；symphonia 的功能列表里没有它） |
+
+- 速度：39 分钟的 m4a 解码 1.7 秒。Opus 例外，纯 Rust 解码器只有约 12 倍实时，一小时的 webm 要 5 分钟左右。
+- HE-AAC 只解出了核心层（16 kHz 或 24 kHz），没有还原高频；送 16 kHz 的 ASR 不受影响。
+- 测试程序没有裁掉编码器的起始延迟（AAC 约 20–40 ms），正式实现要按包里的 trim 字段裁掉。
+- 体积：测试程序 3.6 MB；能通过 Windows 目标的类型检查。
+- 样本都是用 ffmpeg 和 afconvert 生成的，没有用真实的会议软件导出文件测过。
