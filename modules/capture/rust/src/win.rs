@@ -1,11 +1,14 @@
-use crate::mygo::{stream_of, Error, Stream};
+use crate::mygo::{stream_of, CaptureError, Error, Stream};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{sync_channel, Receiver};
 use std::sync::Arc;
 use wasapi::{
-    initialize_mta, AudioClient, DeviceEnumerator, Direction, SampleType, StreamMode, WaveFormat,
+    initialize_mta, AudioClient, DeviceEnumerator, Direction, SampleType, StreamMode, WasapiError,
+    WaveFormat,
 };
+
+const ACCESS_DENIED: i32 = 0x80070005u32 as i32;
 
 const FRAME_BYTES: usize = 3200;
 const WAIT_MS: u32 = 100;
@@ -21,7 +24,7 @@ pub enum Target {
 }
 
 struct Frames {
-    receiver: Receiver<Result<Vec<u8>, String>>,
+    receiver: Receiver<Result<Vec<u8>, Error>>,
     stop: Arc<AtomicBool>,
     failed: bool,
 }
@@ -35,9 +38,9 @@ impl Iterator for Frames {
         }
         match self.receiver.recv().ok()? {
             Ok(frame) => Some(Ok(frame)),
-            Err(message) => {
+            Err(error) => {
                 self.failed = true;
-                Some(Err(Error::other(message)))
+                Some(Err(error))
             }
         }
     }
@@ -56,7 +59,8 @@ pub fn frames(target: Target) -> Stream<Result<Vec<u8>, Error>> {
     std::thread::spawn(move || {
         let result = capture(target, &flag, |frame| sender.send(Ok(frame)).is_ok());
         if let Err(e) = result {
-            let _ = sender.send(Err(e.to_string()));
+            let denied = matches!(e.downcast_ref(), Some(WasapiError::Windows(w)) if w.code().0 == ACCESS_DENIED);
+            let _ = sender.send(Err(if denied { CaptureError::Denied.into() } else { Error::other(e.to_string()) }));
         }
     });
     stream_of(Frames { receiver, stop, failed: false })

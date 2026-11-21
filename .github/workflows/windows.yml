@@ -30,6 +30,13 @@ jobs:
           Get-CimInstance Win32_SoundDevice | Format-Table Name, Status
           [System.Environment]::OSVersion.Version
 
+      - name: Let desktop apps use the microphone
+        shell: pwsh
+        run: |
+          foreach ($hive in 'HKLM', 'HKCU') {
+            reg add "$hive\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone" /v Value /t REG_SZ /d Allow /f
+          }
+
       - name: Play a tone from another process
         shell: pwsh
         run: |
