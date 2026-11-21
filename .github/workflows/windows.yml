@@ -1,0 +1,75 @@
+name: windows
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: oven-sh/setup-bun@v2
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            modules/capture/rust
+            modules/diarize/rust
+      - uses: LABSN/sound-ci-helpers@v1
+      - name: Install the MyGo CLI
+        run: go install github.com/egoist/mygo/cmd/mygo@v0.10.0
+
+      - name: Audio devices
+        shell: pwsh
+        run: |
+          Get-Service Audiosrv | Format-List Status, StartType
+          Get-CimInstance Win32_SoundDevice | Format-Table Name, Status
+          [System.Environment]::OSVersion.Version
+
+      - name: Play a tone from another process
+        shell: pwsh
+        run: |
+          $wav = (Resolve-Path modules/capture/testdata/tone.wav).Path
+          $player = Start-Process powershell -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile', '-Command', "while (1) { (New-Object System.Media.SoundPlayer '$wav').PlaySync() }"
+          "MEETKEEP_TONE_PID=$($player.Id)" >> $env:GITHUB_ENV
+          Start-Sleep -Seconds 2
+
+      - name: Capture, in Rust
+        run: cargo test --manifest-path modules/capture/rust/Cargo.toml -- --test-threads=1 --nocapture
+
+      - name: Capture, from Go through MyGo
+        run: |
+          mygo native build -target host modules/capture
+          go test -v -count=1 ./modules/capture
+
+      - name: Speaker separation fixtures
+        shell: bash
+        run: |
+          mkdir fixtures && cd fixtures
+          base=https://github.com/k2-fsa/sherpa-onnx/releases/download
+          curl -sSLO $base/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2
+          tar xjf sherpa-onnx-pyannote-segmentation-3-0.tar.bz2
+          mv sherpa-onnx-pyannote-segmentation-3-0/model.onnx segmentation.onnx
+          curl -sSL -o embedding.onnx $base/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx
+          curl -sSLO $base/speaker-segmentation-models/0-four-speakers-zh.wav
+          ls -l
+
+      - name: Speaker separation, from Go through MyGo
+        shell: bash
+        run: |
+          mygo native build -target host modules/diarize
+          MEETKEEP_DIARIZE_FIXTURES="$PWD/fixtures" go test -v -count=1 ./modules/diarize
+
+      - name: Build the app
+        run: |
+          bun install
+          bunx mygo build -skip-installer
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: meetkeep-poc-windows
+          path: build/windows-amd64

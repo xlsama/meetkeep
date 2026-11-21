@@ -4,3 +4,4 @@ node_modules/
 /.mygo/
 mygo_windows_*.syso
 .env
+.mygo-call-*/
