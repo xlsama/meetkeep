@@ -15,5 +15,15 @@
     "dist",
     "build",
     ".mygo"
+  ],
+  "overrides": [
+    {
+      "files": [
+        "src/components/transcript.tsx"
+      ],
+      "rules": {
+        "react/incompatible-library": "off"
+      }
+    }
   ]
 }

@@ -1,19 +1,39 @@
-# meetkeep-poc
+# MeetKeep
 
-MyGo 0.10 上的会议转写 POC：Swift native module 采麦克风和系统音频，Go 按停顿切句后调 Azure MAI-Transcribe-2，React 页面实时显示。
+开源的桌面会议记录应用：录制会议，实时转写，生成纪要和白板。macOS 和 Windows 双端，数据存本地。用 [MyGo](https://github.com/egoist/mygo) 写成：界面是 React，业务是 Go，采集和语音模型是 Swift 和 Rust 的原生模块。
+
+范围和阶段见 `docs/plan.md`。
 
 ```sh
 bun install
-cp .env.example .env   # 填 Azure Speech 的 key，以及任意 OpenAI 兼容 LLM 的地址、密钥、模型名
 bun run dev
 bun run check && bun run test
 ```
 
-需要 macOS 14.2+、Go 1.27+、Bun、Xcode、Rust。Windows 上的采集和说话人识别模块已在 CI 里验证，应用界面还没在真机上跑过。
+需要 macOS 14.2+、Go 1.27+、Bun、Xcode、Rust。Windows 上的采集和语音模块在 CI 里验证，应用界面还没在真机上跑过。
+
+转写用 Azure 的 MAI-Transcribe-2，纪要和白板用任意 OpenAI 兼容的模型，都在应用的设置页里填。设置存在 `~/.config/meetkeep/settings.json`，会议存在同目录的 `meetkeep.db`，录音默认存在 `~/Documents/MeetKeep`。
+
+## 结构
+
+| 位置 | 内容 |
+|---|---|
+| `main.go`、`windows.go`、`services.go`、`events.go` | 应用入口、窗口和菜单栏、给界面调用的服务和事件 |
+| `internal/recorder` | 录制流程：采集、切句、转写、入库 |
+| `internal/audio` | 降采样、按语音概率切句 |
+| `internal/asr`、`internal/llm` | 转写服务和模型服务的客户端 |
+| `internal/store`、`internal/config` | SQLite 存储、设置文件 |
+| `modules/capture` | 原生模块：麦克风和系统声音采集（macOS 用 Swift，Windows 用 Rust） |
+| `modules/speech` | 原生模块（Rust）：语音检测、录音编码、说话人识别 |
+| `src` | 界面 |
+
+## 录制
+
+每个来源一条轨：麦克风是「我」，电脑里的声音是「对方」。采集 48kHz 单声道，边录边编码成 Ogg Opus 落盘（每条轨 32kbps）。同时降到 16kHz 送 silero-vad，按停顿切成句子，逐句送去转写。
 
 ## 说话人识别
 
-停止录制后在本地运行，回答「这场会里谁说了哪句」。实现在 `modules/diarize`（Rust，约 700 行），macOS 和 Windows 共用同一份代码。整条流程移植自 [senko](https://github.com/narcotic-sh/senko)，它是一套算法，本身不是模型；流程里用到两个模型。
+停止录制后在本地运行，回答「这场会里谁说了哪句」。实现在 `modules/speech`（Rust），macOS 和 Windows 共用同一份代码。整条流程移植自 [senko](https://github.com/narcotic-sh/senko)，它是一套算法，本身不是模型；流程里用到两个模型。
 
 | 步骤 | 做什么 | 用什么 | 状态 |
 |---|---|---|---|
@@ -35,6 +55,6 @@ bun run check && bun run test
 | pyannote segmentation-3.0（现用） | 94.73% | 92.38% |
 | silero-vad v6.2.3（阈值 0.55，未调参） | 93.69% | 90.28% |
 
-silero-vad 仍然要用，但用在别处：会中实时切句，还没接入。
+silero-vad 用在别处：会中实时切句。
 
 细节见 `docs/research/tech-validation-2026-11-21.md`。整体范围和阶段见 `docs/plan.md`。

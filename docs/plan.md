@@ -16,7 +16,8 @@
 | 纪要与白板的模型 | 任意 OpenAI 兼容服务，设置项是服务地址、密钥、模型名三项，默认 DeepSeek |
 | 配置 | 存 `~/.config/meetkeep/settings.json`，密钥明文写在里面，不用钥匙串；文件权限 0600 |
 | 会中说话人 | 双轨区分：麦克风是「我」，电脑里的声音是「对方」 |
-| 会后说话人 | 本地识别（`modules/diarize`，Rust），不用云端的。线下会议同样适用 |
+| 会后说话人 | 本地识别（`modules/speech`，Rust），不用云端的。线下会议同样适用 |
+| 录音格式 | 采集 48kHz 单声道，每条轨存一个 Ogg Opus 文件（32kbps，两条轨一小时约 29MB），纯 Rust 编码（ropus），边录边落盘；切句和转写在内存里降到 16kHz |
 | 跨会议认人 | 做。本地声纹库，用户主动点「记住声音」才入库 |
 | 实时纪要 | 按话题追加的大纲，约 45 秒更新一次，只改最后两个话题，更早的冻结；每条可点回原句。会后另出定稿 |
 | 实时白板 | Excalidraw 自由画板。模型只输出带稳定 ID 的节点和连线，坐标由程序排；用户动过的元素不再改。不走 Mermaid |
@@ -49,11 +50,12 @@
 | TanStack Virtual | 长文字稿的虚拟滚动 | 已验证 |
 | Zustand | 前端状态 | POC 已用 |
 | Excalidraw | 白板画布 | 未接 |
-| SQLite（MyGo 官方插件） | 本地存储和全文搜索 | 未接 |
+| SQLite（MyGo 官方插件） | 本地存储和全文搜索 | 已接（存储） |
 | Core Audio process tap（Swift） | macOS 采集系统声音和麦克风 | 已验证 |
 | wasapi（Rust） | Windows 采集，支持按进程 | 已在 CI 验证 |
 | ONNX Runtime（Rust 的 ort） | 运行下面几个本地模型 | 已验证 |
-| silero-vad | 会中判断有没有人说话，用来切句 | 未接 |
+| silero-vad | 会中判断有没有人说话，用来切句 | 已接 |
+| ropus、ogg | 录音编码成 Ogg Opus | 已接 |
 | pyannote segmentation-3.0 | 会后标出语音段 | 已验证 |
 | CAM++ | 会后把声音变成向量，供聚类分人 | 已验证，需自己导出和托管 |
 | ReDimNet2 b6 | 跨会议认人的声纹 | 未移植 |

@@ -1,4 +1,4 @@
-module meetkeep-poc
+module github.com/xlsama/meetkeep
 
 go 1.27.4
 
