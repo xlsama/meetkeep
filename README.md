@@ -37,4 +37,4 @@ bun run check && bun run test
 
 silero-vad 仍然要用，但用在别处：会中实时切句，还没接入。
 
-细节见 `docs/research/tech-validation-2026-11-21.md`。
+细节见 `docs/research/tech-validation-2026-11-21.md`。整体范围和阶段见 `docs/plan.md`。
