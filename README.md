@@ -10,7 +10,7 @@ bun run dev
 bun run check && bun run test
 ```
 
-需要 macOS 14.2+、Go 1.27+、Bun、Xcode、Rust。Windows 上的采集和语音模块在 CI 里验证，应用界面还没在真机上跑过。
+需要 macOS 14.2+、Go 1.27+、Bun、Xcode、Rust。现在只在 macOS 上开发和验证；Windows 的现状和待办记在 `docs/plan.md`。
 
 转写用 Azure 的 MAI-Transcribe-2，纪要和白板用任意 OpenAI 兼容的模型，都在应用的设置页里填。设置存在 `~/.config/meetkeep/settings.json`，会议存在同目录的 `meetkeep.db`，录音默认存在 `~/Documents/MeetKeep`。
 
