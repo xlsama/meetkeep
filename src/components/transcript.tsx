@@ -39,6 +39,7 @@ export function Transcript({
   paddingEnd,
   activeSeq = null,
   revealSeq = null,
+  revealKey,
   onSelect,
   className,
 }: {
@@ -48,6 +49,7 @@ export function Transcript({
   paddingEnd: number;
   activeSeq?: number | null;
   revealSeq?: number | null;
+  revealKey?: number;
   onSelect?: (line: Line) => void;
   className?: string;
 }) {
@@ -86,7 +88,7 @@ export function Transcript({
 
   useEffect(() => {
     if (revealIndex >= 0) virtualizer.scrollToIndex(revealIndex, { align: "center" });
-  }, [revealIndex, virtualizer]);
+  }, [revealIndex, revealKey, virtualizer]);
 
   return (
     <div

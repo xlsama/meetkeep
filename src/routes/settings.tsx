@@ -84,7 +84,11 @@ function SettingsForm({ settings }: { settings: Settings }) {
     const parsed = schema.safeParse(form.state.values);
     const current = queryClient.getQueryData(settingsQuery.queryKey);
     if (!parsed.success || !current) return;
-    const next: Settings = { ...current, ...parsed.data };
+    const next: Settings = {
+      ...current,
+      ...parsed.data,
+      recording: { ...current.recording, ...parsed.data.recording },
+    };
     if (JSON.stringify(next) === JSON.stringify(current)) return;
     try {
       await Config.save(next);

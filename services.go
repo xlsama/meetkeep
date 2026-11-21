@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -42,6 +43,9 @@ func (c *Config) Save(s config.Settings) error {
 	}
 	if s.Sources.Apps == nil {
 		s.Sources.Apps = []config.AppRef{}
+	}
+	if s.Recording.IgnoredApps == nil {
+		s.Recording.IgnoredApps = []config.AppRef{}
 	}
 	return c.app.update(func(current *config.Settings) { *current = s })
 }
@@ -230,7 +234,41 @@ func (l *Library) RenameSpeaker(ctx context.Context, id string, speaker int, nam
 	if name == "" {
 		return errors.New("名字不能为空")
 	}
+	speakers, err := l.app.store.Speakers(ctx, id)
+	if err != nil {
+		return err
+	}
+	remembered := false
+	for _, s := range speakers {
+		remembered = remembered || s.ID == speaker && s.Remembered
+	}
+	if remembered {
+		if err := l.app.store.Forget(ctx, id, speaker); err != nil {
+			return err
+		}
+	}
 	if err := l.app.store.RenameSpeaker(ctx, id, speaker, name); err != nil {
+		return err
+	}
+	if remembered {
+		if err := l.app.store.Remember(ctx, id, speaker); err != nil {
+			return err
+		}
+	}
+	return libraryChanged.Broadcast(id)
+}
+
+// RememberSpeaker keeps the voice of a meeting's speaker under the
+// speaker's name, so that later meetings recognize it, or forgets the
+// sample when remember is false.
+func (l *Library) RememberSpeaker(ctx context.Context, id string, speaker int, remember bool) error {
+	var err error
+	if remember {
+		err = l.app.store.Remember(ctx, id, speaker)
+	} else {
+		err = l.app.store.Forget(ctx, id, speaker)
+	}
+	if err != nil {
 		return err
 	}
 	return libraryChanged.Broadcast(id)
@@ -550,6 +588,50 @@ func (l *Library) Reveal(ctx context.Context, id string) error {
 	return nil
 }
 
+// People keeps the voices that are remembered.
+type People struct{ app *app }
+
+// Known are the people whose voices are remembered, and the user.
+type Known struct {
+	// SelfMeetings is in how many meetings the user's microphone was
+	// recorded, SelfLastAt when the newest of them began, in Unix
+	// milliseconds.
+	SelfMeetings int            `json:"selfMeetings"`
+	SelfLastAt   int64          `json:"selfLastAt"`
+	People       []store.Person `json:"people"`
+}
+
+// List returns the people whose voices are remembered.
+func (p *People) List(ctx context.Context) (Known, error) {
+	people, err := p.app.store.People(ctx)
+	if err != nil {
+		return Known{}, err
+	}
+	meetings, lastAt, err := p.app.store.Self(ctx)
+	return Known{SelfMeetings: meetings, SelfLastAt: lastAt, People: people}, err
+}
+
+// Rename gives a person another name, in every meeting they talk in.
+func (p *People) Rename(ctx context.Context, id int, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return errors.New("名字不能为空")
+	}
+	if err := p.app.store.RenamePerson(ctx, id, name); err != nil {
+		return err
+	}
+	return libraryChanged.Broadcast("")
+}
+
+// Delete forgets a person's voice. The meetings they talk in keep their
+// name.
+func (p *People) Delete(ctx context.Context, id int) error {
+	if err := p.app.store.DeletePerson(ctx, id); err != nil {
+		return err
+	}
+	return libraryChanged.Broadcast("")
+}
+
 // Windows shows and hides the app's windows.
 type Windows struct{ app *app }
 
@@ -573,6 +655,20 @@ func (w *Windows) HidePanel() { w.app.windows.setMode(panelHidden) }
 
 // ResizePanel makes the side panel width wide.
 func (w *Windows) ResizePanel(width int) { w.app.windows.resizePanel(width) }
+
+// CloseNotice closes the notice that a call began.
+func (w *Windows) CloseNotice() { w.app.windows.closeNotice() }
+
+// IgnoreApp stops announcing the calls of an app, and closes the notice
+// of one.
+func (w *Windows) IgnoreApp(app config.AppRef) error {
+	w.app.windows.closeNotice()
+	return w.app.update(func(s *config.Settings) {
+		if !ignored(*s, app.ID) {
+			s.Recording.IgnoredApps = append(slices.Clone(s.Recording.IgnoredApps), app)
+		}
+	})
+}
 
 // CloseToast closes the notice that a meeting's notes are ready.
 func (w *Windows) CloseToast() { w.app.windows.closeToast() }

@@ -7,21 +7,29 @@ func makeRecorder() throws -> any Recorder { NativeRecorder() }
 
 final class NativeRecorder: Recorder {
     func apps() throws -> [App] {
+        Self.running { _ in true }.sorted {
+            $0.playing != $1.playing ? $0.playing : $0.name.localizedCompare($1.name) == .orderedAscending
+        }
+    }
+
+    func listening() throws -> [App] {
+        Self.running { $0.recording }
+    }
+
+    private static func running(having wanted: (AudioProcess) -> Bool) -> [App] {
         let processes = AudioProcess.all()
         let own = Bundle.main.bundleIdentifier
         var found: [App] = []
         for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular {
             guard let id = app.bundleIdentifier, id != own else { continue }
             let owned = processes.filter { $0.belongs(to: id) }
-            guard !owned.isEmpty else { continue }
+            guard owned.contains(where: wanted) else { continue }
             found.append(
                 App(
                     id: id, name: app.localizedName ?? id, icon: Self.png(app.icon),
                     playing: owned.contains { $0.playing }))
         }
-        return found.sorted {
-            $0.playing != $1.playing ? $0.playing : $0.name.localizedCompare($1.name) == .orderedAscending
-        }
+        return found
     }
 
     func microphone() throws -> String {
@@ -80,6 +88,7 @@ struct AudioProcess {
     let objectID: AudioObjectID
     let bundleID: String
     let playing: Bool
+    let recording: Bool
 
     func belongs(to app: String) -> Bool {
         bundleID == app || bundleID.hasPrefix(app + ".")
@@ -98,7 +107,8 @@ struct AudioProcess {
         return ids.map { id in
             AudioProcess(
                 objectID: id, bundleID: string(id, kAudioProcessPropertyBundleID),
-                playing: number(id, kAudioProcessPropertyIsRunningOutput) != 0)
+                playing: number(id, kAudioProcessPropertyIsRunningOutput) != 0,
+                recording: number(id, kAudioProcessPropertyIsRunningInput) != 0)
         }
     }
 

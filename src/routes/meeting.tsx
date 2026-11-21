@@ -4,6 +4,7 @@ import {
   Check,
   Download,
   Ellipsis,
+  FileText,
   FolderOpen,
   LoaderCircle,
   Mic,
@@ -17,6 +18,7 @@ import {
 import { isMyGo } from "mygo-runtime";
 import { useEffect, useState } from "react";
 import { LevelMeter } from "@/components/level-meter";
+import { MeetingAside, type AsideTab } from "@/components/meeting-aside";
 import { FaultNotice, Notice } from "@/components/notice";
 import { PlayerBar } from "@/components/player-bar";
 import { RecDot } from "@/components/rec-dot";
@@ -40,13 +42,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Library, type Format, type Meeting, type Progress, type Speaker, type Step } from "@/mygo";
 import { useControls } from "@/lib/controls";
 import { clock, meetingDate, minutes, systemLabel } from "@/lib/format";
 import { resetPlayback, seek, togglePlayback, usePlayback } from "@/lib/player";
 import { clearProgress, useProgress } from "@/lib/progress";
+import { seqOf, type Jump } from "@/lib/notes";
 import { errorMessage, meetingQuery } from "@/lib/queries";
 import { useElapsed, useRecorder } from "@/lib/recorder";
 import { initial, speakerVoice } from "@/lib/speakers";
@@ -57,7 +59,7 @@ import { SpeakersSheet } from "@/routes/speakers-sheet";
 
 export function MeetingPage() {
   const { id = "" } = useParams({ strict: false });
-  const { t } = useSearch({ strict: false });
+  const { t, tab = "summary" } = useSearch({ strict: false });
   const navigate = useNavigate();
   const status = useRecorder((s) => s.status);
   const ready = useRecorder((s) => s.ready) || !isMyGo();
@@ -71,11 +73,33 @@ export function MeetingPage() {
     if (detail.isError && !live) void navigate({ to: "/", replace: true });
   }, [detail.isError, live, navigate]);
 
+  const setTab = (next: AsideTab) =>
+    void navigate({
+      to: "/meetings/$id",
+      params: { id },
+      search: (prev) => ({ ...prev, tab: next === "board" ? ("board" as const) : undefined }),
+      replace: true,
+    });
+
   if (!ready || !meeting) return null;
-  return live ? <LiveView key={id} meeting={meeting} /> : <MeetingView key={id} meeting={meeting} t={t} />;
+  return live ? (
+    <LiveView key={id} meeting={meeting} tab={tab} onTabChange={setTab} />
+  ) : (
+    <MeetingView key={id} meeting={meeting} t={t} tab={tab} onTabChange={setTab} />
+  );
 }
 
-function LiveView({ meeting }: { meeting: Meeting }) {
+type TabProps = { tab: AsideTab; onTabChange: (tab: AsideTab) => void };
+
+function LiveView({ meeting, tab, onTabChange }: { meeting: Meeting } & TabProps) {
+  const { lines } = useTranscript(meeting.id, true);
+  const [focus, setFocus] = useState<{ seq: number; at: number } | null>(null);
+
+  const jump = (target: Jump) => {
+    const seq = seqOf(lines, target);
+    if (seq !== null) setFocus({ seq, at: Date.now() });
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex h-[52px] shrink-0 items-center gap-3 border-b border-divider pr-5 pl-8">
@@ -91,10 +115,18 @@ function LiveView({ meeting }: { meeting: Meeting }) {
       <div className="flex min-h-0 flex-1">
         <section aria-label="文字稿" className="relative flex min-w-0 flex-[1.15_1_0] flex-col">
           <FaultNotice className="mx-8 mt-4" />
-          <Transcript meetingId={meeting.id} live variant="main" paddingEnd={110} />
+          <Transcript
+            meetingId={meeting.id}
+            live
+            variant="main"
+            paddingEnd={110}
+            activeSeq={focus?.seq ?? null}
+            revealSeq={focus?.seq ?? null}
+            revealKey={focus?.at}
+          />
           <RecordingBar meeting={meeting} />
         </section>
-        <SummaryAside />
+        <MeetingAside meeting={meeting} live tab={tab} onTabChange={onTabChange} onJump={jump} />
       </div>
     </div>
   );
@@ -185,9 +217,11 @@ function reprocess(id: string, onError: (error: string | null) => void) {
   });
 }
 
-const typing = "input, textarea, select, button, a[href], [contenteditable], [role=dialog], [role=menu], [role=menuitem]";
+const typing =
+  "input, textarea, select, button, a[href], [contenteditable], [role=dialog], [role=menu], [role=menuitem], .excalidraw";
 
-function MeetingView({ meeting, t }: { meeting: Meeting; t: number | undefined }) {
+function MeetingView({ meeting, t, tab, onTabChange }: { meeting: Meeting; t: number | undefined } & TabProps) {
+  const navigate = useNavigate();
   const detail = useQuery(meetingQuery(meeting.id));
   const speakers = detail.data?.speakers ?? [];
   const { groups, lines } = useTranscript(meeting.id, false);
@@ -277,7 +311,22 @@ function MeetingView({ meeting, t }: { meeting: Meeting; t: number | undefined }
             onSelect={playable ? (line) => seek(line.startMs, true) : undefined}
           />
         </section>
-        <SummaryAside />
+        <MeetingAside
+          meeting={meeting}
+          live={false}
+          tab={tab}
+          onTabChange={onTabChange}
+          onJump={(target) => {
+            seek(target.atMs);
+            void navigate({
+              to: "/meetings/$id",
+              params: { id: meeting.id },
+              search: (prev) => ({ ...prev, t: target.atMs }),
+              replace: true,
+            });
+          }}
+          onRetry={meeting.status === "done" ? () => void run(setError, () => Library.regenerateNotes(meeting.id)) : undefined}
+        />
       </div>
       {playable && <PlayerBar meetingId={meeting.id} durationMs={meeting.durationMs} groups={groups} />}
       {meeting.status === "done" && (
@@ -455,6 +504,14 @@ function MoreMenu({ meeting, onError }: { meeting: Meeting; onError: (error: str
             <RotateCcw />
             重新转写
           </DropdownMenuItem>
+          <DropdownMenuItem
+            data-testid="more-regenerate-notes"
+            disabled={meeting.status !== "done"}
+            onSelect={() => void run(onError, () => Library.regenerateNotes(meeting.id))}
+          >
+            <FileText />
+            重新生成纪要
+          </DropdownMenuItem>
           <DropdownMenuItem data-testid="meeting-reveal" onSelect={() => void run(onError, () => Library.reveal(meeting.id))}>
             <FolderOpen />
             在访达中显示
@@ -503,24 +560,5 @@ function MoreMenu({ meeting, onError }: { meeting: Meeting; onError: (error: str
         </AlertDialogContent>
       </AlertDialog>
     </>
-  );
-}
-
-function SummaryAside() {
-  return (
-    <aside aria-label="纪要与白板" className="flex min-w-0 flex-[1_1_0] flex-col border-l border-divider bg-panel">
-      <Tabs defaultValue="summary" className="flex-1">
-        <TabsList className="h-11 gap-[22px] border-divider px-7">
-          <TabsTrigger value="summary" data-testid="tab-summary" className="text-row">
-            纪要
-          </TabsTrigger>
-          <TabsTrigger value="board" data-testid="tab-board" className="text-row">
-            白板
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="summary" />
-        <TabsContent value="board" />
-      </Tabs>
-    </aside>
   );
 }

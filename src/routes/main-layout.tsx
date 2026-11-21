@@ -91,15 +91,15 @@ function Sidebar() {
         </div>
       </ScrollArea>
       <div className="flex flex-col gap-px border-t border-line p-2">
-        <button
-          type="button"
-          disabled
+        <Link
+          to="/people"
           data-testid="nav-people"
-          className="flex h-8 items-center gap-2.5 rounded-sm px-2.5 text-ui text-secondary-foreground disabled:opacity-50"
+          className="flex h-8 items-center gap-2.5 rounded-sm px-2.5 text-ui text-secondary-foreground transition-colors hover:bg-accent"
+          activeProps={{ className: "bg-selected font-medium hover:bg-selected" }}
         >
           <Users className="size-[15px] shrink-0" />
           <span>人物</span>
-        </button>
+        </Link>
         <Link
           to="/settings"
           data-testid="nav-settings"

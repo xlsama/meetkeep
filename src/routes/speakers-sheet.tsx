@@ -1,7 +1,9 @@
 import { Ellipsis, LoaderCircle } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { SampleButton } from "@/components/sample-button";
 import { Button } from "@/components/ui/button";
 import { DialogTitle, Sheet } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,6 +14,7 @@ import { Library, type MeetingDetail, type Speaker } from "@/mygo";
 import { span } from "@/lib/format";
 import { clearProgress } from "@/lib/progress";
 import { errorMessage, meetingQuery, queryClient } from "@/lib/queries";
+import { stopSample, toggleSample } from "@/lib/sample";
 import { initial, ordered, speakerVoice } from "@/lib/speakers";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +61,8 @@ function SpeakersForm({
   const total = speakers.reduce((sum, s) => sum + s.durationMs, 0);
   const rows = ordered(speakers);
 
+  useEffect(() => stopSample, []);
+
   const act = async (action: () => Promise<unknown>) => {
     setError(null);
     try {
@@ -92,6 +97,12 @@ function SpeakersForm({
             share={total > 0 ? Math.round((speaker.durationMs / total) * 100) : 0}
             onRename={(name) => act(() => rename(meetingId, speaker, name))}
             onMerge={(into) => void act(() => Library.mergeSpeakers(meetingId, speaker.id, into))}
+            onListen={() =>
+              void act(() =>
+                toggleSample(`speaker-${speaker.id}`, meetingId, speaker.sampleStartMs, speaker.sampleEndMs),
+              )
+            }
+            onRemember={(remember) => void act(() => setRemembered(meetingId, speaker, remember))}
           />
         ))}
         {error && (
@@ -147,20 +158,30 @@ function SpeakersForm({
   );
 }
 
-function setSpeakerName(meetingId: string, speakerId: number, name: string) {
+function patchSpeaker(meetingId: string, speakerId: number, patch: Partial<Speaker>) {
   queryClient.setQueryData<MeetingDetail>(meetingQuery(meetingId).queryKey, (detail) =>
     detail
-      ? { ...detail, speakers: detail.speakers.map((s) => (s.id === speakerId ? { ...s, name } : s)) }
+      ? { ...detail, speakers: detail.speakers.map((s) => (s.id === speakerId ? { ...s, ...patch } : s)) }
       : detail,
   );
 }
 
 async function rename(meetingId: string, speaker: Speaker, name: string) {
-  setSpeakerName(meetingId, speaker.id, name);
+  patchSpeaker(meetingId, speaker.id, { name });
   try {
     await Library.renameSpeaker(meetingId, speaker.id, name);
   } catch (err) {
-    setSpeakerName(meetingId, speaker.id, speaker.name);
+    patchSpeaker(meetingId, speaker.id, { name: speaker.name });
+    throw err;
+  }
+}
+
+async function setRemembered(meetingId: string, speaker: Speaker, remembered: boolean) {
+  patchSpeaker(meetingId, speaker.id, { remembered });
+  try {
+    await Library.rememberSpeaker(meetingId, speaker.id, remembered);
+  } catch (err) {
+    patchSpeaker(meetingId, speaker.id, { remembered: speaker.remembered });
     throw err;
   }
 }
@@ -172,6 +193,8 @@ function SpeakerRow({
   share,
   onRename,
   onMerge,
+  onListen,
+  onRemember,
 }: {
   meetingId: string;
   speaker: Speaker;
@@ -179,6 +202,8 @@ function SpeakerRow({
   share: number;
   onRename: (name: string) => Promise<boolean>;
   onMerge: (into: number) => void;
+  onListen: () => void;
+  onRemember: (remember: boolean) => void;
 }) {
   const voice = speakerVoice(speaker, speakers);
   const targets = ordered(speakers).filter((s) => s.id !== speaker.id);
@@ -198,6 +223,30 @@ function SpeakerRow({
       <span className="w-[84px] shrink-0 text-right text-label text-muted-foreground tabular-nums">
         {span(speaker.durationMs)} · {share}%
       </span>
+      {speaker.sampleEndMs > 0 ? (
+        <SampleButton
+          sampleKey={`speaker-${speaker.id}`}
+          label={`试听${speaker.name}`}
+          testId={`speaker-listen-${speaker.id}`}
+          size={12}
+          onClick={onListen}
+        />
+      ) : (
+        <span aria-hidden className="w-[30px] shrink-0" />
+      )}
+      {speaker.self ? (
+        <span aria-hidden className="w-[118px] shrink-0" />
+      ) : (
+        <label className="inline-flex w-[118px] shrink-0 items-center justify-end gap-2 text-label text-secondary-foreground">
+          记住声音
+          <Switch
+            aria-label={`记住${speaker.name}的声音`}
+            data-testid={`speaker-remember-${speaker.id}`}
+            checked={speaker.remembered}
+            onCheckedChange={onRemember}
+          />
+        </label>
+      )}
       {speaker.self ? (
         <span aria-hidden className="w-[30px] shrink-0" />
       ) : (

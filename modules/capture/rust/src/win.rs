@@ -178,11 +178,22 @@ fn root(system: &System, process: u32) -> u32 {
 }
 
 pub fn apps() -> Result<Vec<App>, Failure> {
+    sessions(Direction::Render)
+}
+
+/// The apps with an active session on a microphone.
+pub fn listening() -> Result<Vec<App>, Failure> {
+    Ok(sessions(Direction::Capture)?.into_iter().filter(|app| app.playing).collect())
+}
+
+/// The apps with a session on the devices of a direction; playing tells
+/// those whose session is active.
+fn sessions(direction: Direction) -> Result<Vec<App>, Failure> {
     initialize_mta().ok()?;
     let system = processes()?;
     let own = name(&system, std::process::id());
     let mut found: BTreeMap<String, bool> = BTreeMap::new();
-    for device in &DeviceEnumerator::new()?.get_device_collection(Direction::Render)? {
+    for device in &DeviceEnumerator::new()?.get_device_collection(direction)? {
         let sessions = device?.get_iaudiosessionmanager()?.get_audiosessionenumerator()?;
         for i in 0..sessions.get_count()? {
             let session = sessions.get_session(i)?;
@@ -284,6 +295,16 @@ mod tests {
         assert!(!found.is_empty());
         let (_, peak) = loudest(found[0], Duration::from_secs(3));
         assert!(peak > 0.01, "peak rms {peak}");
+    }
+
+    #[test]
+    fn nothing_of_ours_listens() {
+        let Some(_) = tone() else { return };
+        let listening = listening().expect("listening");
+        println!("listening: {:?}", listening.iter().map(|a| &a.id).collect::<Vec<_>>());
+        let system = processes().expect("processes");
+        let own = name(&system, std::process::id()).expect("our name");
+        assert!(listening.iter().all(|a| a.id != own));
     }
 
     #[test]

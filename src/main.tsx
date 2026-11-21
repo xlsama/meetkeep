@@ -10,7 +10,7 @@ import { startRecorder } from "@/lib/recorder";
 import { router } from "@/router";
 import "@/style.css";
 
-const surfaces = ["panel", "mini", "menu"] as const;
+const surfaces = ["panel", "mini", "menu", "toast", "detect"] as const;
 const surface = surfaces.find((name) => location.pathname.startsWith(`/${name}`)) ?? "main";
 document.documentElement.dataset.window = surface;
 

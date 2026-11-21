@@ -3,6 +3,7 @@ package processor
 import (
 	"context"
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -38,6 +39,32 @@ func TestAssign(t *testing.T) {
 	}
 }
 
+func TestRecheckAndMatch(t *testing.T) {
+	a, b := []float32{1, 0}, []float32{0, 1}
+	voices := map[int][]float32{0: a, 1: b}
+	who := []int{0, 0, 0, 1, 0}
+	uncertain := []bool{true, false, false, false, true}
+	vectors := [][]float32{{0.98, 0.2}, {0.1, 0.99}, {0.7, 0.71}, nil, nil}
+	recheck(who, uncertain, vectors, voices)
+	for i, want := range []struct {
+		speaker   int
+		uncertain bool
+	}{{0, false}, {1, false}, {0, true}, {1, false}, {0, true}} {
+		if who[i] != want.speaker || uncertain[i] != want.uncertain {
+			t.Errorf("sentence %d: speaker %d, uncertain %v; want %d, %v", i, who[i], uncertain[i], want.speaker, want.uncertain)
+		}
+	}
+
+	people := map[int][]float32{7: {0.9, 0.44}, 8: {0, 1}}
+	found := match(map[int][]float32{0: a, 1: {0.8, 0.6}, 2: {-1, 0}}, people)
+	if len(found) != 1 || found[1] != 7 {
+		t.Errorf("matched %v, want only the voice most like person 7", found)
+	}
+	if got := mean([][]float32{{1, 0}, {0, 1}}); math.Abs(float64(got[0])-math.Sqrt2/2) > 1e-6 {
+		t.Errorf("the mean is %v", got)
+	}
+}
+
 type fakeEngine struct {
 	speech.Engine
 	mixed    []string
@@ -55,6 +82,17 @@ func (e *fakeEngine) Import(_ context.Context, input, output string) (int, error
 		return 0, errors.New("no audio")
 	}
 	return 90000, os.WriteFile(output, []byte("imported"), 0o644)
+}
+
+func (e *fakeEngine) Embed(_ context.Context, _ string, _ string, spans []speech.Span) ([]speech.Voiceprint, error) {
+	prints := make([]speech.Voiceprint, len(spans))
+	for i, span := range spans {
+		prints[i].Vector = []float32{1, 0}
+		if span.StartMs >= 4800 && span.StartMs < 7500 {
+			prints[i].Vector = []float32{0, 1}
+		}
+	}
+	return prints, nil
 }
 
 func (e *fakeEngine) Separate(_ context.Context, _ string, _ speech.Models, count int) ([]speech.Segment, error) {
@@ -89,6 +127,7 @@ type harness struct {
 	changed    chan string
 	dir        string
 	summarized []string
+	voiced     bool
 }
 
 func newHarness(t *testing.T, transcriber fakeTranscriber) *harness {
@@ -104,7 +143,10 @@ func newHarness(t *testing.T, transcriber fakeTranscriber) *harness {
 		{StartMs: 4800, EndMs: 7200, Speaker: 1},
 		{StartMs: 7500, EndMs: 9500, Speaker: 0},
 	}}
+	model := filepath.Join(h.dir, "recognition.onnx")
+	h.voiced = os.WriteFile(model, []byte("model"), 0o644) == nil
 	h.p = &Processor{
+		Recognition: model,
 		Speech:      h.engine,
 		Store:       db,
 		Settings:    func() config.Settings { return config.Settings{} },
@@ -228,6 +270,19 @@ func TestProcessesOneTrackAndImports(t *testing.T) {
 		t.Errorf("speakers of a room are %+v", speakers)
 	}
 
+	if !h.voiced {
+		t.Fatal("the test has no recognition model")
+	}
+	if speakers[0].SampleEndMs != 4000 || len(speakers[0].Voice) != 2 {
+		t.Errorf("the speaker's voice is %+v", speakers[0])
+	}
+	if err := h.db.RenameSpeaker(ctx, "room", 1, "陈昊"); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.db.Remember(ctx, "room", 1); err != nil {
+		t.Fatal(err)
+	}
+
 	h.meeting(t, "file")
 	h.p.Import("file", "/tmp/talk.mp4")
 	m := h.wait(t, "file")
@@ -237,6 +292,10 @@ func TestProcessesOneTrackAndImports(t *testing.T) {
 	utterances, _ := h.db.Utterances(ctx, "file")
 	if len(utterances) != 3 || utterances[0].Track != store.File || utterances[1].Speaker != 2 {
 		t.Errorf("stored %+v", utterances)
+	}
+	speakers, _ = h.db.Speakers(ctx, "file")
+	if len(speakers) != 2 || speakers[0].Name != "陈昊" || speakers[0].PersonID == 0 || speakers[1].Name != "说话人 2" {
+		t.Errorf("the remembered voice was not recognized: %+v", speakers)
 	}
 
 	h.meeting(t, "bad")

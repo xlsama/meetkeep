@@ -8,11 +8,12 @@ import { searchQuery } from "@/lib/queries";
 import { useWindowTitle } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 
-type Filter = "all" | "transcript" | "title";
+type Filter = "all" | "transcript" | "notes" | "title";
 
 const filters: { value: Filter; label: string }[] = [
   { value: "all", label: "全部" },
   { value: "transcript", label: "文字稿" },
+  { value: "notes", label: "纪要" },
   { value: "title", label: "标题" },
 ];
 
@@ -23,7 +24,7 @@ export function SearchPage() {
   const result = useQuery({ ...searchQuery(query), enabled: query !== "", placeholderData: keepPreviousData });
   const [filter, setFilter] = useState<Filter>("all");
   const hits = result.data ?? [];
-  const found = hits.reduce((sum, hit) => sum + hit.lines.length + (hit.titleMatch ? 1 : 0), 0);
+  const found = hits.reduce((sum, hit) => sum + hit.lines.length + hit.notes.length + (hit.titleMatch ? 1 : 0), 0);
   const empty = result.isSuccess && !result.isPlaceholderData && hits.length === 0;
 
   return (
@@ -64,7 +65,13 @@ export function SearchPage() {
 
 function Results({ hits, filter, query }: { hits: SearchHit[]; filter: Filter; query: string }) {
   const shown = hits.filter((hit) =>
-    filter === "transcript" ? hit.lines.length > 0 : filter === "title" ? hit.titleMatch : true,
+    filter === "transcript"
+      ? hit.lines.length > 0
+      : filter === "notes"
+        ? hit.notes.length > 0
+        : filter === "title"
+          ? hit.titleMatch
+          : true,
   );
   return (
     <div className="flex max-w-[820px] flex-col gap-[26px] px-7 py-[22px]">
@@ -89,7 +96,7 @@ function Results({ hits, filter, query }: { hits: SearchHit[]; filter: Filter; q
               {hit.meeting.status === "failed" && " · 转写失败"}
             </span>
           </Link>
-          {filter !== "title" &&
+          {(filter === "all" || filter === "transcript") &&
             hit.lines.map((line) => (
               <Link
                 key={line.seq}
@@ -109,6 +116,25 @@ function Results({ hits, filter, query }: { hits: SearchHit[]; filter: Filter; q
                 </span>
                 <span className="text-body leading-[1.7]">
                   <Highlight text={line.text} query={query} />
+                </span>
+              </Link>
+            ))}
+          {(filter === "all" || filter === "notes") &&
+            hit.notes.map((note, index) => (
+              <Link
+                key={`note-${index}`}
+                to="/meetings/$id"
+                params={{ id: hit.meeting.id }}
+                search={{ t: note.atMs }}
+                data-testid={`search-note-${hit.meeting.id}-${index}`}
+                className="grid grid-cols-[44px_72px_minmax(0,1fr)] items-baseline gap-x-2.5 rounded-md px-3 py-2 text-foreground transition-colors hover:bg-hover"
+              >
+                <span className="font-mono text-tiny text-muted-foreground">纪要</span>
+                <span className="inline-flex items-center">
+                  <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-faint" />
+                </span>
+                <span className="text-body leading-[1.7]">
+                  <Highlight text={note.text} query={query} />
                 </span>
               </Link>
             ))}

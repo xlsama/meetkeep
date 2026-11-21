@@ -169,6 +169,47 @@ func TestSeparateReadsOggOpus(t *testing.T) {
 	}
 }
 
+func cosine(a, b []float32) float64 {
+	var dot float64
+	for i := range a {
+		dot += float64(a[i]) * float64(b[i])
+	}
+	return dot
+}
+
+func TestEmbedTellsVoicesApart(t *testing.T) {
+	dir := fixtures(t)
+	e := engine(t)
+	path := filepath.Join(t.TempDir(), "meeting.opus")
+	if _, err := e.Import(t.Context(), filepath.Join(dir, "0-four-speakers-zh.wav"), path); err != nil {
+		t.Fatal(err)
+	}
+	model := filepath.Join("..", "..", "resources", "models", "recognition.onnx")
+	voices, err := e.Embed(t.Context(), path, model, []speech.Span{
+		{StartMs: 600, EndMs: 6700},
+		{StartMs: 20400, EndMs: 23600},
+		{StartMs: 7100, EndMs: 13600},
+		{StartMs: 1000, EndMs: 1020},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(voices) != 4 || len(voices[0].Vector) != 192 {
+		t.Fatalf("got %d voiceprints of %d dimensions", len(voices), len(voices[0].Vector))
+	}
+	if len(voices[3].Vector) != 0 {
+		t.Error("20 ms of audio got a voiceprint")
+	}
+	same, other := cosine(voices[0].Vector, voices[1].Vector), cosine(voices[0].Vector, voices[2].Vector)
+	t.Logf("the narrator against herself %.3f, against another speaker %.3f", same, other)
+	if same < 0.52 {
+		t.Errorf("one voice twice is %.3f alike, want at least 0.52", same)
+	}
+	if other > 0.35 {
+		t.Errorf("two voices are %.3f alike, want at most 0.35", other)
+	}
+}
+
 func TestDetectorStaysQuietOnSilence(t *testing.T) {
 	detector, err := engine(t).Detector()
 	if err != nil {

@@ -44,6 +44,9 @@ type Processor struct {
 	Settings    func() config.Settings
 	Transcriber func(config.ASRSettings) (asr.Transcriber, error)
 	Models      speech.Models
+	// Recognition is the file of the model that tells voices apart across
+	// meetings. Without it nobody is recognized.
+	Recognition string
 	// Summarize writes the notes of a meeting whose record is ready. What
 	// it fails at does not fail the meeting.
 	Summarize func(ctx context.Context, id string)
@@ -327,6 +330,24 @@ func (p *Processor) label(ctx context.Context, found []track, utterances []store
 		return nil, fmt.Errorf("区分说话人失败：%w", err)
 	}
 	who, uncertain := assign(phrases, segments)
+	sentences := make([]store.Utterance, len(index))
+	for k, i := range index {
+		sentences[k] = utterances[i]
+	}
+	heard, err := p.listen(ctx, mixed.path, sentences, who, uncertain)
+	if err != nil {
+		return nil, fmt.Errorf("区分说话人失败：%w", err)
+	}
+	known, names, err := p.Store.Voices(ctx)
+	if err != nil {
+		return nil, err
+	}
+	people := map[int][]float32{}
+	for person, samples := range known {
+		people[person] = mean(samples)
+	}
+	recognizedAs := match(heard.voices, people)
+
 	used := map[int]int{}
 	var order []int
 	for _, speaker := range who {
@@ -342,7 +363,15 @@ func (p *Processor) label(ctx context.Context, found []track, utterances []store
 		if len(order) == 1 && self != 0 {
 			name = "对方"
 		}
-		speakers = append(speakers, store.Speaker{ID: used[speaker], Name: name})
+		sample := heard.samples[speaker]
+		found := store.Speaker{
+			ID: used[speaker], Name: name, Voice: heard.voices[speaker],
+			SampleStartMs: int64(sample.StartMs), SampleEndMs: int64(sample.EndMs),
+		}
+		if person, ok := recognizedAs[speaker]; ok {
+			found.PersonID, found.Name = person, names[person]
+		}
+		speakers = append(speakers, found)
 	}
 	for k, i := range index {
 		utterances[i].Speaker = used[who[k]]

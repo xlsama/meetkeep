@@ -1,5 +1,5 @@
 import { QueryClient, queryOptions } from "@tanstack/react-query";
-import { Config, events, Library, Sources } from "@/mygo";
+import { Config, events, Library, People, Sources } from "@/mygo";
 import { applyProgress } from "@/lib/progress";
 
 export const queryClient = new QueryClient({
@@ -35,6 +35,17 @@ export const searchQuery = (query: string) =>
     queryFn: () => Library.search(query),
   });
 
+export const peopleQuery = queryOptions({
+  queryKey: ["people"],
+  queryFn: () => People.list(),
+});
+
+export const notesQuery = (id: string) =>
+  queryOptions({
+    queryKey: ["notes", id],
+    queryFn: () => Library.notes(id),
+  });
+
 export const microphoneQuery = queryOptions({
   queryKey: ["microphone"],
   queryFn: () => Sources.microphone(),
@@ -56,8 +67,12 @@ export function syncQueries() {
     void queryClient.invalidateQueries({ queryKey: ["meetings"] });
     void queryClient.invalidateQueries({ queryKey: ["meeting"] });
     void queryClient.invalidateQueries({ queryKey: ["search"] });
+    void queryClient.invalidateQueries({ queryKey: ["people"] });
   });
   events.processing.on(applyProgress);
+  events.notes.on((state) => {
+    queryClient.setQueryData(notesQuery(state.meetingId).queryKey, state);
+  });
   events.settings.on((settings) => {
     queryClient.setQueryData(settingsQuery.queryKey, settings);
   });

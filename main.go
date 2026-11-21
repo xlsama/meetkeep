@@ -39,7 +39,7 @@ func main() {
 	a := &app{}
 	a.windows.app = a
 	a.notes.app = a
-	mygo.Bind(&Config{a}, &Sources{a}, &Recorder{a}, &Library{a}, &Windows{a})
+	mygo.Bind(&Config{a}, &Sources{a}, &Recorder{a}, &Library{a}, &People{a}, &Windows{a})
 	mygo.App.SetPath(mygo.PathUserData, filepath.Join(config.Dir(), "app"))
 	mygo.App.OnWindowAllClosed(func() {})
 	mygo.App.WhenReady(func() {
@@ -107,9 +107,10 @@ func (a *app) start() error {
 			Segmentation: filepath.Join(resources, "models", "segmentation.onnx"),
 			Embedding:    filepath.Join(resources, "models", "embedding.onnx"),
 		},
-		Summarize: a.notes.finalize,
-		Progress:  func(p processor.Progress) { _ = processing.Broadcast(p) },
-		Changed:   func(id string) { _ = libraryChanged.Broadcast(id) },
+		Recognition: filepath.Join(resources, "models", "recognition.onnx"),
+		Summarize:   a.notes.finalize,
+		Progress:    func(p processor.Progress) { _ = processing.Broadcast(p) },
+		Changed:     func(id string) { _ = libraryChanged.Broadcast(id) },
 	}
 	for _, id := range interrupted {
 		a.processor.Process(id)

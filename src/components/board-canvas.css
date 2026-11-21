@@ -1,0 +1,9 @@
+.mk-board .excalidraw {
+  --color-selection: #0d0d0d;
+}
+
+.mk-board .layer-ui__wrapper,
+.mk-board .App-top-bar,
+.mk-board .App-bottom-bar {
+  display: none !important;
+}

@@ -126,7 +126,13 @@
   }
   :root[data-window="mini"],
   :root[data-window="mini"] body,
-  :root[data-window="mini"] #root {
+  :root[data-window="mini"] #root,
+  :root[data-window="toast"],
+  :root[data-window="toast"] body,
+  :root[data-window="toast"] #root,
+  :root[data-window="detect"],
+  :root[data-window="detect"] body,
+  :root[data-window="detect"] #root {
     height: 100%;
     overflow: hidden;
     background: transparent;

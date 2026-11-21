@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { AppWindow, LoaderCircle, Mic, PanelRightClose, Pause, Play, Volume2, X } from "lucide-react";
-import { useRef, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
+import { BoardPreview } from "@/components/board";
 import { LevelMeter } from "@/components/level-meter";
 import { FaultNotice, Notice } from "@/components/notice";
+import { PanelNotes } from "@/components/notes";
 import { RecDot } from "@/components/rec-dot";
 import { Transcript } from "@/components/transcript";
 import { Button } from "@/components/ui/button";
@@ -11,14 +13,28 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Windows } from "@/mygo";
 import { useControls } from "@/lib/controls";
 import { clock, systemLabel } from "@/lib/format";
+import { seqOf, useNotes, type Jump } from "@/lib/notes";
 import { meetingQuery } from "@/lib/queries";
 import { useElapsed, useRecorder } from "@/lib/recorder";
+import { useTranscript } from "@/lib/transcript";
 
 export function PanelPage() {
   const status = useRecorder((s) => s.status);
   const meeting = status.meeting;
   const detail = useQuery({ ...meetingQuery(meeting?.id ?? ""), enabled: meeting !== null });
   const title = detail.data?.meeting.title ?? meeting?.title ?? "";
+  const meetingId = meeting?.id ?? "";
+  const notes = useNotes(meetingId);
+  const { lines } = useTranscript(meetingId, true);
+  const [tab, setTab] = useState("transcript");
+  const [focus, setFocus] = useState<{ seq: number; at: number } | null>(null);
+
+  const jump = (target: Jump) => {
+    const seq = seqOf(lines, target);
+    if (seq === null) return;
+    setFocus({ seq, at: Date.now() });
+    setTab("transcript");
+  };
 
   return (
     <div className="relative flex h-full flex-col border-l border-edge bg-background">
@@ -42,7 +58,7 @@ export function PanelPage() {
         </IconButton>
       </div>
       <Controls />
-      <Tabs defaultValue="transcript" className="flex-1">
+      <Tabs value={tab} onValueChange={setTab} className="flex-1">
         <TabsList className="h-[38px] gap-5 border-line px-[18px]">
           <TabsTrigger value="transcript" data-testid="panel-tab-transcript" className="text-ui">
             文字稿
@@ -56,13 +72,30 @@ export function PanelPage() {
         </TabsList>
         <FaultNotice className="mx-[18px] mt-2.5" />
         <TabsContent value="transcript" forceMount className="flex flex-col">
-          {meeting && <Transcript meetingId={meeting.id} live variant="panel" paddingEnd={18} />}
+          {meeting && (
+            <Transcript
+              meetingId={meeting.id}
+              live
+              variant="panel"
+              paddingEnd={18}
+              activeSeq={focus?.seq ?? null}
+              revealSeq={focus?.seq ?? null}
+              revealKey={focus?.at}
+            />
+          )}
         </TabsContent>
-        <TabsContent value="summary" />
-        <TabsContent
-          value="board"
-          className="bg-muted bg-[radial-gradient(#d9d9d9_1px,transparent_1px)] bg-size-[18px_18px]"
-        />
+        <TabsContent value="summary" className="flex flex-col">
+          <PanelNotes state={notes} onJump={jump} />
+        </TabsContent>
+        <TabsContent value="board" className="flex flex-col">
+          {meeting && (
+            <BoardPreview
+              title={title}
+              topics={notes?.notes?.topics ?? []}
+              onOpen={() => void Windows.showMain(`/meetings/${meeting.id}?tab=board`)}
+            />
+          )}
+        </TabsContent>
       </Tabs>
     </div>
   );

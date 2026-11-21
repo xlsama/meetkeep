@@ -131,6 +131,59 @@ func TestTranscriptNotesAndBoard(t *testing.T) {
 		t.Errorf("speakers are %+v", who)
 	}
 
+	if err := s.Remember(ctx, "a", 2); !errors.Is(err, ErrNoVoice) {
+		t.Errorf("a speaker without a voiceprint was remembered: %v", err)
+	}
+	voiced := []Speaker{{ID: 1, Name: "我", Self: true}, {ID: 2, Name: "周然", Voice: []float32{0.6, 0.8}, SampleStartMs: 100, SampleEndMs: 1900}}
+	if err := s.ReplaceTranscript(ctx, "a", final[:2], voiced, "audio.opus"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Remember(ctx, "a", 2); err != nil {
+		t.Fatal(err)
+	}
+	people, _ := s.People(ctx)
+	if len(people) != 1 || people[0].Name != "周然" || people[0].Samples != 1 || people[0].Meetings != 1 || people[0].SampleMeeting != "a" || people[0].SampleEndMs != 1900 {
+		t.Fatalf("people are %+v", people)
+	}
+	voices, names, _ := s.Voices(ctx)
+	if got := voices[people[0].ID]; len(got) != 1 || got[0][1] != 0.8 || names[people[0].ID] != "周然" {
+		t.Errorf("voices are %v, names %v", voices, names)
+	}
+	if who, _ = s.Speakers(ctx, "a"); !who[1].Remembered || who[1].PersonID != people[0].ID || who[0].Remembered {
+		t.Errorf("speakers are %+v", who)
+	}
+	if err := s.RenamePerson(ctx, people[0].ID, "周老师"); err != nil {
+		t.Fatal(err)
+	}
+	if who, _ = s.Speakers(ctx, "a"); who[1].Name != "周老师" {
+		t.Errorf("the person's new name did not reach the meeting: %+v", who)
+	}
+	again := []Speaker{{ID: 1, Name: "周老师", PersonID: people[0].ID, Voice: []float32{0.6, 0.8}}}
+	if err := s.ReplaceTranscript(ctx, "a", final[:1], again, "audio.opus"); err != nil {
+		t.Fatal(err)
+	}
+	if who, _ = s.Speakers(ctx, "a"); len(who) != 1 || !who[0].Remembered {
+		t.Errorf("processing the meeting again lost the sample: %+v", who)
+	}
+	if err := s.Forget(ctx, "a", 1); err != nil {
+		t.Fatal(err)
+	}
+	if people, _ = s.People(ctx); len(people) != 0 {
+		t.Errorf("a person without samples is kept: %+v", people)
+	}
+	if who, _ = s.Speakers(ctx, "a"); who[0].PersonID != 0 || who[0].Name != "周老师" {
+		t.Errorf("forgetting the voice changed the speaker to %+v", who[0])
+	}
+	if err := s.ReplaceTranscript(ctx, "a", final, speakers, "audio.opus"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RenameSpeaker(ctx, "a", 2, "周然"); err != nil {
+		t.Fatal(err)
+	}
+	if n, _, _ := s.Self(ctx); n != 0 {
+		t.Errorf("the user was heard in %d meetings", n)
+	}
+
 	lines, err := s.SearchLines(ctx, "100%")
 	if err != nil {
 		t.Fatal(err)

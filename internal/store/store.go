@@ -4,9 +4,12 @@ package store
 import (
 	"context"
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,6 +60,34 @@ type Speaker struct {
 	// Self marks the user.
 	Self       bool  `json:"self"`
 	DurationMs int64 `json:"durationMs"`
+	// PersonID is the person whose voice this is, or 0.
+	PersonID int `json:"personId"`
+	// Remembered tells that the voice heard here is kept as a sample of
+	// that person's.
+	Remembered bool `json:"remembered"`
+	// SampleStartMs and SampleEndMs bound a stretch of the meeting in which
+	// the speaker is heard alone, or are both 0.
+	SampleStartMs int64 `json:"sampleStartMs"`
+	SampleEndMs   int64 `json:"sampleEndMs"`
+	// Voice is the speaker's voiceprint in this meeting, or empty.
+	Voice []float32 `json:"-"`
+}
+
+// Person is someone whose voice is remembered.
+type Person struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+	// Meetings is how many meetings the person talks in, LastAt when the
+	// newest of them began, in Unix milliseconds.
+	Meetings int   `json:"meetings"`
+	LastAt   int64 `json:"lastAt"`
+	// Samples is how many samples of the voice are kept.
+	Samples int `json:"samples"`
+	// SampleMeeting, SampleStartMs and SampleEndMs tell where to hear the
+	// voice; SampleMeeting is "" when no recording of it is left.
+	SampleMeeting string `json:"sampleMeeting"`
+	SampleStartMs int64  `json:"sampleStartMs"`
+	SampleEndMs   int64  `json:"sampleEndMs"`
 }
 
 type Utterance struct {
@@ -130,6 +161,26 @@ var migrations = [][]string{
 			meeting_id TEXT PRIMARY KEY REFERENCES meetings (id) ON DELETE CASCADE,
 			scene TEXT NOT NULL
 		)`,
+	},
+	{
+		`CREATE TABLE people (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			created_at INTEGER NOT NULL
+		)`,
+		`CREATE TABLE voiceprints (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			person_id INTEGER NOT NULL REFERENCES people (id) ON DELETE CASCADE,
+			meeting_id TEXT REFERENCES meetings (id) ON DELETE SET NULL,
+			speaker INTEGER NOT NULL,
+			embedding BLOB NOT NULL,
+			start_ms INTEGER NOT NULL,
+			end_ms INTEGER NOT NULL
+		)`,
+		`ALTER TABLE speakers ADD COLUMN person_id INTEGER REFERENCES people (id) ON DELETE SET NULL`,
+		`ALTER TABLE speakers ADD COLUMN embedding BLOB`,
+		`ALTER TABLE speakers ADD COLUMN sample_start INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE speakers ADD COLUMN sample_end INTEGER NOT NULL DEFAULT 0`,
 	},
 }
 
@@ -288,11 +339,21 @@ func (s *Store) ReplaceTranscript(ctx context.Context, id string, utterances []U
 	batch := []sqlite.Statement{
 		{SQL: "DELETE FROM utterances WHERE meeting_id = ?", Args: []any{id}},
 		{SQL: "DELETE FROM speakers WHERE meeting_id = ?", Args: []any{id}},
+		{SQL: "UPDATE voiceprints SET speaker = 0 WHERE meeting_id = ?", Args: []any{id}},
 	}
 	for _, sp := range speakers {
+		var person any
+		if sp.PersonID != 0 {
+			person = sp.PersonID
+			batch = append(batch, sqlite.Statement{
+				SQL:  "UPDATE voiceprints SET speaker = ? WHERE meeting_id = ? AND person_id = ? AND speaker = 0",
+				Args: []any{sp.ID, id, sp.PersonID},
+			})
+		}
 		batch = append(batch, sqlite.Statement{
-			SQL:  "INSERT INTO speakers (meeting_id, id, name, self) VALUES (?, ?, ?, ?)",
-			Args: []any{id, sp.ID, sp.Name, sp.Self},
+			SQL: `INSERT INTO speakers (meeting_id, id, name, self, person_id, embedding, sample_start, sample_end)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			Args: []any{id, sp.ID, sp.Name, sp.Self, person, encode(sp.Voice), sp.SampleStartMs, sp.SampleEndMs},
 		})
 	}
 	for _, u := range utterances {
@@ -313,18 +374,165 @@ func (s *Store) ReplaceTranscript(ctx context.Context, id string, utterances []U
 // Speakers returns who talks in a meeting, with for how long.
 func (s *Store) Speakers(ctx context.Context, meetingID string) ([]Speaker, error) {
 	rows, err := s.db.Query(ctx, `SELECT s.id, s.name, s.self,
-		COALESCE((SELECT SUM(end_ms - start_ms) FROM utterances u WHERE u.meeting_id = s.meeting_id AND u.speaker = s.id), 0)
+		COALESCE((SELECT SUM(end_ms - start_ms) FROM utterances u WHERE u.meeting_id = s.meeting_id AND u.speaker = s.id), 0),
+		COALESCE(s.person_id, 0), s.embedding, s.sample_start, s.sample_end,
+		EXISTS (SELECT 1 FROM voiceprints v WHERE v.meeting_id = s.meeting_id AND v.speaker = s.id)
 		FROM speakers s WHERE s.meeting_id = ? ORDER BY s.id`, meetingID)
 	if err != nil {
 		return nil, err
 	}
 	speakers := make([]Speaker, 0, len(rows.Values))
 	for _, row := range rows.Values {
+		voice, _ := row[5].([]byte)
 		speakers = append(speakers, Speaker{
 			ID: int(row[0].(int64)), Name: row[1].(string), Self: row[2].(int64) != 0, DurationMs: row[3].(int64),
+			PersonID: int(row[4].(int64)), Voice: decode(voice),
+			SampleStartMs: row[6].(int64), SampleEndMs: row[7].(int64), Remembered: row[8].(int64) != 0,
 		})
 	}
 	return speakers, nil
+}
+
+func encode(vector []float32) []byte {
+	if len(vector) == 0 {
+		return nil
+	}
+	out := make([]byte, 4*len(vector))
+	for i, v := range vector {
+		binary.LittleEndian.PutUint32(out[4*i:], math.Float32bits(v))
+	}
+	return out
+}
+
+func decode(data []byte) []float32 {
+	vector := make([]float32, len(data)/4)
+	for i := range vector {
+		vector[i] = math.Float32frombits(binary.LittleEndian.Uint32(data[4*i:]))
+	}
+	return vector
+}
+
+// ErrNoVoice means the speaker has no voiceprint to remember.
+var ErrNoVoice = errors.New("这个说话人还没有可以记住的声音")
+
+// Remember keeps the voice of a meeting's speaker as a sample of the
+// person of the speaker's name, whom it makes if need be.
+func (s *Store) Remember(ctx context.Context, meetingID string, speaker int) error {
+	rows, err := s.db.Query(ctx, `SELECT name, embedding, sample_start, sample_end FROM speakers
+		WHERE meeting_id = ? AND id = ?`, meetingID, speaker)
+	if err != nil {
+		return err
+	}
+	if len(rows.Values) == 0 {
+		return ErrNotFound
+	}
+	row := rows.Values[0]
+	voice, _ := row[1].([]byte)
+	if len(voice) == 0 {
+		return ErrNoVoice
+	}
+	name := row[0].(string)
+	people, err := s.db.Query(ctx, "SELECT id FROM people WHERE name = ? ORDER BY id LIMIT 1", name)
+	if err != nil {
+		return err
+	}
+	var person int64
+	if len(people.Values) > 0 {
+		person = people.Values[0][0].(int64)
+	} else {
+		made, err := s.db.Execute(ctx, "INSERT INTO people (name, created_at) VALUES (?, ?)", name, time.Now().UnixMilli())
+		if err != nil {
+			return err
+		}
+		person = made.LastInsertID
+	}
+	_, err = s.db.Transaction(ctx, []sqlite.Statement{
+		{SQL: "DELETE FROM voiceprints WHERE meeting_id = ? AND speaker = ?", Args: []any{meetingID, speaker}},
+		{
+			SQL:  "INSERT INTO voiceprints (person_id, meeting_id, speaker, embedding, start_ms, end_ms) VALUES (?, ?, ?, ?, ?, ?)",
+			Args: []any{person, meetingID, speaker, voice, row[2], row[3]},
+		},
+		{SQL: "UPDATE speakers SET person_id = ? WHERE meeting_id = ? AND id = ?", Args: []any{person, meetingID, speaker}},
+	})
+	return err
+}
+
+// Forget drops the sample kept of a meeting's speaker, and the person it
+// was the last sample of.
+func (s *Store) Forget(ctx context.Context, meetingID string, speaker int) error {
+	_, err := s.db.Transaction(ctx, []sqlite.Statement{
+		{SQL: "DELETE FROM voiceprints WHERE meeting_id = ? AND speaker = ?", Args: []any{meetingID, speaker}},
+		{SQL: "DELETE FROM people WHERE NOT EXISTS (SELECT 1 FROM voiceprints v WHERE v.person_id = people.id)"},
+	})
+	return err
+}
+
+// People returns those whose voices are remembered, by name.
+func (s *Store) People(ctx context.Context) ([]Person, error) {
+	rows, err := s.db.Query(ctx, `SELECT p.id, p.name,
+		(SELECT COUNT(DISTINCT s.meeting_id) FROM speakers s WHERE s.person_id = p.id),
+		COALESCE((SELECT MAX(m.started_at) FROM speakers s JOIN meetings m ON m.id = s.meeting_id WHERE s.person_id = p.id), 0),
+		(SELECT COUNT(*) FROM voiceprints v WHERE v.person_id = p.id),
+		COALESCE((SELECT v.meeting_id || ':' || v.start_ms || ':' || v.end_ms FROM voiceprints v
+			WHERE v.person_id = p.id AND v.meeting_id IS NOT NULL ORDER BY v.id DESC LIMIT 1), '')
+		FROM people p ORDER BY p.name`)
+	if err != nil {
+		return nil, err
+	}
+	people := make([]Person, 0, len(rows.Values))
+	for _, row := range rows.Values {
+		p := Person{
+			ID: int(row[0].(int64)), Name: row[1].(string), Meetings: int(row[2].(int64)), LastAt: row[3].(int64),
+			Samples: int(row[4].(int64)),
+		}
+		if parts := strings.Split(row[5].(string), ":"); len(parts) == 3 {
+			p.SampleMeeting = parts[0]
+			p.SampleStartMs, _ = strconv.ParseInt(parts[1], 10, 64)
+			p.SampleEndMs, _ = strconv.ParseInt(parts[2], 10, 64)
+		}
+		people = append(people, p)
+	}
+	return people, nil
+}
+
+// Voices returns the samples kept of each person's voice.
+func (s *Store) Voices(ctx context.Context) (map[int][][]float32, map[int]string, error) {
+	rows, err := s.db.Query(ctx, `SELECT v.person_id, p.name, v.embedding FROM voiceprints v
+		JOIN people p ON p.id = v.person_id`)
+	if err != nil {
+		return nil, nil, err
+	}
+	voices, names := map[int][][]float32{}, map[int]string{}
+	for _, row := range rows.Values {
+		id := int(row[0].(int64))
+		names[id] = row[1].(string)
+		voices[id] = append(voices[id], decode(row[2].([]byte)))
+	}
+	return voices, names, nil
+}
+
+// RenamePerson gives a person another name, in every meeting they talk in.
+func (s *Store) RenamePerson(ctx context.Context, id int, name string) error {
+	_, err := s.db.Transaction(ctx, []sqlite.Statement{
+		{SQL: "UPDATE people SET name = ? WHERE id = ?", Args: []any{name, id}},
+		{SQL: "UPDATE speakers SET name = ? WHERE person_id = ?", Args: []any{name, id}},
+	})
+	return err
+}
+
+// DeletePerson forgets a person's voice. The meetings keep their name.
+func (s *Store) DeletePerson(ctx context.Context, id int) error {
+	return s.changed(s.db.Execute(ctx, "DELETE FROM people WHERE id = ?", id))
+}
+
+// Self returns in how many meetings the user's microphone was recorded,
+// and when the newest of them began.
+func (s *Store) Self(ctx context.Context) (meetings int, lastAt int64, err error) {
+	rows, err := s.db.Query(ctx, "SELECT COUNT(*), COALESCE(MAX(started_at), 0) FROM meetings WHERE microphone = 1")
+	if err != nil {
+		return 0, 0, err
+	}
+	return int(rows.Values[0][0].(int64)), rows.Values[0][1].(int64), nil
 }
 
 func (s *Store) RenameSpeaker(ctx context.Context, meetingID string, speaker int, name string) error {

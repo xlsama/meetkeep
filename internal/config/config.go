@@ -42,6 +42,8 @@ type RecordingSettings struct {
 	DetectMeetings   bool             `json:"detectMeetings"`
 	ShowPanel        bool             `json:"showPanel"`
 	EchoCancellation EchoCancellation `json:"echoCancellation"`
+	// IgnoredApps are the apps whose calls are not announced.
+	IgnoredApps []AppRef `json:"ignoredApps"`
 }
 
 // AppRef names an app whose sound is recorded alone.
@@ -65,6 +67,7 @@ func defaults() Settings {
 			DetectMeetings:   true,
 			ShowPanel:        true,
 			EchoCancellation: EchoAuto,
+			IgnoredApps:      []AppRef{},
 		},
 		Sources: SourceSettings{Microphone: true, System: true, Apps: []AppRef{}},
 	}
@@ -99,6 +102,9 @@ func Load() (Settings, error) {
 	}
 	if s.Sources.Apps == nil {
 		s.Sources.Apps = []AppRef{}
+	}
+	if s.Recording.IgnoredApps == nil {
+		s.Recording.IgnoredApps = []AppRef{}
 	}
 	return s, nil
 }

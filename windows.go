@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"github.com/xlsama/meetkeep/internal/config"
 	"github.com/xlsama/meetkeep/internal/notes"
 	"github.com/xlsama/meetkeep/internal/recorder"
 	"github.com/xlsama/meetkeep/internal/store"
@@ -31,6 +32,8 @@ const (
 	toastWidth    = 380
 	toastHeight   = 96
 	toastStays    = 10 * time.Second
+	noticeHeight  = 132
+	noticeStays   = 30 * time.Second
 )
 
 type panelMode int
@@ -53,6 +56,7 @@ type windows struct {
 	mini   *mygo.Window
 	menu   *mygo.Window
 	toast  *mygo.Window
+	notice *mygo.Window
 	mode   panelMode
 	width  int
 	active bool
@@ -76,6 +80,7 @@ func (w *windows) start() error {
 		return err
 	}
 	go w.clock()
+	go w.app.watch()
 	w.openMain("/")
 	return nil
 }
@@ -262,6 +267,7 @@ func (w *windows) follow(s recorder.Status) {
 	w.mu.Unlock()
 	switch {
 	case active && !was:
+		w.closeNotice()
 		_ = w.tray.SetIcon(trayRecordingIcon, false)
 		if w.app.current().Recording.ShowPanel {
 			w.setMode(panelOpen)
@@ -273,24 +279,21 @@ func (w *windows) follow(s recorder.Status) {
 	}
 }
 
-// notesReady tells the user that a meeting's notes are written, unless
-// the main window shows and has the keyboard.
-func (w *windows) notesReady(meeting store.Meeting, written notes.Notes) {
+// card shows a small window in the corner of the screen, in place of the
+// one slot holds, and closes it after a while.
+func (w *windows) card(slot **mygo.Window, route string, height int, stays time.Duration) {
 	w.mu.Lock()
-	main, old := w.main, w.toast
+	old := *slot
 	w.mu.Unlock()
-	if main != nil && main.IsVisible() && main.IsFocused() {
-		return
-	}
 	if old != nil {
 		old.Close()
 	}
 	area := mygo.Screen.PrimaryDisplay().WorkArea
-	toast := mygo.NewWindow(mygo.WindowOptions{
+	card := mygo.NewWindow(mygo.WindowOptions{
 		Title:             "MeetKeep",
-		URL:               "/toast?meeting=" + url.QueryEscape(meeting.ID),
+		URL:               route,
 		Width:             toastWidth,
-		Height:            toastHeight,
+		Height:            height,
 		Frameless:         true,
 		Panel:             true,
 		AlwaysOnTop:       true,
@@ -303,39 +306,61 @@ func (w *windows) notesReady(meeting store.Meeting, written notes.Notes) {
 		DisableMaximize:   true,
 		DisableFullScreen: true,
 	})
-	toast.SetBounds(mygo.Rectangle{
+	card.SetBounds(mygo.Rectangle{
 		X: area.X + area.Width - toastWidth - miniMargin, Y: area.Y + miniMargin,
-		Width: toastWidth, Height: toastHeight,
+		Width: toastWidth, Height: height,
 	})
-	toast.ShowInactive()
-	toast.OnClosed(func() {
+	card.ShowInactive()
+	card.OnClosed(func() {
 		w.mu.Lock()
-		if w.toast == toast {
-			w.toast = nil
+		if *slot == card {
+			*slot = nil
 		}
 		w.mu.Unlock()
 	})
 	w.mu.Lock()
-	w.toast = toast
+	*slot = card
 	w.mu.Unlock()
-	time.AfterFunc(toastStays, func() {
+	time.AfterFunc(stays, func() {
 		w.mu.Lock()
-		current := w.toast == toast
+		current := *slot == card
 		w.mu.Unlock()
 		if current {
-			toast.Close()
+			card.Close()
 		}
 	})
 }
 
-func (w *windows) closeToast() {
+func (w *windows) closeCard(slot **mygo.Window) {
 	w.mu.Lock()
-	toast := w.toast
+	card := *slot
 	w.mu.Unlock()
-	if toast != nil {
-		toast.Close()
+	if card != nil {
+		card.Close()
 	}
 }
+
+// notesReady tells the user that a meeting's notes are written, unless
+// the main window shows and has the keyboard.
+func (w *windows) notesReady(meeting store.Meeting, written notes.Notes) {
+	w.mu.Lock()
+	main := w.main
+	w.mu.Unlock()
+	if main != nil && main.IsVisible() && main.IsFocused() {
+		return
+	}
+	w.card(&w.toast, "/toast?meeting="+url.QueryEscape(meeting.ID), toastHeight, toastStays)
+}
+
+func (w *windows) closeToast() { w.closeCard(&w.toast) }
+
+// announce tells the user that a call began in an app.
+func (w *windows) announce(app config.AppRef) {
+	route := "/detect?app=" + url.QueryEscape(app.ID) + "&name=" + url.QueryEscape(app.Name)
+	w.card(&w.notice, route, noticeHeight, noticeStays)
+}
+
+func (w *windows) closeNotice() { w.closeCard(&w.notice) }
 
 func (w *windows) clock() {
 	shown := ""

@@ -25,9 +25,10 @@ type fakeCapture struct {
 	deny   capture.Source
 }
 
-func (f *fakeCapture) Apps() ([]capture.App, error) { return nil, nil }
-func (f *fakeCapture) Microphone() (string, error)  { return "fake", nil }
-func (f *fakeCapture) Headphones() (bool, error)    { return true, nil }
+func (f *fakeCapture) Apps() ([]capture.App, error)      { return nil, nil }
+func (f *fakeCapture) Listening() ([]capture.App, error) { return nil, nil }
+func (f *fakeCapture) Microphone() (string, error)       { return "fake", nil }
+func (f *fakeCapture) Headphones() (bool, error)         { return true, nil }
 
 func (f *fakeCapture) Frames(ctx context.Context, source capture.Source, _ capture.Options) iter.Seq2[[]byte, error] {
 	return func(yield func([]byte, error) bool) {

@@ -6,6 +6,7 @@ mod mygo;
 mod recording;
 mod regions;
 mod spectral;
+mod voice;
 
 use fbank::{Fbank, FIXED_FRAMES, MEL_BINS};
 use mygo::*;
@@ -45,6 +46,10 @@ impl Engine for NativeEngine {
 
     fn import(&self, ctx: &Context, input: String, output: String) -> Result<i64, Error> {
         media::import(ctx, &input, &output)
+    }
+
+    fn embed(&self, ctx: &Context, path: String, model: String, spans: Vec<Span>) -> Result<Vec<Voiceprint>, Error> {
+        voice::embed(ctx, &path, &model, &spans)
     }
 
     fn separate(&self, ctx: &Context, path: String, models: Models, speakers: i64) -> Result<Vec<Segment>, Error> {

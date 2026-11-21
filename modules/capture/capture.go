@@ -47,6 +47,9 @@ var ErrDenied = native.NewError("denied")
 type Recorder interface {
 	// Apps lists the apps whose sound can be recorded alone.
 	Apps() ([]App, error)
+	// Listening lists the apps that record the microphone now, as those in
+	// a call do.
+	Listening() ([]App, error)
 	// Microphone returns the name of the microphone Frames records.
 	Microphone() (string, error)
 	// Headphones reports whether the output is heard by the user alone, so

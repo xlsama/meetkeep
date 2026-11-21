@@ -23,6 +23,18 @@ type Segment struct {
 	Speaker int
 }
 
+// Span is a stretch of audio.
+type Span struct {
+	StartMs int
+	EndMs   int
+}
+
+// Voiceprint is what tells a voice from others: a unit vector, near those
+// of the same voice. It is empty for a span too short to tell a voice from.
+type Voiceprint struct {
+	Vector []float32
+}
+
 // Engine runs the models.
 //
 //mygo:native
@@ -37,6 +49,10 @@ type Engine interface {
 	// output as Ogg Opus. It returns how long the audio lasts, in
 	// milliseconds.
 	Import(ctx context.Context, input string, output string) (int, error)
+	// Embed returns the voiceprint of each span of the Ogg Opus file at
+	// path. model is ReDimNet2 b6 as ONNX: a 16 kHz waveform in, 192
+	// dimensions out.
+	Embed(ctx context.Context, path string, model string, spans []Span) ([]Voiceprint, error)
 	// Separate returns who speaks when in the audio at path: an Ogg Opus
 	// file, or a 16 kHz mono 16-bit WAV file. speakers is how many people
 	// talk, or 0 to estimate it.

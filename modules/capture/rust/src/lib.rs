@@ -21,6 +21,10 @@ impl Recorder for NativeRecorder {
         win::apps().map_err(|e| Error::other(e.to_string()))
     }
 
+    fn listening(&self) -> Result<Vec<App>, Error> {
+        win::listening().map_err(|e| Error::other(e.to_string()))
+    }
+
     fn microphone(&self) -> Result<String, Error> {
         win::microphone().map_err(|e| Error::other(e.to_string()))
     }
@@ -41,6 +45,10 @@ impl Recorder for NativeRecorder {
 #[cfg(not(windows))]
 impl Recorder for NativeRecorder {
     fn apps(&self) -> Result<Vec<App>, Error> {
+        Err(Error::Unsupported)
+    }
+
+    fn listening(&self) -> Result<Vec<App>, Error> {
         Err(Error::Unsupported)
     }
 

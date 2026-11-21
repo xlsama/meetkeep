@@ -26,6 +26,18 @@ export interface Fault {
 
 export type Format = "markdown" | "text" | "srt";
 
+/** Known are the people whose voices are remembered, and the user. */
+export interface Known {
+  /**
+   * SelfMeetings is in how many meetings the user's microphone was
+   * recorded, SelfLastAt when the newest of them began, in Unix
+   * milliseconds.
+   */
+  selfMeetings: number;
+  selfLastAt: number;
+  people: Person[];
+}
+
 export interface LLMSettings {
   baseUrl: string;
   key: string;
@@ -114,6 +126,27 @@ export interface NotesState {
   working: boolean;
 }
 
+/** Person is someone whose voice is remembered. */
+export interface Person {
+  id: number;
+  name: string;
+  /**
+   * Meetings is how many meetings the person talks in, LastAt when the
+   * newest of them began, in Unix milliseconds.
+   */
+  meetings: number;
+  lastAt: number;
+  /** Samples is how many samples of the voice are kept. */
+  samples: number;
+  /**
+   * SampleMeeting, SampleStartMs and SampleEndMs tell where to hear the
+   * voice; SampleMeeting is "" when no recording of it is left.
+   */
+  sampleMeeting: string;
+  sampleStartMs: number;
+  sampleEndMs: number;
+}
+
 export type Phase = "idle" | "recording" | "paused" | "stopping";
 
 /** Point is a line of the notes with the utterance it rests on. */
@@ -137,6 +170,8 @@ export interface RecordingSettings {
   detectMeetings: boolean;
   showPanel: boolean;
   echoCancellation: EchoCancellation;
+  /** IgnoredApps are the apps whose calls are not announced. */
+  ignoredApps: AppRef[];
 }
 
 /**
@@ -211,6 +246,19 @@ export interface Speaker {
   /** Self marks the user. */
   self: boolean;
   durationMs: number;
+  /** PersonID is the person whose voice this is, or 0. */
+  personId: number;
+  /**
+   * Remembered tells that the voice heard here is kept as a sample of
+   * that person's.
+   */
+  remembered: boolean;
+  /**
+   * SampleStartMs and SampleEndMs bound a stretch of the meeting in which
+   * the speaker is heard alone, or are both 0.
+   */
+  sampleStartMs: number;
+  sampleEndMs: number;
 }
 
 /** StartOptions say what to record and what to show meanwhile. */
@@ -371,6 +419,12 @@ export const Library = {
    * as many as are found when count is 0.
    */
   reidentify: bind<[string, number], void>("Library.Reidentify", (id: string, count: number) => [id, count]),
+  /**
+   * RememberSpeaker keeps the voice of a meeting's speaker under the
+   * speaker's name, so that later meetings recognize it, or forgets the
+   * sample when remember is false.
+   */
+  rememberSpeaker: bind<[string, number, boolean], void>("Library.RememberSpeaker", (id: string, speaker: number, remember: boolean) => [id, speaker, remember]),
   /** Rename gives a meeting another title. */
   rename: bind<[string, string], void>("Library.Rename", (id: string, title: string) => [id, title]),
   /** RenameSpeaker gives a speaker of a meeting another name. */
@@ -396,16 +450,36 @@ export const Library = {
   search: bind<[string], SearchHit[]>("Library.Search", (query: string) => [query]),
 } as const;
 
+/** People keeps the voices that are remembered. */
+export const People = {
+  /**
+   * Delete forgets a person's voice. The meetings they talk in keep their
+   * name.
+   */
+  delete: bind<[number], void>("People.Delete", (id: number) => [id]),
+  /** List returns the people whose voices are remembered. */
+  list: bind<[], Known>("People.List", () => []),
+  /** Rename gives a person another name, in every meeting they talk in. */
+  rename: bind<[number, string], void>("People.Rename", (id: number, name: string) => [id, name]),
+} as const;
+
 /** Windows shows and hides the app's windows. */
 export const Windows = {
   /** CloseMenu closes the panel of the menu bar item. */
   closeMenu: bind<[], void>("Windows.CloseMenu", () => []),
+  /** CloseNotice closes the notice that a call began. */
+  closeNotice: bind<[], void>("Windows.CloseNotice", () => []),
   /** CloseToast closes the notice that a meeting's notes are ready. */
   closeToast: bind<[], void>("Windows.CloseToast", () => []),
   /** CollapsePanel shrinks the side panel to a strip. */
   collapsePanel: bind<[], void>("Windows.CollapsePanel", () => []),
   /** HidePanel hides the side panel and its strip. */
   hidePanel: bind<[], void>("Windows.HidePanel", () => []),
+  /**
+   * IgnoreApp stops announcing the calls of an app, and closes the notice
+   * of one.
+   */
+  ignoreApp: bind<[AppRef], void>("Windows.IgnoreApp", (app: AppRef) => [app]),
   /** Quit ends the app. */
   quit: bind<[], void>("Windows.Quit", () => []),
   /** ResizePanel makes the side panel width wide. */

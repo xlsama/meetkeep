@@ -37,6 +37,11 @@ func TestListsWhatCanBeRecorded(t *testing.T) {
 		seen[a.ID] = true
 	}
 	t.Logf("%d apps", len(apps))
+	listening, err := r.Listening()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("%d apps record the microphone", len(listening))
 	if _, err := r.Headphones(); err != nil {
 		t.Errorf("headphones: %v", err)
 	}
