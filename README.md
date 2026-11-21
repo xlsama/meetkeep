@@ -4,7 +4,7 @@ MyGo 0.10 上的会议转写 POC：Swift native module 采麦克风和系统音�
 
 ```sh
 bun install
-cp .env.example .env   # 填 Azure Speech 与 DeepSeek 的 key
+cp .env.example .env   # 填 Azure Speech 的 key，以及任意 OpenAI 兼容 LLM 的地址、密钥、模型名
 bun run dev
 bun run check && bun run test
 ```
