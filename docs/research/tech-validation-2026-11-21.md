@@ -48,6 +48,17 @@ sherpa-onnx 发布的 `3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.on
 
 `scripts/export_campplus.py` 从 senko 仓库里的原始权重导出 ONNX，与 CoreML 版余弦 0.9998，上表用的是这份。正式项目需要自己托管这个文件（约 28 MB）。
 
+### 语音段检测能不能换成 silero-vad
+
+不能直接换。把第一步的 pyannote segmentation-3.0 换成 silero-vad v6.2.3（senko 的参数：阈值 0.55、最短语音 250 ms、最短静音 100 ms），其余不变：
+
+| | pyannote | silero |
+|---|---|---|
+| 中文 20 场 | 94.73% | 93.69% |
+| 英文 5 场 | 92.38% | 90.28% |
+
+英文掉得多是因为 ami-TS3003a 一场 4 人只认出 2 人（82.5%）。silero 的阈值没有调过。换掉只省 6 MB，所以保留 pyannote；试验代码没有留在模块里。
+
 ### MyGo 的一个构建问题
 
 `mygo native build` 用 `--release` 加 `MACOSX_DEPLOYMENT_TARGET` 编译时，过程宏动态库被 strip 后加载失败，报 `can't find crate`。`Cargo.toml` 里加了：
