@@ -290,7 +290,7 @@ func (p *Processor) process(ctx context.Context, j job) error {
 		audio = audioFile
 	}
 	p.report(j.id, Separating, 70)
-	speakers, err := p.label(ctx, found, utterances, 0)
+	speakers, err := p.label(ctx, j.id, found, utterances, 0)
 	if err != nil {
 		return err
 	}
@@ -319,7 +319,7 @@ func (p *Processor) separate(ctx context.Context, j job) error {
 		return err
 	}
 	p.report(j.id, Separating, 60)
-	speakers, err := p.label(ctx, found, utterances, j.count)
+	speakers, err := p.label(ctx, j.id, found, utterances, j.count)
 	if err != nil {
 		return err
 	}
@@ -329,7 +329,7 @@ func (p *Processor) separate(ctx context.Context, j job) error {
 // label sets who says each utterance and returns the speakers: the user,
 // when the microphone is a track of its own, and those told apart in the
 // other track.
-func (p *Processor) label(ctx context.Context, found []track, utterances []store.Utterance, count int) ([]store.Speaker, error) {
+func (p *Processor) label(ctx context.Context, id string, found []track, utterances []store.Utterance, count int) ([]store.Speaker, error) {
 	var speakers []store.Speaker
 	self := 0
 	if len(found) > 1 {
@@ -355,6 +355,7 @@ func (p *Processor) label(ctx context.Context, found []track, utterances []store
 		return nil, fmt.Errorf("区分说话人失败：%w", err)
 	}
 	who, uncertain := assign(phrases, segments)
+	p.report(id, Separating, 80)
 	sentences := make([]store.Utterance, len(index))
 	for k, i := range index {
 		sentences[k] = utterances[i]

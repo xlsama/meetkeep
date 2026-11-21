@@ -11,7 +11,7 @@ mod voice;
 use fbank::{Fbank, FIXED_FRAMES, MEL_BINS};
 use mygo::*;
 use ort::environment::Environment;
-use ort::session::builder::SessionBuilder;
+use ort::session::builder::{AutoDevicePolicy, SessionBuilder};
 use ort::session::Session;
 use ort::value::Tensor;
 use rayon::prelude::*;
@@ -82,7 +82,14 @@ pub(crate) fn builder(threads: usize) -> Result<SessionBuilder, Error> {
         .get_or_init(|| ort::init().build().map_err(|e| e.to_string()))
         .as_ref()
         .map_err(fail)?;
-    Session::builder(environment).map_err(fail)?.with_intra_threads(threads).map_err(fail)
+    // ort's default hands every model to Core ML on macOS, which runs these
+    // slower than the CPU and in several times the memory.
+    Session::builder(environment)
+        .map_err(fail)?
+        .with_auto_device(AutoDevicePolicy::PreferCPU)
+        .map_err(fail)?
+        .with_intra_threads(threads)
+        .map_err(fail)
 }
 
 pub(crate) fn session(model: &str) -> Result<Session, Error> {
