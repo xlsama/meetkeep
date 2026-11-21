@@ -125,6 +125,13 @@ export interface NotesState {
   meetingId: string;
   /** Notes are nil while the meeting has none. */
   notes: Notes | null;
+  /**
+   * Doc is the document the user made of the notes by editing them, as
+   * SaveNotesDoc took it, or "".
+   */
+  doc: string;
+  /** Replaced tells that the notes written before these can be restored. */
+  replaced: boolean;
   /** Error tells why the last attempt to write them failed. */
   error: string;
   /** Working is true while the model writes them. */
@@ -417,7 +424,10 @@ export const Library = {
   mergeSpeakers: bind<[string, number, number], void>("Library.MergeSpeakers", (id: string, from: number, into: number) => [id, from, into]),
   /** Notes returns what is known of a meeting's notes. */
   notes: bind<[string], NotesState>("Library.Notes", (id: string) => [id]),
-  /** RegenerateNotes writes the final notes of a processed meeting again. */
+  /**
+   * RegenerateNotes writes the final notes of a processed meeting again.
+   * The notes they replace can be restored.
+   */
   regenerateNotes: bind<[string], void>("Library.RegenerateNotes", (id: string) => [id]),
   /**
    * Reidentify tells the speakers of a meeting apart again: count of them, or
@@ -439,10 +449,20 @@ export const Library = {
    * apart.
    */
   reprocess: bind<[string], void>("Library.Reprocess", (id: string) => [id]),
+  /**
+   * RestoreNotes brings back the notes that writing them again replaced,
+   * with what the user had made of them.
+   */
+  restoreNotes: bind<[string], void>("Library.RestoreNotes", (id: string) => [id]),
   /** Reveal shows a meeting's recordings in the file manager. */
   reveal: bind<[string], void>("Library.Reveal", (id: string) => [id]),
   /** SaveBoard stores the scene of a meeting's whiteboard. */
   saveBoard: bind<[string, string], void>("Library.SaveBoard", (id: string, scene: string) => [id, scene]),
+  /**
+   * SaveNotesDoc stores the document the user made of a meeting's notes by
+   * editing them, and text, its words line by line, to search.
+   */
+  saveNotesDoc: bind<[string, string, string], void>("Library.SaveNotesDoc", (id: string, doc: string, text: string) => [id, doc, text]),
   /**
    * SaveRecording asks where to save a copy of a meeting's recording and
    * returns where it went, or "" when the user canceled.

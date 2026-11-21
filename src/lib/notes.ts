@@ -10,10 +10,6 @@ export function useNotes(meetingId: string) {
   return query.data ?? null;
 }
 
-export function ordinal(index: number) {
-  return String(index + 1).padStart(2, "0");
-}
-
 export function todoMeta(todo: { owner: string; due: string }) {
   return [todo.owner, todo.due].filter((part) => part.trim() !== "").join(" · ");
 }

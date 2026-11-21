@@ -188,6 +188,12 @@ var migrations = [][]string{
 	{
 		`ALTER TABLE meetings ADD COLUMN video TEXT NOT NULL DEFAULT ''`,
 	},
+	{
+		`ALTER TABLE notes ADD COLUMN doc TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE notes ADD COLUMN previous_data TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE notes ADD COLUMN previous_doc TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE notes ADD COLUMN previous_text TEXT NOT NULL DEFAULT ''`,
+	},
 }
 
 type Store struct {
@@ -298,14 +304,54 @@ func (s *Store) SetNotesError(ctx context.Context, meetingID, failure string) er
 	return err
 }
 
-// Notes returns a meeting's notes as SaveNotes took them, "" when it has
-// none, and why the last attempt to write them failed, if it did.
-func (s *Store) Notes(ctx context.Context, meetingID string) (data, failure string, err error) {
-	rows, err := s.db.Query(ctx, "SELECT data, error FROM notes WHERE meeting_id = ?", meetingID)
+// StoredNotes are a meeting's notes as they are kept.
+type StoredNotes struct {
+	// Data is what SaveNotes took, "" when the meeting has no notes.
+	Data string
+	// Doc is the document the user made of the notes by editing them, or
+	// "", and Text the words to search: the document's, or the notes'.
+	Doc  string
+	Text string
+	// Error tells why the last attempt to write the notes failed.
+	Error string
+	// Replaced tells that the notes written before these are kept.
+	Replaced bool
+}
+
+// Notes returns a meeting's notes.
+func (s *Store) Notes(ctx context.Context, meetingID string) (StoredNotes, error) {
+	rows, err := s.db.Query(ctx, `SELECT data, doc, text, error, previous_data <> '' FROM notes
+		WHERE meeting_id = ?`, meetingID)
 	if err != nil || len(rows.Values) == 0 {
-		return "", "", err
+		return StoredNotes{}, err
 	}
-	return rows.Values[0][0].(string), rows.Values[0][1].(string), nil
+	row := rows.Values[0]
+	return StoredNotes{
+		Data: row[0].(string), Doc: row[1].(string), Text: row[2].(string), Error: row[3].(string),
+		Replaced: row[4].(int64) != 0,
+	}, nil
+}
+
+// SaveNotesDoc stores the document the user made of a meeting's notes,
+// and its words, to search.
+func (s *Store) SaveNotesDoc(ctx context.Context, meetingID, doc, text string) error {
+	return s.changed(s.db.Execute(ctx, "UPDATE notes SET doc = ?, text = ? WHERE meeting_id = ?", doc, text, meetingID))
+}
+
+// ReplaceNotes stores notes written anew for a meeting and keeps those
+// they replace, with what the user made of them, for RestoreNotes.
+func (s *Store) ReplaceNotes(ctx context.Context, meetingID, data, text string) error {
+	return s.changed(s.db.Execute(ctx, `UPDATE notes SET previous_data = data, previous_doc = doc,
+		previous_text = text, data = ?, doc = '', text = ?, error = '' WHERE meeting_id = ?`, data, text, meetingID))
+}
+
+// RestoreNotes brings back the notes that ReplaceNotes replaced, and
+// keeps those it replaces in their place.
+func (s *Store) RestoreNotes(ctx context.Context, meetingID string) error {
+	return s.changed(s.db.Execute(ctx, `UPDATE notes SET
+		data = previous_data, doc = previous_doc, text = previous_text,
+		previous_data = data, previous_doc = doc, previous_text = text
+		WHERE meeting_id = ? AND previous_data <> ''`, meetingID))
 }
 
 // SaveBoard stores the scene of a meeting's whiteboard as the page gave
@@ -327,14 +373,15 @@ func (s *Store) Board(ctx context.Context, meetingID string) (string, error) {
 }
 
 // SearchNotes returns the notes whose words contain query, by meeting.
-func (s *Store) SearchNotes(ctx context.Context, query string) (map[string]string, error) {
-	rows, err := s.db.Query(ctx, `SELECT meeting_id, data FROM notes WHERE text LIKE ? ESCAPE '\' LIMIT 50`, like(query))
+func (s *Store) SearchNotes(ctx context.Context, query string) (map[string]StoredNotes, error) {
+	rows, err := s.db.Query(ctx, `SELECT meeting_id, data, doc, text FROM notes
+		WHERE text LIKE ? ESCAPE '\' LIMIT 50`, like(query))
 	if err != nil {
 		return nil, err
 	}
-	found := make(map[string]string, len(rows.Values))
+	found := make(map[string]StoredNotes, len(rows.Values))
 	for _, row := range rows.Values {
-		found[row[0].(string)] = row[1].(string)
+		found[row[0].(string)] = StoredNotes{Data: row[1].(string), Doc: row[2].(string), Text: row[3].(string)}
 	}
 	return found, nil
 }

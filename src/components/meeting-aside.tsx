@@ -1,5 +1,5 @@
 import { BoardPane } from "@/components/board";
-import { NotesPane } from "@/components/notes";
+import { NotesDoc } from "@/components/notes-doc";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Meeting } from "@/mygo";
 import { clock } from "@/lib/format";
@@ -43,7 +43,7 @@ export function MeetingAside({
           )}
         </TabsList>
         <TabsContent value="summary" className="flex flex-col">
-          <NotesPane state={state} live={live} onJump={onJump} onRetry={onRetry} />
+          <NotesDoc meetingId={meeting.id} state={state} live={live} onJump={onJump} onRetry={onRetry} />
         </TabsContent>
         <TabsContent value="board" className="flex flex-col">
           {tab === "board" && (

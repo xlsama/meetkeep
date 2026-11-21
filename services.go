@@ -317,7 +317,24 @@ func (l *Library) Notes(ctx context.Context, id string) (NotesState, error) {
 	return l.app.notes.state(ctx, id)
 }
 
+// SaveNotesDoc stores the document the user made of a meeting's notes by
+// editing them, and text, its words line by line, to search.
+func (l *Library) SaveNotesDoc(ctx context.Context, id, doc, text string) error {
+	return l.app.store.SaveNotesDoc(ctx, id, doc, text)
+}
+
+// RestoreNotes brings back the notes that writing them again replaced,
+// with what the user had made of them.
+func (l *Library) RestoreNotes(ctx context.Context, id string) error {
+	if err := l.app.store.RestoreNotes(ctx, id); err != nil {
+		return err
+	}
+	l.app.notes.announce(id)
+	return nil
+}
+
 // RegenerateNotes writes the final notes of a processed meeting again.
+// The notes they replace can be restored.
 func (l *Library) RegenerateNotes(ctx context.Context, id string) error {
 	meeting, err := l.app.store.Meeting(ctx, id)
 	if err != nil {
@@ -372,13 +389,21 @@ type SearchHit struct {
 	Notes      []SearchNote  `json:"notes"`
 }
 
-func matchingNotes(data, query string) []SearchNote {
-	var saved notes.Notes
-	if json.Unmarshal([]byte(data), &saved) != nil {
-		return nil
-	}
+func matchingNotes(kept store.StoredNotes, query string) []SearchNote {
 	query = strings.ToLower(query)
 	var found []SearchNote
+	if kept.Doc != "" {
+		for line := range strings.SplitSeq(kept.Text, "\n") {
+			if strings.Contains(strings.ToLower(line), query) {
+				found = append(found, SearchNote{Text: strings.TrimSpace(line)})
+			}
+		}
+		return found
+	}
+	var saved notes.Notes
+	if json.Unmarshal([]byte(kept.Data), &saved) != nil {
+		return nil
+	}
 	add := func(text string, at int64) {
 		if strings.Contains(strings.ToLower(text), query) {
 			found = append(found, SearchNote{Text: text, AtMs: at})
@@ -434,8 +459,8 @@ func (l *Library) Search(ctx context.Context, query string) ([]SearchHit, error)
 		hits[id] = &SearchHit{Meeting: m, Lines: []SearchLine{}, Notes: []SearchNote{}}
 		return hits[id], nil
 	}
-	for id, data := range noted {
-		if found := matchingNotes(data, query); len(found) > 0 {
+	for id, kept := range noted {
+		if found := matchingNotes(kept, query); len(found) > 0 {
 			hit, err := hitOf(id)
 			if err != nil {
 				return nil, err

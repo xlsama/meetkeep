@@ -198,8 +198,8 @@ func TestTranscriptNotesAndBoard(t *testing.T) {
 		t.Errorf("found %d meetings by title", len(titled))
 	}
 
-	if data, failure, err := s.Notes(ctx, "a"); data != "" || failure != "" || err != nil {
-		t.Errorf("a meeting without notes has %q, %q, %v", data, failure, err)
+	if kept, err := s.Notes(ctx, "a"); kept.Data != "" || kept.Error != "" || err != nil {
+		t.Errorf("a meeting without notes has %+v, %v", kept, err)
 	}
 	if err := s.SaveNotes(ctx, "a", `{"headline":"3 月 14 号上线"}`, "3 月 14 号上线\n价格页"); err != nil {
 		t.Fatal(err)
@@ -207,11 +207,35 @@ func TestTranscriptNotesAndBoard(t *testing.T) {
 	if err := s.SetNotesError(ctx, "a", "offline"); err != nil {
 		t.Fatal(err)
 	}
-	if data, failure, _ := s.Notes(ctx, "a"); data == "" || failure != "offline" {
-		t.Errorf("a failure dropped the notes: %q, %q", data, failure)
+	if kept, _ := s.Notes(ctx, "a"); kept.Data == "" || kept.Error != "offline" || kept.Replaced {
+		t.Errorf("a failure dropped the notes: %+v", kept)
 	}
-	if found, _ := s.SearchNotes(ctx, "价格页"); found["a"] == "" {
+	if found, _ := s.SearchNotes(ctx, "价格页"); found["a"].Data == "" {
 		t.Errorf("the notes were not found: %v", found)
+	}
+	if err := s.SaveNotesDoc(ctx, "a", `{"type":"doc"}`, "我改过的纪要\n首页文案我来写"); err != nil {
+		t.Fatal(err)
+	}
+	if found, _ := s.SearchNotes(ctx, "首页文案"); found["a"].Doc == "" {
+		t.Errorf("the edited notes were not found: %v", found)
+	}
+	if found, _ := s.SearchNotes(ctx, "价格页"); len(found) != 0 {
+		t.Errorf("words the user removed are still found: %v", found)
+	}
+	if err := s.ReplaceNotes(ctx, "a", `{"headline":"重新写的"}`, "重新写的"); err != nil {
+		t.Fatal(err)
+	}
+	if kept, _ := s.Notes(ctx, "a"); kept.Doc != "" || kept.Data != `{"headline":"重新写的"}` || !kept.Replaced {
+		t.Errorf("replaced as %+v", kept)
+	}
+	if err := s.RestoreNotes(ctx, "a"); err != nil {
+		t.Fatal(err)
+	}
+	if kept, _ := s.Notes(ctx, "a"); kept.Doc != `{"type":"doc"}` || kept.Text != "我改过的纪要\n首页文案我来写" || !kept.Replaced {
+		t.Errorf("restored as %+v", kept)
+	}
+	if err := s.SaveNotesDoc(ctx, "none", "{}", ""); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a document was saved for a meeting without notes: %v", err)
 	}
 
 	if scene, _ := s.Board(ctx, "a"); scene != "" {

@@ -18,6 +18,11 @@ type NotesState struct {
 	MeetingID string `json:"meetingId"`
 	// Notes are nil while the meeting has none.
 	Notes *notes.Notes `json:"notes"`
+	// Doc is the document the user made of the notes by editing them, as
+	// SaveNotesDoc took it, or "".
+	Doc string `json:"doc"`
+	// Replaced tells that the notes written before these can be restored.
+	Replaced bool `json:"replaced"`
 	// Error tells why the last attempt to write them failed.
 	Error string `json:"error"`
 	// Working is true while the model writes them.
@@ -67,16 +72,16 @@ func (n *noteTaker) lines(ctx context.Context, id string) ([]notes.Line, error) 
 }
 
 func (n *noteTaker) state(ctx context.Context, id string) (NotesState, error) {
-	data, failure, err := n.app.store.Notes(ctx, id)
+	kept, err := n.app.store.Notes(ctx, id)
 	if err != nil {
 		return NotesState{}, err
 	}
 	n.mu.Lock()
-	state := NotesState{MeetingID: id, Error: failure, Working: n.working[id]}
+	state := NotesState{MeetingID: id, Doc: kept.Doc, Replaced: kept.Replaced, Error: kept.Error, Working: n.working[id]}
 	n.mu.Unlock()
-	if data != "" {
+	if kept.Data != "" {
 		var saved notes.Notes
-		if err := json.Unmarshal([]byte(data), &saved); err != nil {
+		if err := json.Unmarshal([]byte(kept.Data), &saved); err != nil {
 			return NotesState{}, err
 		}
 		state.Notes = &saved
@@ -100,11 +105,18 @@ func (n *noteTaker) busy(id string, working bool) {
 	n.announce(id)
 }
 
+// save stores notes. Final notes that take the place of others keep them,
+// so that the user can have them back.
 func (n *noteTaker) save(ctx context.Context, id string, written notes.Notes, err error) {
 	if err == nil {
 		var data []byte
 		if data, err = json.Marshal(written); err == nil {
-			err = n.app.store.SaveNotes(ctx, id, string(data), written.Text())
+			before, _ := n.state(ctx, id)
+			if written.Final && before.Notes != nil && before.Notes.Final {
+				err = n.app.store.ReplaceNotes(ctx, id, string(data), written.Text())
+			} else {
+				err = n.app.store.SaveNotes(ctx, id, string(data), written.Text())
+			}
 		}
 	}
 	if err != nil && ctx.Err() == nil {

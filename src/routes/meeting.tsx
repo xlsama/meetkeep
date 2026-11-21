@@ -6,6 +6,7 @@ import {
   Ellipsis,
   FileText,
   FolderOpen,
+  History,
   LoaderCircle,
   Mic,
   Pause,
@@ -47,7 +48,7 @@ import { Library, type Format, type Meeting, type Progress, type Speaker, type S
 import { useControls } from "@/lib/controls";
 import { clock, meetingDate, minutes, systemLabel } from "@/lib/format";
 import { clearProgress, useProgress } from "@/lib/progress";
-import { seqOf, type Jump } from "@/lib/notes";
+import { seqOf, useNotes, type Jump } from "@/lib/notes";
 import { errorMessage, meetingQuery } from "@/lib/queries";
 import { useElapsed, useRecorder } from "@/lib/recorder";
 import { initial, speakerVoice } from "@/lib/speakers";
@@ -467,6 +468,7 @@ function MoreMenu({ meeting, onError }: { meeting: Meeting; onError: (error: str
   };
 
   const processing = meeting.status === "processing";
+  const notesState = useNotes(meeting.id);
 
   return (
     <>
@@ -506,6 +508,15 @@ function MoreMenu({ meeting, onError }: { meeting: Meeting; onError: (error: str
             <FileText />
             重新生成纪要
           </DropdownMenuItem>
+          {notesState?.replaced && (
+            <DropdownMenuItem
+              data-testid="more-restore-notes"
+              onSelect={() => void run(onError, () => Library.restoreNotes(meeting.id))}
+            >
+              <History />
+              恢复上一版纪要
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem data-testid="meeting-reveal" onSelect={() => void run(onError, () => Library.reveal(meeting.id))}>
             <FolderOpen />
             在访达中显示

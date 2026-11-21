@@ -171,6 +171,58 @@
   }
 }
 
+@layer components {
+  .notes-time {
+    display: inline-block;
+    padding: 0 5px;
+    border: 1px solid var(--color-border);
+    border-radius: 5px;
+    background: var(--color-background);
+    font-family: var(--font-mono);
+    font-size: var(--text-micro);
+    line-height: 16px;
+    color: var(--color-muted-foreground);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    transition:
+      color 150ms,
+      background-color 150ms,
+      border-color 150ms;
+  }
+  .notes-time:hover {
+    border-color: var(--color-border-strong);
+    background: var(--color-hover);
+    color: var(--color-foreground);
+  }
+  .notes-chip {
+    display: inline-block;
+    padding: 0 6px;
+    border-radius: 5px;
+    background: var(--color-secondary);
+    font-size: var(--text-tiny);
+    line-height: 18px;
+    color: var(--color-secondary-foreground);
+    white-space: nowrap;
+  }
+  .notes-doubt {
+    display: inline-block;
+    padding: 0 5px;
+    border: 1px solid var(--color-warning-border);
+    border-radius: 5px;
+    background: var(--color-warning-bg);
+    font-size: var(--text-micro);
+    font-weight: 600;
+    line-height: 16px;
+    color: var(--color-warning);
+    white-space: nowrap;
+  }
+  .notes-glue {
+    white-space: nowrap;
+  }
+}
+
 @utility drag {
   --app-region: drag;
 }
