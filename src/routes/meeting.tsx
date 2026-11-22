@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { isMyGo } from "mygo-runtime";
 import { useEffect, useState } from "react";
+import { Avatar } from "@/components/avatar";
 import { LevelMeter } from "@/components/level-meter";
 import { MeetingAside, type AsideTab } from "@/components/meeting-aside";
 import { FaultNotice, Notice } from "@/components/notice";
@@ -51,7 +52,7 @@ import { clearProgress, useProgress } from "@/lib/progress";
 import { seqOf, useNotes, type Jump } from "@/lib/notes";
 import { errorMessage, meetingQuery } from "@/lib/queries";
 import { useElapsed, useRecorder } from "@/lib/recorder";
-import { initial, speakerVoice } from "@/lib/speakers";
+import { speakerVoice } from "@/lib/speakers";
 import { lineAt, useTranscript } from "@/lib/transcript";
 import { useWindowTitle } from "@/lib/ui";
 import { cn } from "@/lib/utils";
@@ -350,17 +351,12 @@ function SpeakersButton({ speakers, onClick }: { speakers: Speaker[]; onClick: (
     >
       <span className="inline-flex">
         {shown.map((speaker, index) => (
-          <span
+          <Avatar
             key={speaker.id}
-            aria-hidden
-            className={cn(
-              "inline-flex size-[22px] items-center justify-center rounded-full text-micro font-semibold text-white shadow-[0_0_0_2px_#ffffff]",
-              index > 0 && "-ml-1.5",
-              speakerVoice(speaker, speakers).avatar,
-            )}
-          >
-            {initial(speaker.name)}
-          </span>
+            name={speaker.name}
+            tone={speakerVoice(speaker, speakers).avatar}
+            className={cn("size-[22px] text-micro shadow-[0_0_0_2px_#ffffff]", index > 0 && "-ml-1.5")}
+          />
         ))}
       </span>
       {speakers.length} 人

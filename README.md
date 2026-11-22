@@ -14,6 +14,12 @@ bun run check && bun run test
 
 转写用 Azure 的 MAI-Transcribe-2，纪要和白板用任意 OpenAI 兼容的模型，都在应用的设置页里填。设置存在 `~/.config/meetkeep/settings.json`，会议存在同目录的 `meetkeep.db`，录音默认存在 `~/Documents/MeetKeep`。
 
+每次处理的每一步都记在 `meetkeep.db` 的 `steps` 表里：排队、导入、转写、混音、分人、声纹、纪要各用了多久、内存峰值多少、失败原因和这一步的数据量。同一次处理的各行 `run` 相同：
+
+```sh
+sqlite3 ~/.config/meetkeep/meetkeep.db "SELECT name, duration_ms, memory_peak / 1048576 AS mb, error, detail FROM steps WHERE meeting_id = '<会议 ID>' ORDER BY id"
+```
+
 ## 结构
 
 | 位置 | 内容 |

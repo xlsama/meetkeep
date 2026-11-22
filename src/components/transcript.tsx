@@ -1,6 +1,7 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { motion } from "motion/react";
 import { useEffect, useRef } from "react";
+import { Avatar } from "@/components/avatar";
 import { clock } from "@/lib/format";
 import { useTranscript, type Group, type Line } from "@/lib/transcript";
 import { cn } from "@/lib/utils";
@@ -12,22 +13,24 @@ const styles = {
     gap: 20,
     paddingStart: 28,
     inset: "pr-10 pl-8",
-    group: "gap-[3px]",
-    head: "gap-2",
+    row: "gap-3",
+    avatar: "size-7 text-meta",
+    head: "h-7 gap-2",
     name: "text-label",
     stamp: "text-tiny",
-    text: "pl-3.5 text-lead leading-[1.75]",
+    text: "text-lead leading-[1.75]",
     caret: "h-[17px]",
   },
   panel: {
     gap: 16,
     paddingStart: 16,
-    inset: "px-[18px]",
-    group: "gap-0.5",
-    head: "gap-[7px]",
+    inset: "px-4",
+    row: "gap-2.5",
+    avatar: "size-6 text-micro",
+    head: "h-6 gap-[7px]",
     name: "text-meta",
     stamp: "text-micro",
-    text: "pl-[13px] text-body leading-[1.7]",
+    text: "text-body leading-[1.7]",
     caret: "h-4",
   },
 } satisfies Record<Variant, unknown>;
@@ -130,23 +133,27 @@ function GroupView({
 }) {
   const style = styles[variant];
   return (
-    <div className={cn("flex flex-col", style.group)}>
-      <div className={cn("flex items-center", style.head)}>
-        <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", group.voice.tone)} />
-        <span className={cn("font-semibold text-foreground", style.name)}>{group.voice.name}</span>
-        <span className={cn("font-mono text-muted-foreground tabular-nums", style.stamp)}>{clock(group.startMs)}</span>
-        {group.uncertain && <Badge>存疑</Badge>}
-      </div>
-      <div data-selectable className={cn("m-0", group.uncertain ? "text-subtle" : "text-prose", style.text)}>
-        {group.lines.map((line) => (
-          <LineView
-            key={line.seq}
-            line={line}
-            caret={style.caret}
-            active={line.seq === activeSeq}
-            onSelect={onSelect}
-          />
-        ))}
+    <div className={cn("flex", style.row)}>
+      <Avatar name={group.voice.name} tone={group.voice.avatar} className={style.avatar} />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className={cn("flex items-center", style.head)}>
+          <span className={cn("font-semibold text-foreground", style.name)}>{group.voice.name}</span>
+          <span className={cn("font-mono text-muted-foreground tabular-nums", style.stamp)}>
+            {clock(group.startMs)}
+          </span>
+          {group.uncertain && <Badge>存疑</Badge>}
+        </div>
+        <div data-selectable className={cn("m-0", group.uncertain ? "text-subtle" : "text-prose", style.text)}>
+          {group.lines.map((line) => (
+            <LineView
+              key={line.seq}
+              line={line}
+              caret={style.caret}
+              active={line.seq === activeSeq}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );

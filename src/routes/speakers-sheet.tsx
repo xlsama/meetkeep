@@ -1,5 +1,6 @@
 import { Ellipsis, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Avatar } from "@/components/avatar";
 import { SampleButton } from "@/components/sample-button";
 import { Button } from "@/components/ui/button";
 import { DialogTitle, Sheet } from "@/components/ui/dialog";
@@ -15,7 +16,7 @@ import { span } from "@/lib/format";
 import { clearProgress } from "@/lib/progress";
 import { errorMessage, meetingQuery, queryClient } from "@/lib/queries";
 import { stopSample, toggleSample } from "@/lib/sample";
-import { initial, ordered, speakerVoice } from "@/lib/speakers";
+import { ordered, speakerVoice } from "@/lib/speakers";
 import { cn } from "@/lib/utils";
 
 export function SpeakersSheet({
@@ -210,15 +211,7 @@ function SpeakerRow({
 
   return (
     <div className="flex items-center gap-3 border-b border-border-subtle py-2.5" data-testid={`speaker-${speaker.id}`}>
-      <span
-        aria-hidden
-        className={cn(
-          "inline-flex size-7 shrink-0 items-center justify-center rounded-full text-meta font-semibold text-white",
-          voice.avatar,
-        )}
-      >
-        {initial(speaker.name)}
-      </span>
+      <Avatar name={speaker.name} tone={voice.avatar} className="size-7 text-meta" />
       <NameInput key={`${meetingId}-${speaker.id}-${speaker.name}`} speaker={speaker} onRename={onRename} />
       <span className="w-[84px] shrink-0 text-right text-label text-muted-foreground tabular-nums">
         {span(speaker.durationMs)} · {share}%

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Ellipsis, LoaderCircle, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type Ref } from "react";
+import { Avatar } from "@/components/avatar";
 import { SampleButton } from "@/components/sample-button";
 import {
   AlertDialog,
@@ -23,7 +24,6 @@ import { People, type Person } from "@/mygo";
 import { meetingDate } from "@/lib/format";
 import { errorMessage, peopleQuery, queryClient } from "@/lib/queries";
 import { stopSample, toggleSample } from "@/lib/sample";
-import { initial } from "@/lib/speakers";
 import { useWindowTitle } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 
@@ -120,15 +120,7 @@ export function PeoplePage() {
 function Name({ name, tone }: { name: string; tone: string }) {
   return (
     <span className="inline-flex items-center gap-2.5 text-body font-medium text-foreground">
-      <span
-        aria-hidden
-        className={cn(
-          "inline-flex size-[30px] shrink-0 items-center justify-center rounded-full text-label font-semibold text-white",
-          tone,
-        )}
-      >
-        {initial(name)}
-      </span>
+      <Avatar name={name} tone={tone} className="size-[30px] text-label" />
       {name}
     </span>
   );
@@ -181,15 +173,7 @@ function PersonRow({
       <td className={cell}>
         {editing ? (
           <span className="inline-flex items-center gap-2.5">
-            <span
-              aria-hidden
-              className={cn(
-                "inline-flex size-[30px] shrink-0 items-center justify-center rounded-full text-label font-semibold text-white",
-                tone,
-              )}
-            >
-              {initial(person.name)}
-            </span>
+            <Avatar name={person.name} tone={tone} className="size-[30px] text-label" />
             <NameInput
               ref={input}
               person={person}

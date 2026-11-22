@@ -1,7 +1,7 @@
 import type { Speaker, Track } from "@/mygo";
 
 const trackName: Record<Track, string> = { mic: "我", system: "对方", file: "说话人" };
-const tones = ["bg-them", "bg-them-2", "bg-them-3"] as const;
+const tones = ["bg-them", "bg-them-2", "bg-them-3", "bg-them-4", "bg-them-5", "bg-them-6"] as const;
 
 export type Voice = {
   key: string;
@@ -38,5 +38,6 @@ export function ordered(speakers: Speaker[]) {
 }
 
 export function initial(name: string) {
-  return Array.from(name.trim())[0] ?? "?";
+  const numbered = /^说话人\s*(\d+)$/.exec(name.trim());
+  return numbered?.[1] ?? Array.from(name.trim())[0] ?? "?";
 }
