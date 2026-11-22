@@ -1,7 +1,10 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { motion } from "motion/react";
-import { useEffect, useRef } from "react";
+import { Pencil } from "lucide-react";
+import { Popover } from "radix-ui";
+import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/avatar";
+import { SpeakerPopover } from "@/components/speaker-popover";
 import { clock } from "@/lib/format";
 import { useTranscript, type Group, type Line } from "@/lib/transcript";
 import { cn } from "@/lib/utils";
@@ -111,7 +114,13 @@ export function Transcript({
               className={cn("absolute top-0 left-0 w-full", style.inset)}
               style={{ transform: `translateY(${item.start}px)` }}
             >
-              <GroupView group={group} variant={variant} activeSeq={activeSeq} onSelect={onSelect} />
+              <GroupView
+                group={group}
+                meetingId={meetingId}
+                variant={variant}
+                activeSeq={activeSeq}
+                onSelect={onSelect}
+              />
             </div>
           );
         })}
@@ -122,40 +131,80 @@ export function Transcript({
 
 function GroupView({
   group,
+  meetingId,
   variant,
   activeSeq,
   onSelect,
 }: {
   group: Group;
+  meetingId: string;
   variant: Variant;
   activeSeq: number | null;
   onSelect: ((line: Line) => void) | undefined;
 }) {
   const style = styles[variant];
+  const { voice } = group;
+  const [editing, setEditing] = useState(false);
+  const avatar = useRef<HTMLButtonElement>(null);
+  const speakerId = voice.self ? null : voice.speakerId;
+
   return (
-    <div className={cn("flex", style.row)}>
-      <Avatar name={group.voice.name} tone={group.voice.avatar} className={style.avatar} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className={cn("flex items-center", style.head)}>
-          <span className={cn("text-subtle", style.name)}>{group.voice.name}</span>
-          <span className={cn("text-muted-foreground tabular-nums", style.stamp)}>
-            {clock(group.startMs)}
-          </span>
-          {group.uncertain && <Badge>存疑</Badge>}
-        </div>
-        <div data-selectable className={cn("m-0", group.uncertain ? "text-subtle" : "text-prose", style.text)}>
-          {group.lines.map((line) => (
-            <LineView
-              key={line.seq}
-              line={line}
-              caret={style.caret}
-              active={line.seq === activeSeq}
-              onSelect={onSelect}
-            />
-          ))}
+    <Popover.Root open={editing} onOpenChange={setEditing}>
+      <div className={cn("flex", style.row)}>
+        {speakerId === null ? (
+          <Avatar name={voice.name} tone={voice.avatar} className={style.avatar} />
+        ) : (
+          <button
+            ref={avatar}
+            type="button"
+            tabIndex={-1}
+            aria-label={`改名：${voice.name}`}
+            data-testid={`speaker-avatar-${group.key}`}
+            onClick={() => setEditing((open) => !open)}
+            className="shrink-0 cursor-pointer self-start rounded-full outline-none transition-shadow hover:shadow-[0_0_0_3px_rgba(0,0,0,0.08)]"
+          >
+            <Avatar name={voice.name} tone={voice.avatar} className={style.avatar} />
+          </button>
+        )}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className={cn("flex items-center", style.head)}>
+            {speakerId === null ? (
+              <span className={cn("text-subtle", style.name)}>{voice.name}</span>
+            ) : (
+              <Popover.Trigger asChild>
+                <button
+                  type="button"
+                  data-testid={`speaker-name-${group.key}`}
+                  className={cn(
+                    "group/name -mx-1.5 inline-flex h-6 cursor-pointer items-center gap-1 rounded-md px-1.5 text-subtle outline-none transition-colors hover:bg-hover hover:text-foreground focus-visible:bg-hover data-[state=open]:bg-hover data-[state=open]:text-foreground",
+                    style.name,
+                  )}
+                >
+                  {voice.name}
+                  <Pencil className="hidden size-3 group-hover/name:block group-data-[state=open]/name:block" />
+                </button>
+              </Popover.Trigger>
+            )}
+            <span className={cn("text-muted-foreground tabular-nums", style.stamp)}>{clock(group.startMs)}</span>
+            {group.uncertain && <Badge>存疑</Badge>}
+          </div>
+          <div data-selectable className={cn("m-0", group.uncertain ? "text-subtle" : "text-prose", style.text)}>
+            {group.lines.map((line) => (
+              <LineView
+                key={line.seq}
+                line={line}
+                caret={style.caret}
+                active={line.seq === activeSeq}
+                onSelect={onSelect}
+              />
+            ))}
+          </div>
         </div>
       </div>
-    </div>
+      {editing && speakerId !== null && (
+        <SpeakerPopover meetingId={meetingId} speakerId={speakerId} avatar={avatar} onDone={() => setEditing(false)} />
+      )}
+    </Popover.Root>
   );
 }
 

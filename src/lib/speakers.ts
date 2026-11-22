@@ -1,10 +1,11 @@
 import type { Speaker, Track } from "@/mygo";
 
 const trackName: Record<Track, string> = { mic: "我", system: "对方", file: "说话人" };
-const tones = ["bg-them", "bg-them-2", "bg-them-3", "bg-them-4", "bg-them-5", "bg-them-6"] as const;
+export const tones = ["bg-them", "bg-them-2", "bg-them-3", "bg-them-4", "bg-them-5", "bg-them-6"] as const;
 
 export type Voice = {
   key: string;
+  speakerId: number | null;
   name: string;
   self: boolean;
   tone: string;
@@ -17,6 +18,7 @@ export function voiceOf(line: { speaker: number; track: Track }, speakers: Speak
   const self = line.track === "mic";
   return {
     key: `track-${line.track}`,
+    speakerId: null,
     name: trackName[line.track],
     self,
     tone: self ? "bg-foreground" : "bg-them",
@@ -26,11 +28,18 @@ export function voiceOf(line: { speaker: number; track: Track }, speakers: Speak
 
 export function speakerVoice(speaker: Speaker, speakers: Speaker[]): Voice {
   if (speaker.self) {
-    return { key: `speaker-${speaker.id}`, name: speaker.name, self: true, tone: "bg-foreground", avatar: "bg-secondary-foreground" };
+    return {
+      key: `speaker-${speaker.id}`,
+      speakerId: speaker.id,
+      name: speaker.name,
+      self: true,
+      tone: "bg-foreground",
+      avatar: "bg-secondary-foreground",
+    };
   }
   const index = speakers.filter((s) => !s.self).findIndex((s) => s.id === speaker.id);
   const tone = tones[Math.max(0, index) % tones.length] ?? "bg-them";
-  return { key: `speaker-${speaker.id}`, name: speaker.name, self: false, tone, avatar: tone };
+  return { key: `speaker-${speaker.id}`, speakerId: speaker.id, name: speaker.name, self: false, tone, avatar: tone };
 }
 
 export function ordered(speakers: Speaker[]) {

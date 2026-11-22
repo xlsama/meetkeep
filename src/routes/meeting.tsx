@@ -81,7 +81,7 @@ export function MeetingPage() {
     void navigate({
       to: "/meetings/$id",
       params: { id },
-      search: (prev) => ({ ...prev, tab: next === "board" ? ("board" as const) : undefined }),
+      search: (prev) => ({ ...prev, tab: next === "summary" ? undefined : next }),
       replace: true,
     });
 
