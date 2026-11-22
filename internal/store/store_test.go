@@ -354,3 +354,44 @@ func TestStar(t *testing.T) {
 		t.Errorf("starring a meeting that is not there returned %v", err)
 	}
 }
+
+func TestPolished(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	if err := s.CreateMeeting(ctx, Meeting{ID: "a", Title: "周会", StartedAt: 1000, Status: Done, Directory: "/tmp/a", Apps: []config.AppRef{}}); err != nil {
+		t.Fatal(err)
+	}
+	utterances := []Utterance{
+		{Seq: 1, Track: File, StartMs: 0, EndMs: 800, Text: "呃，回韩必达。", Speaker: 1},
+		{Seq: 2, Track: File, StartMs: 900, EndMs: 1200, Text: "对对对。", Speaker: 2},
+		{Seq: 3, Track: File, StartMs: 1300, EndMs: 2400, Text: "明天上线。", Speaker: 1},
+	}
+	if err := s.ReplaceTranscript(ctx, "a", utterances, []Speaker{{ID: 1, Name: "甲"}, {ID: 2, Name: "乙"}}, "audio.opus"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetPolished(ctx, "a", []Utterance{{Seq: 1, Polished: "回函必达。"}, {Seq: 2, Filler: true}}); err != nil {
+		t.Fatal(err)
+	}
+	stored, _ := s.Utterances(ctx, "a")
+	if stored[0].Text != "呃，回韩必达。" || stored[0].Polished != "回函必达。" || !stored[1].Filler || stored[2].Polished != "" {
+		t.Fatalf("stored %+v", stored)
+	}
+	shown := Shown(stored)
+	if len(shown) != 2 || shown[0].Text != "回函必达。" || shown[1].Text != "明天上线。" {
+		t.Errorf("shown as %+v", shown)
+	}
+	for _, query := range []string{"函必达", "韩必达"} {
+		if lines, _ := s.SearchLines(ctx, query); len(lines) != 1 || lines[0].Utterance.Seq != 1 || lines[0].Speaker != "甲" {
+			t.Errorf("searching %q found %+v", query, lines)
+		}
+	}
+	if glances, _ := s.Glances(ctx); glances["a"].Opening != "回函必达。明天上线。" {
+		t.Errorf("the meeting opens with %q", glances["a"].Opening)
+	}
+	if err := s.SetPolished(ctx, "a", nil); err != nil {
+		t.Fatal(err)
+	}
+	if stored, _ = s.Utterances(ctx, "a"); stored[0].Polished != "" || stored[1].Filler {
+		t.Errorf("polishing again kept %+v", stored)
+	}
+}

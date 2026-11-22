@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -74,6 +75,11 @@ type Processor struct {
 	// Summarize writes the notes of a meeting whose record is ready and
 	// tells what it took. What it fails at does not fail the meeting.
 	Summarize func(ctx context.Context, id string) (trace.Detail, error)
+	// Polish returns what makes a transcript easier to read, to give to
+	// the store, and tells what it took. It needs only what was said, so
+	// it runs while the speakers are told apart. What it fails at does not
+	// fail the meeting.
+	Polish func(ctx context.Context, utterances []store.Utterance) ([]store.Utterance, trace.Detail, error)
 	// Progress hears how far a meeting got.
 	Progress func(Progress)
 	// Changed hears that a meeting's record changed.
@@ -308,6 +314,20 @@ func (p *Processor) process(ctx context.Context, j job) error {
 		utterances[i].Seq = i + 1
 	}
 
+	var polished chan []store.Utterance
+	if p.Polish != nil {
+		polished = make(chan []store.Utterance, 1)
+		said := slices.Clone(utterances)
+		go func() {
+			var edits []store.Utterance
+			_ = j.record.Step("polish", func() (detail trace.Detail, err error) {
+				edits, detail, err = p.Polish(ctx, said)
+				return detail, err
+			})
+			polished <- edits
+		}()
+	}
+
 	p.report(j.id, Separating, 60)
 	audio := filepath.Base(found[0].path)
 	if kept := original(meeting.Directory); kept != "" && found[0].name == store.File {
@@ -335,6 +355,13 @@ func (p *Processor) process(ctx context.Context, j job) error {
 	}
 	if err := p.Store.ReplaceTranscript(ctx, j.id, utterances, speakers, audio); err != nil {
 		return err
+	}
+	if polished != nil {
+		p.Changed(j.id)
+		p.report(j.id, Summarizing, 84)
+		if edits := <-polished; edits != nil {
+			_ = p.Store.SetPolished(ctx, j.id, edits)
+		}
 	}
 	if p.Summarize != nil {
 		p.Changed(j.id)

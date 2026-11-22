@@ -108,6 +108,7 @@ func (a *app) start() error {
 			Embedding:    filepath.Join(resources, "models", "embedding.onnx"),
 		},
 		Recognition: filepath.Join(resources, "models", "recognition.onnx"),
+		Polish:      a.polish,
 		Summarize:   a.notes.finalize,
 		Progress:    func(p processor.Progress) { _ = processing.Broadcast(p) },
 		Changed:     func(id string) { _ = libraryChanged.Broadcast(id) },

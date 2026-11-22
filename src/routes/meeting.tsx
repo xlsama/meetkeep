@@ -9,11 +9,13 @@ import {
   FileText,
   FolderOpen,
   History,
+  Languages,
   LoaderCircle,
   Mic,
   Pause,
   Play,
   RotateCcw,
+  Sparkles,
   Star,
   Trash2,
   Upload,
@@ -63,6 +65,7 @@ import { speakerVoice } from "@/lib/speakers";
 import { lineAt, useTranscript, type Group } from "@/lib/transcript";
 import { useWindowTitle } from "@/lib/ui";
 import { cn } from "@/lib/utils";
+import { useWorkspace } from "@/lib/workspace";
 import { SpeakersSheet } from "@/routes/speakers-sheet";
 
 export function MeetingPage() {
@@ -250,7 +253,7 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
   const navigate = useNavigate();
   const detail = useQuery(meetingQuery(meeting.id));
   const speakers = detail.data?.speakers ?? [];
-  const { groups, lines } = useTranscript(meeting.id, false);
+  const { groups, lines, polished } = useTranscript(meeting.id, false);
   const tracked = useProgress((s) => s.items[meeting.id]);
   const progress = tracked ?? detail.data?.progress ?? null;
   const processing = meeting.status === "processing";
@@ -293,7 +296,7 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
             search={search}
             menu={
               meeting.status === "done" && lines.length > 0 ? (
-                <TranscriptMenu meetingId={meeting.id} groups={groups} onError={setError} />
+                <TranscriptMenu meetingId={meeting.id} groups={groups} polished={polished} onError={setError} />
               ) : undefined
             }
           />
@@ -395,13 +398,23 @@ async function copyText(text: string) {
 function TranscriptMenu({
   meetingId,
   groups,
+  polished,
   onError,
 }: {
   meetingId: string;
   groups: Group[];
+  polished: boolean;
   onError: (error: string | null) => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [polishing, setPolishing] = useState(false);
+  const original = useWorkspace((s) => s.original);
+  const setOriginal = useWorkspace((s) => s.setOriginal);
+  const polish = async () => {
+    setPolishing(true);
+    await run(onError, () => Library.polish(meetingId));
+    setPolishing(false);
+  };
   const copy = () =>
     run(onError, async () => {
       await copyText(
@@ -417,7 +430,13 @@ function TranscriptMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button type="button" aria-label="文字记录的更多操作" data-testid="transcript-more" className={transcriptIconButton}>
-          {copied ? <Check className="size-4" /> : <Ellipsis className="size-4" />}
+          {polishing ? (
+            <LoaderCircle className="size-4 animate-spin" />
+          ) : copied ? (
+            <Check className="size-4" />
+          ) : (
+            <Ellipsis className="size-4" />
+          )}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
@@ -434,6 +453,16 @@ function TranscriptMenu({
           导出为 SRT 字幕
         </DropdownMenuItem>
         <DropdownMenuSeparator />
+        {polished && (
+          <DropdownMenuItem data-testid="transcript-original" onSelect={() => setOriginal(!original)}>
+            <Languages />
+            {original ? "显示整理后的文字" : "显示原文"}
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem data-testid="transcript-polish" disabled={polishing} onSelect={() => void polish()}>
+          <Sparkles />
+          {polished ? "重新整理文字" : "整理文字"}
+        </DropdownMenuItem>
         <DropdownMenuItem
           data-testid="transcript-reidentify"
           onSelect={() => void run(onError, () => Library.reidentify(meetingId, 0))}

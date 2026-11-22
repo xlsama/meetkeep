@@ -8,6 +8,11 @@ export interface ASRSettings {
   endpoint: string;
   key: string;
   hotwords: string[];
+  /**
+   * Polish has the language model take the filler out of a transcript
+   * and set misheard names right.
+   */
+  polish: boolean;
 }
 
 /** AppRef names an app whose sound is recorded alone. */
@@ -348,6 +353,13 @@ export interface Utterance {
   speaker: number;
   /** Uncertain marks a guess at the speaker. */
   uncertain: boolean;
+  /** Polished is Text made easier to read, or "" when it reads as it is. */
+  polished: string;
+  /**
+   * Filler marks an utterance that says nothing: it is left out where
+   * the polished text is shown.
+   */
+  filler: boolean;
 }
 
 export type UtteranceState = "speaking" | "transcribing" | "done" | "dropped" | "failed";
@@ -442,6 +454,11 @@ export const Library = {
   mergeSpeakers: bind<[string, number, number], void>("Library.MergeSpeakers", (id: string, from: number, into: number) => [id, from, into]),
   /** Notes returns what is known of a meeting's notes. */
   notes: bind<[string], NotesState>("Library.Notes", (id: string) => [id]),
+  /**
+   * Polish makes the transcript of a processed meeting easier to read
+   * again: it takes out the filler and sets misheard names right.
+   */
+  polish: bind<[string], void>("Library.Polish", (id: string) => [id]),
   /**
    * RegenerateNotes writes the final notes of a processed meeting again.
    * The notes they replace can be restored.

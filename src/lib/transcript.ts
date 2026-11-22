@@ -3,6 +3,7 @@ import type { LiveUtterance, Speaker, Track, UtteranceState } from "@/mygo";
 import { meetingQuery } from "@/lib/queries";
 import { useRecorder } from "@/lib/recorder";
 import { voiceOf, type Voice } from "@/lib/speakers";
+import { useWorkspace } from "@/lib/workspace";
 
 export type Line = {
   seq: number;
@@ -31,9 +32,16 @@ export function useTranscript(meetingId: string, live: boolean) {
   const detail = useQuery(meetingQuery(meetingId));
   const items = useRecorder((s) => (live && s.live.meetingId === meetingId ? s.live.items : none));
   const speakers = detail.data?.speakers ?? nobody;
+  const original = useWorkspace((s) => s.original);
+  const utterances = detail.data?.utterances ?? [];
+  const polished = utterances.some((u) => u.filler || u.polished !== "");
 
   const merged = new Map<number, Line>();
-  for (const u of detail.data?.utterances ?? []) merged.set(u.seq, { ...u, state: "done" });
+  for (const u of utterances) {
+    if (!original && u.filler) continue;
+    const text = original || u.polished === "" ? u.text : u.polished;
+    merged.set(u.seq, { seq: u.seq, track: u.track, startMs: u.startMs, endMs: u.endMs, text, speaker: u.speaker, uncertain: u.uncertain, state: "done" });
+  }
   for (const u of Object.values(items)) {
     if (u.state === "dropped") merged.delete(u.seq);
     else merged.set(u.seq, { ...u, speaker: 0, uncertain: false });
@@ -52,6 +60,7 @@ export function useTranscript(meetingId: string, live: boolean) {
   return {
     groups,
     lines,
+    polished,
     last: spoken ? { line: spoken, voice: voiceOf(spoken, speakers) } : undefined,
     loading: detail.isPending,
   };

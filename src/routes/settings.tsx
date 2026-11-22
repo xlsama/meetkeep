@@ -28,7 +28,7 @@ const address = z
   .refine((value) => value === "" || /^https?:\/\/\S+$/.test(value), "地址要以 http:// 或 https:// 开头");
 
 const schema = z.object({
-  asr: z.object({ endpoint: address, key: z.string().trim(), hotwords: z.array(z.string()) }),
+  asr: z.object({ endpoint: address, key: z.string().trim(), hotwords: z.array(z.string()), polish: z.boolean() }),
   llm: z.object({ baseUrl: address, key: z.string().trim(), model: z.string().trim() }),
   recording: z.object({
     directory: z.string(),
@@ -78,6 +78,7 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
     sync("asr", "endpoint");
     sync("asr", "key");
     sync("asr", "hotwords");
+    sync("asr", "polish");
     sync("llm", "baseUrl");
     sync("llm", "key");
     sync("llm", "model");
@@ -191,6 +192,21 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
                 value={field.state.value}
                 onChange={(words) => {
                   field.handleChange(words);
+                  void save();
+                }}
+              />
+            </Row>
+          )}
+        </form.Field>
+        <form.Field name="asr.polish">
+          {(field) => (
+            <Row label="去掉语气词，纠正听错的术语">
+              <Switch
+                aria-label="去掉语气词，纠正听错的术语"
+                data-testid="settings-asr-polish"
+                checked={field.state.value}
+                onCheckedChange={(checked) => {
+                  field.handleChange(checked);
                   void save();
                 }}
               />

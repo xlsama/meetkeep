@@ -155,6 +155,10 @@ func newHarness(t *testing.T, transcriber fakeTranscriber) *harness {
 		Settings:    func() config.Settings { return config.Settings{} },
 		Transcriber: func(config.ASRSettings) (asr.Transcriber, error) { return transcriber, nil },
 		Progress:    func(Progress) {},
+		Polish: func(_ context.Context, said []store.Utterance) ([]store.Utterance, trace.Detail, error) {
+			edits := []store.Utterance{{Seq: said[0].Seq, Polished: "整理过的一句"}}
+			return edits, trace.Detail{"changed": 1}, nil
+		},
 		Summarize: func(_ context.Context, id string) (trace.Detail, error) {
 			h.summarized = append(h.summarized, id)
 			return trace.Detail{"topics": 2}, nil
@@ -165,7 +169,8 @@ func newHarness(t *testing.T, transcriber fakeTranscriber) *harness {
 }
 
 // steps returns the steps recorded of a meeting, each as its kind and name,
-// with a mark when it failed.
+// with a mark when it failed. Polishing, which runs beside the steps after
+// transcribing, is not among them: recorded finds it.
 func (h *harness) steps(t *testing.T, id string) []string {
 	t.Helper()
 	recorded, err := h.db.Steps(context.Background(), id)
@@ -181,9 +186,27 @@ func (h *harness) steps(t *testing.T, id string) []string {
 		if s.Run == 0 || s.StartedAt < s.Run || s.DurationMs < 0 || !json.Valid([]byte(s.Detail)) {
 			t.Errorf("step %s is recorded as %+v", name, s)
 		}
-		names = append(names, name)
+		if s.Name != "polish" {
+			names = append(names, name)
+		}
 	}
 	return names
+}
+
+// recorded returns the steps of a kind and a name recorded of a meeting.
+func (h *harness) recorded(t *testing.T, id, kind, name string) []store.Step {
+	t.Helper()
+	all, err := h.db.Steps(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found []store.Step
+	for _, s := range all {
+		if s.Kind == kind && s.Name == name {
+			found = append(found, s)
+		}
+	}
+	return found
 }
 
 func (h *harness) meeting(t *testing.T, id string, files ...string) {
@@ -274,12 +297,17 @@ func TestProcessesBothTracks(t *testing.T) {
 	if got := strings.Join(h.steps(t, "a"), " "); got != steps {
 		t.Fatalf("the steps recorded are %q, want %q", got, steps)
 	}
-	recorded, _ := h.db.Steps(ctx, "a")
-	if got := recorded[4].Detail; got != `{"segments":3,"sentences":3,"speakers":2}` {
-		t.Errorf("telling the speakers apart is detailed as %s", got)
+	if got := h.recorded(t, "a", "process", "speakers"); len(got) != 1 || got[0].Detail != `{"segments":3,"sentences":3,"speakers":2}` {
+		t.Errorf("telling the speakers apart is recorded as %+v", got)
 	}
-	if got := recorded[6].Detail; got != `{"topics":2}` {
-		t.Errorf("the notes are detailed as %s", got)
+	if got := h.recorded(t, "a", "process", "notes"); len(got) != 1 || got[0].Detail != `{"topics":2}` {
+		t.Errorf("the notes are recorded as %+v", got)
+	}
+	if got := h.recorded(t, "a", "process", "polish"); len(got) != 1 || got[0].Detail != `{"changed":1}` {
+		t.Errorf("polishing is recorded as %+v", got)
+	}
+	if utterances[0].Polished != "整理过的一句" || utterances[1].Polished != "" {
+		t.Errorf("the polished transcript is %+v", utterances)
 	}
 
 	if err := h.db.SetStatus(ctx, "a", store.Processing, ""); err != nil {
@@ -297,8 +325,12 @@ func TestProcessesBothTracks(t *testing.T) {
 	if got := strings.Join(h.steps(t, "a")[7:], " "); got != "speakers/queue speakers/speakers speakers/voices" {
 		t.Errorf("telling the speakers apart again recorded %q", got)
 	}
-	if recorded, _ = h.db.Steps(ctx, "a"); recorded[7].Run == recorded[0].Run {
-		t.Error("the second processing is recorded as the first")
+	first, second := h.recorded(t, "a", "process", "queue"), h.recorded(t, "a", "speakers", "queue")
+	if len(first) != 1 || len(second) != 1 || first[0].Run == second[0].Run {
+		t.Errorf("the two processings are recorded as %+v and %+v", first, second)
+	}
+	if got := h.recorded(t, "a", "speakers", "polish"); len(got) != 0 {
+		t.Errorf("telling the speakers apart again polished the transcript: %+v", got)
 	}
 }
 

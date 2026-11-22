@@ -106,6 +106,11 @@ type Utterance struct {
 	Speaker int `json:"speaker"`
 	// Uncertain marks a guess at the speaker.
 	Uncertain bool `json:"uncertain"`
+	// Polished is Text made easier to read, or "" when it reads as it is.
+	Polished string `json:"polished"`
+	// Filler marks an utterance that says nothing: it is left out where
+	// the polished text is shown.
+	Filler bool `json:"filler"`
 }
 
 // Step is what one step of processing a meeting took.
@@ -232,6 +237,10 @@ var migrations = [][]string{
 	},
 	{
 		`ALTER TABLE meetings ADD COLUMN starred INTEGER NOT NULL DEFAULT 0`,
+	},
+	{
+		`ALTER TABLE utterances ADD COLUMN polished TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE utterances ADD COLUMN filler INTEGER NOT NULL DEFAULT 0`,
 	},
 }
 
@@ -675,18 +684,19 @@ func (s *Store) SearchTitles(ctx context.Context, query string) ([]Meeting, erro
 // newest meetings first.
 func (s *Store) SearchLines(ctx context.Context, query string) ([]Line, error) {
 	rows, err := s.db.Query(ctx, `SELECT u.meeting_id, u.seq, u.track, u.start_ms, u.end_ms, u.text, u.speaker, u.uncertain,
-		COALESCE(s.name, ''), COALESCE(s.self, u.track = 'mic')
+		u.polished, u.filler, COALESCE(s.name, ''), COALESCE(s.self, u.track = 'mic')
 		FROM utterances u
 		JOIN meetings m ON m.id = u.meeting_id
 		LEFT JOIN speakers s ON s.meeting_id = u.meeting_id AND s.id = u.speaker
-		WHERE u.text LIKE ? ESCAPE '\' ORDER BY m.started_at DESC, u.start_ms LIMIT 500`, like(query))
+		WHERE u.text LIKE ? ESCAPE '\' OR u.polished LIKE ? ESCAPE '\'
+		ORDER BY m.started_at DESC, u.start_ms LIMIT 500`, like(query), like(query))
 	if err != nil {
 		return nil, err
 	}
 	lines := make([]Line, 0, len(rows.Values))
 	for _, row := range rows.Values {
 		lines = append(lines, Line{
-			MeetingID: row[0].(string), Utterance: utterance(row[1:]), Speaker: row[8].(string), Self: row[9].(int64) != 0,
+			MeetingID: row[0].(string), Utterance: utterance(row[1:]), Speaker: row[10].(string), Self: row[11].(int64) != 0,
 		})
 	}
 	return lines, nil
@@ -750,7 +760,8 @@ func (s *Store) Glances(ctx context.Context) (map[string]Glance, error) {
 		glances[row[0].(string)] = g
 	}
 	rows, err = s.db.Query(ctx, `SELECT meeting_id, group_concat(text, '') FROM
-		(SELECT meeting_id, text FROM utterances WHERE seq <= ? ORDER BY meeting_id, seq) GROUP BY meeting_id`, opening)
+		(SELECT meeting_id, CASE WHEN polished != '' THEN polished ELSE text END AS text FROM utterances
+			WHERE seq <= ? AND filler = 0 ORDER BY meeting_id, seq) GROUP BY meeting_id`, opening)
 	if err != nil {
 		return nil, err
 	}
@@ -828,6 +839,39 @@ func (s *Store) Steps(ctx context.Context, meetingID string) ([]Step, error) {
 	return steps, nil
 }
 
+// Shown returns the utterances as the polished transcript has them: those
+// that say something, with their polished text.
+func Shown(utterances []Utterance) []Utterance {
+	shown := make([]Utterance, 0, len(utterances))
+	for _, u := range utterances {
+		if u.Filler {
+			continue
+		}
+		if u.Polished != "" {
+			u.Text = u.Polished
+		}
+		shown = append(shown, u)
+	}
+	return shown
+}
+
+// SetPolished replaces what polishing made of a meeting's transcript:
+// each of edits gives an utterance its polished text or marks it filler,
+// and the others read as they are.
+func (s *Store) SetPolished(ctx context.Context, meetingID string, edits []Utterance) error {
+	batch := []sqlite.Statement{
+		{SQL: "UPDATE utterances SET polished = '', filler = 0 WHERE meeting_id = ?", Args: []any{meetingID}},
+	}
+	for _, e := range edits {
+		batch = append(batch, sqlite.Statement{
+			SQL:  "UPDATE utterances SET polished = ?, filler = ? WHERE meeting_id = ? AND seq = ?",
+			Args: []any{e.Polished, e.Filler, meetingID, e.Seq},
+		})
+	}
+	_, err := s.db.Transaction(ctx, batch)
+	return err
+}
+
 func (s *Store) AddUtterance(ctx context.Context, meetingID string, u Utterance) error {
 	_, err := s.db.Execute(ctx, `INSERT INTO utterances (meeting_id, seq, track, start_ms, end_ms, text)
 		VALUES (?, ?, ?, ?, ?, ?)`, meetingID, u.Seq, string(u.Track), u.StartMs, u.EndMs, u.Text)
@@ -835,7 +879,7 @@ func (s *Store) AddUtterance(ctx context.Context, meetingID string, u Utterance)
 }
 
 func (s *Store) Utterances(ctx context.Context, meetingID string) ([]Utterance, error) {
-	rows, err := s.db.Query(ctx, `SELECT seq, track, start_ms, end_ms, text, speaker, uncertain FROM utterances
+	rows, err := s.db.Query(ctx, `SELECT seq, track, start_ms, end_ms, text, speaker, uncertain, polished, filler FROM utterances
 		WHERE meeting_id = ? ORDER BY start_ms, seq`, meetingID)
 	if err != nil {
 		return nil, err
@@ -856,5 +900,7 @@ func utterance(row []any) Utterance {
 		Text:      row[4].(string),
 		Speaker:   int(row[5].(int64)),
 		Uncertain: row[6].(int64) != 0,
+		Polished:  row[7].(string),
+		Filler:    row[8].(int64) != 0,
 	}
 }

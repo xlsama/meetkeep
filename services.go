@@ -23,6 +23,7 @@ import (
 	"github.com/xlsama/meetkeep/internal/processor"
 	"github.com/xlsama/meetkeep/internal/recorder"
 	"github.com/xlsama/meetkeep/internal/store"
+	"github.com/xlsama/meetkeep/internal/trace"
 	"github.com/xlsama/meetkeep/modules/capture"
 )
 
@@ -553,7 +554,11 @@ func (l *Library) Export(ctx context.Context, id string, format export.Format) (
 	if err != nil || path == "" {
 		return "", err
 	}
-	text := export.Render(detail.Meeting, detail.Utterances, detail.Speakers, format)
+	utterances := detail.Utterances
+	if format != export.SRT {
+		utterances = store.Shown(utterances)
+	}
+	text := export.Render(detail.Meeting, utterances, detail.Speakers, format)
 	return path, os.WriteFile(path, []byte(text), 0o644)
 }
 
@@ -667,6 +672,39 @@ func (l *Library) ImportFile(ctx context.Context, path string) (store.Meeting, e
 	}
 	l.app.processor.Import(id, path)
 	return meeting, libraryChanged.Broadcast(id)
+}
+
+// Polish makes the transcript of a processed meeting easier to read
+// again: it takes out the filler and sets misheard names right.
+func (l *Library) Polish(ctx context.Context, id string) error {
+	meeting, err := l.app.store.Meeting(ctx, id)
+	if err != nil {
+		return err
+	}
+	if meeting.Status != store.Done {
+		return errors.New("这场会议还没有整理好")
+	}
+	if _, err := l.app.notes.model(); err != nil {
+		return err
+	}
+	if !l.app.current().ASR.Polish {
+		return errors.New("整理文字记录在设置里关着")
+	}
+	utterances, err := l.app.store.Utterances(ctx, id)
+	if err != nil {
+		return err
+	}
+	err = trace.Begin(l.app.store, id, "polish").Step("polish", func() (trace.Detail, error) {
+		edits, detail, err := l.app.polish(ctx, utterances)
+		if err != nil {
+			return detail, err
+		}
+		return detail, l.app.store.SetPolished(ctx, id, edits)
+	})
+	if err != nil {
+		return err
+	}
+	return libraryChanged.Broadcast(id)
 }
 
 // Star marks a meeting as one the user wants at hand, or clears the mark.

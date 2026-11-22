@@ -11,6 +11,7 @@ import (
 	"github.com/xlsama/meetkeep/internal/llm"
 	"github.com/xlsama/meetkeep/internal/notes"
 	"github.com/xlsama/meetkeep/internal/recorder"
+	"github.com/xlsama/meetkeep/internal/store"
 	"github.com/xlsama/meetkeep/internal/trace"
 )
 
@@ -65,6 +66,7 @@ func (n *noteTaker) lines(ctx context.Context, id string) ([]notes.Line, error) 
 	if err != nil {
 		return nil, err
 	}
+	utterances = store.Shown(utterances)
 	lines := make([]notes.Line, len(utterances))
 	for i, u := range utterances {
 		lines[i] = notes.Line{Seq: u.Seq, StartMs: u.StartMs, EndMs: u.EndMs, Speaker: export.Name(u, speakers), Text: u.Text}

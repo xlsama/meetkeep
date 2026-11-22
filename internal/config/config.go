@@ -21,6 +21,9 @@ type ASRSettings struct {
 	Endpoint string   `json:"endpoint"`
 	Key      string   `json:"key"`
 	Hotwords []string `json:"hotwords"`
+	// Polish has the language model take the filler out of a transcript
+	// and set misheard names right.
+	Polish bool `json:"polish"`
 }
 
 type LLMSettings struct {
@@ -60,7 +63,7 @@ type SourceSettings struct {
 
 func defaults() Settings {
 	return Settings{
-		ASR: ASRSettings{Hotwords: []string{}},
+		ASR: ASRSettings{Hotwords: []string{}, Polish: true},
 		LLM: LLMSettings{BaseURL: "https://api.deepseek.com", Model: "deepseek-flash"},
 		Recording: RecordingSettings{
 			Directory:        "~/Documents/MeetKeep",
