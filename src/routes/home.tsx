@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ChevronRight, LoaderCircle, Upload } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { PageTitle } from "@/components/header-slot";
 import { cardGrid, MeetingCard, useNow } from "@/components/meeting-card";
 import { SourceSummary } from "@/components/source-summary";
-import { Library } from "@/mygo";
-import { cardsQuery, errorMessage, settingsQuery } from "@/lib/queries";
+import { useImport, useImporter } from "@/lib/importer";
+import { cardsQuery, settingsQuery } from "@/lib/queries";
 import { isActive, useRecorder } from "@/lib/recorder";
 import { useSheet, useWindowTitle } from "@/lib/ui";
 import { cn } from "@/lib/utils";
@@ -20,8 +21,8 @@ export function Home() {
   const status = useRecorder((s) => s.status);
   const setSheetOpen = useSheet((s) => s.setOpen);
   const sources = settings.data?.sources;
-  const [importing, setImporting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const importing = useImporter((s) => s.importing);
+  const importFile = useImport();
 
   useEffect(() => {
     if (search.new !== 1) return;
@@ -37,21 +38,9 @@ export function Home() {
     setSheetOpen(true);
   };
 
-  const importFile = async () => {
-    setImporting(true);
-    setError(null);
-    try {
-      const meeting = await Library.import();
-      if (meeting) void navigate({ to: "/meetings/$id", params: { id: meeting.id } });
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setImporting(false);
-    }
-  };
-
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+      <PageTitle title="首页" />
       <div className="flex min-h-[300px] flex-1 flex-col items-center justify-center gap-[18px] px-6 py-10">
         <button
           type="button"
@@ -74,7 +63,7 @@ export function Home() {
         <span aria-hidden className="my-1.5 h-px w-8 bg-border" />
         <button
           type="button"
-          data-testid="import"
+          data-testid="home-import"
           disabled={importing}
           aria-busy={importing}
           onClick={() => void importFile()}
@@ -87,11 +76,6 @@ export function Home() {
           )}
           导入录音或视频
         </button>
-        {error && (
-          <p role="alert" data-testid="import-error" data-selectable className="m-0 max-w-[360px] text-center text-label break-words text-destructive">
-            {error}
-          </p>
-        )}
       </div>
       {recent.length > 0 && (
         <section className="flex shrink-0 flex-col gap-2">

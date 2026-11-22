@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Ellipsis, LoaderCircle, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type Ref } from "react";
 import { Avatar } from "@/components/avatar";
+import { PageTitle } from "@/components/header-slot";
 import { SampleButton } from "@/components/sample-button";
 import {
   AlertDialog,
@@ -54,13 +55,8 @@ export function PeoplePage() {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-      <div className="flex w-full max-w-[880px] flex-col gap-6 px-10 pt-8 pb-10">
-        <div className="flex items-baseline gap-3">
-          <h1 className="m-0 text-display font-semibold">人物</h1>
-          <span className="text-ui text-muted-foreground tabular-nums" data-testid="people-count">
-            记住了 {people.length} 个人的声音
-          </span>
-        </div>
+      <div className="flex w-full max-w-[880px] flex-col gap-6 px-10 pt-6 pb-10">
+        <PageTitle title="人物" meta={`记住了 ${people.length} 个人的声音`} />
         {error && (
           <p role="alert" data-testid="people-error" data-selectable className="m-0 -mt-3 text-label break-words text-destructive">
             {error}

@@ -1,6 +1,8 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
+import { PageTitle } from "@/components/header-slot";
+import { Highlight } from "@/components/highlight";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { SearchHit } from "@/mygo";
 import { clock, meetingDate } from "@/lib/format";
@@ -29,21 +31,15 @@ export function SearchPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-baseline gap-3 px-10 pt-7">
-        <h1 className="m-0 min-w-0 truncate text-display font-semibold" data-selectable>
-          “{query}”
-        </h1>
-        {(empty || hits.length > 0) && (
-          <span className="shrink-0 text-ui text-muted-foreground tabular-nums" data-testid="search-summary">
-            {empty ? "没有找到" : `${hits.length} 场会议 · ${found} 处`}
-          </span>
-        )}
-      </div>
+      <PageTitle
+        title={`“${query}”`}
+        meta={empty ? "没有找到" : hits.length > 0 ? `${hits.length} 场会议 · ${found} 处` : undefined}
+      />
       {hits.length > 0 && (
         <Tabs
           value={filter}
           onValueChange={(value) => setFilter(filters.find((f) => f.value === value)?.value ?? "all")}
-          className="mt-3.5 flex-1"
+          className="flex-1"
         >
           <TabsList className="h-11 gap-[22px] border-divider px-10">
             {filters.map((f) => (
@@ -141,28 +137,5 @@ function Results({ hits, filter, query }: { hits: SearchHit[]; filter: Filter; q
         </section>
       ))}
     </div>
-  );
-}
-
-function Highlight({ text, query }: { text: string; query: string }) {
-  if (query === "") return text;
-  const lower = text.toLowerCase();
-  const needle = query.toLowerCase();
-  const parts: { text: string; mark: boolean; at: number }[] = [];
-  let from = 0;
-  for (let at = lower.indexOf(needle); at !== -1; at = lower.indexOf(needle, from)) {
-    if (at > from) parts.push({ text: text.slice(from, at), mark: false, at: from });
-    parts.push({ text: text.slice(at, at + needle.length), mark: true, at });
-    from = at + needle.length;
-  }
-  if (from < text.length) parts.push({ text: text.slice(from), mark: false, at: from });
-  return parts.map((part) =>
-    part.mark ? (
-      <mark key={part.at} className="rounded-[3px] bg-mark px-px text-inherit">
-        {part.text}
-      </mark>
-    ) : (
-      <span key={part.at}>{part.text}</span>
-    ),
   );
 }

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronDown, LoaderCircle, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
+import { PageTitle } from "@/components/header-slot";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -44,8 +45,8 @@ export function SettingsPage() {
   const settings = useQuery(settingsQuery);
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <div className="flex w-full max-w-[880px] flex-col gap-6 px-10 pt-8 pb-10">
-        <h1 className="m-0 text-display font-semibold">设置</h1>
+      <div className="flex w-full max-w-[880px] flex-col gap-6 px-10 pt-7 pb-10">
+        <PageTitle title="设置" />
         {settings.data && <SettingsForm settings={settings.data} />}
         {settings.error && <p className="m-0 text-label text-destructive">{errorMessage(settings.error)}</p>}
       </div>

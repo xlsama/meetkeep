@@ -21,7 +21,7 @@ import { useEffect, useState } from "react";
 import { Avatar } from "@/components/avatar";
 import { LevelMeter } from "@/components/level-meter";
 import { MeetingAside, type AsideTab } from "@/components/meeting-aside";
-import { HeaderSlot } from "@/components/header-slot";
+import { HeaderActions, HeaderTitle } from "@/components/header-slot";
 import { FaultNotice, Notice } from "@/components/notice";
 import { AudioBar, PlayerProvider, usePlayback, VideoStage } from "@/components/player";
 import { RecDot } from "@/components/rec-dot";
@@ -105,16 +105,18 @@ function LiveView({ meeting, tab, onTabChange }: { meeting: Meeting } & TabProps
 
   return (
     <>
-      <HeaderSlot>
+      <HeaderTitle>
         <TitleInput id={meeting.id} title={meeting.title} className="text-title font-semibold" />
+      </HeaderTitle>
+      <HeaderActions>
         <SourceSummary
           microphone={meeting.microphone}
           system={meeting.system}
           apps={meeting.apps}
           iconSize={13}
-          className="ml-auto max-w-[45%] shrink-0 gap-1.5 text-label text-muted-foreground"
+          className="min-w-0 gap-1.5 text-label text-muted-foreground"
         />
-      </HeaderSlot>
+      </HeaderActions>
       <Workspace
         cards={{
           transcript: (
@@ -259,19 +261,19 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
 
   return (
     <>
-      <HeaderSlot>
-        <div className="flex min-w-0 flex-1 flex-col items-start">
+      <HeaderTitle>
           <TitleInput id={meeting.id} title={meeting.title} className="text-title leading-[1.35] font-semibold" />
-          <span className="truncate text-label text-muted-foreground tabular-nums" data-testid="meeting-meta">
+          <span className="max-w-full truncate text-label text-muted-foreground tabular-nums" data-testid="meeting-meta">
             {[meetingDate(meeting.startedAt), minutes(meeting.durationMs), sources.join(" + ")].filter(Boolean).join(" · ")}
           </span>
-        </div>
+      </HeaderTitle>
+      <HeaderActions>
         {meeting.status === "done" && speakers.length > 0 && (
           <SpeakersButton speakers={speakers} onClick={() => setSpeakersOpen(true)} />
         )}
         <ExportMenu meetingId={meeting.id} onError={setError} />
         <MoreMenu meeting={meeting} onError={setError} />
-      </HeaderSlot>
+      </HeaderActions>
       {processing && <ProgressBand meeting={meeting} progress={progress} />}
       <Workspace
         cards={{
