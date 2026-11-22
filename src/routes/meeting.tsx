@@ -315,6 +315,14 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
             revealSeq={revealSeq}
             onSelect={playable ? (line) => seek(line.startMs, true) : undefined}
           />
+          {playable && !video && (
+            <AudioBar
+              meetingId={meeting.id}
+              durationMs={meeting.durationMs}
+              groups={groups}
+              spaceDisabled={tab === "board"}
+            />
+          )}
         </section>
           ),
           notes: (
@@ -337,9 +345,6 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
           ),
         }}
       />
-      {playable && !video && (
-        <AudioBar meetingId={meeting.id} durationMs={meeting.durationMs} groups={groups} spaceDisabled={tab === "board"} />
-      )}
       {meeting.status === "done" && (
         <SpeakersSheet
           meetingId={meeting.id}

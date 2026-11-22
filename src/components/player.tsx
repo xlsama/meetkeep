@@ -39,7 +39,7 @@ const audioTokens = {
   "--media-accent-text-color": "var(--color-primary-foreground)",
   "--media-border-color": "var(--color-border)",
   "--media-controls": "var(--color-background)",
-  "--media-controls-radius": "12px",
+  "--media-controls-radius": "8px",
   "--media-surface-border": "transparent",
   "--media-shadow-surface": "none",
   "--media-shadow-surface-inset": "none",
@@ -159,7 +159,7 @@ export function VideoStage({ meetingId, durationMs, groups, spaceDisabled }: Sta
 
 export function AudioBar({ meetingId, durationMs, groups, spaceDisabled }: StageProps) {
   return (
-    <footer className="shrink-0">
+    <footer className="shrink-0 border-t border-divider px-1.5 py-1">
       <AudioSkin style={audioTokens} markers={<SpeakerMarkers groups={groups} durationMs={durationMs} />}>
         <Audio src={`recording://localhost/${meetingId}/audio`} preload="metadata" fallback={null} />
         <Hotkey keys="Space" action="togglePaused" target="document" disabled={spaceDisabled} />
