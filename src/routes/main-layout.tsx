@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
-import { AudioLines, House, LoaderCircle, Plus, Settings, Upload, Users } from "lucide-react";
+import { AudioLines, House, LoaderCircle, PanelLeft, PanelLeftClose, Plus, Settings, Upload, Users } from "lucide-react";
 import { isMyGo } from "mygo-runtime";
 import { useEffect, type ReactNode } from "react";
 import { useHeader } from "@/components/header-slot";
 import { RecordingLabel } from "@/components/meeting-card";
 import { Notice } from "@/components/notice";
+import { RecDot } from "@/components/rec-dot";
 import { SearchDialog, SearchTrigger } from "@/components/search-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { events } from "@/mygo";
@@ -14,6 +15,7 @@ import { settingsQuery } from "@/lib/queries";
 import { isActive, useRecorder } from "@/lib/recorder";
 import { useSheet } from "@/lib/ui";
 import { cn } from "@/lib/utils";
+import { useWorkspace } from "@/lib/workspace";
 import { NewSheet } from "@/routes/new-sheet";
 
 export function MainLayout() {
@@ -35,10 +37,15 @@ export function MainLayout() {
   const setSheetOpen = useSheet((s) => s.setOpen);
   const importer = useImporter();
   const importFile = useImport();
+  const sidebar = useWorkspace((s) => s.sidebar);
+  const toggleSidebar = useWorkspace((s) => s.toggleSidebar);
 
   return (
     <div className="flex h-full flex-col bg-canvas">
-      <header className="drag flex h-[52px] shrink-0 items-center gap-3 pr-3 pl-[94px]">
+      <header className="drag flex h-[52px] shrink-0 items-center gap-3 pr-3 pl-[82px]">
+        <HeaderButton label={sidebar ? "收起侧边栏" : "展开侧边栏"} testId="sidebar-toggle" onClick={toggleSidebar}>
+          {sidebar ? <PanelLeftClose className="size-4" /> : <PanelLeft className="size-4" />}
+        </HeaderButton>
         <div ref={setTitle} className="flex min-w-0 flex-1 basis-0 flex-col items-start justify-center" />
         <SearchTrigger />
         <div className="flex min-w-0 flex-1 basis-0 items-center justify-end gap-1">
@@ -58,7 +65,7 @@ export function MainLayout() {
         className="mx-2 mb-2"
       />
       <div className="flex min-h-0 flex-1 gap-2 px-2 pb-2">
-        <Sidebar />
+        <Sidebar open={sidebar} />
         <main className={cn("relative flex min-w-0 flex-1 flex-col gap-2", !bare && "card overflow-hidden")}>
           <Outlet />
         </main>
@@ -114,22 +121,31 @@ const items = [
   { to: "/settings", label: "设置", icon: Settings, testId: "nav-settings", exact: false },
 ] as const;
 
-function Sidebar() {
+function Sidebar({ open }: { open: boolean }) {
   const status = useRecorder((s) => s.status);
 
   return (
-    <nav aria-label="功能" className="flex w-[176px] shrink-0 flex-col gap-0.5 pl-1">
+    <nav
+      aria-label="功能"
+      data-open={open}
+      className={cn(
+        "flex shrink-0 flex-col gap-0.5 overflow-hidden pl-1 transition-[width] duration-200 ease-out",
+        open ? "w-[176px]" : "w-10",
+      )}
+    >
       {items.map((item) => (
         <Link
           key={item.to}
           to={item.to}
           data-testid={item.testId}
+          aria-label={item.label}
+          title={open ? undefined : item.label}
           activeOptions={{ exact: item.exact }}
           className="flex h-9 items-center gap-2.5 rounded-[10px] px-2.5 text-ui text-secondary-foreground transition-colors hover:bg-black/[0.05]"
           activeProps={{ className: "bg-background font-medium text-foreground hover:bg-background" }}
         >
           <item.icon className="size-4 shrink-0" />
-          <span>{item.label}</span>
+          <span className={cn("whitespace-nowrap transition-opacity", !open && "opacity-0")}>{item.label}</span>
         </Link>
       ))}
       {isActive(status) && status.meeting && (
@@ -139,7 +155,11 @@ function Sidebar() {
           data-testid="nav-live"
           className="mt-auto flex h-9 items-center rounded-[10px] px-2.5 transition-colors hover:bg-black/[0.05]"
         >
-          <RecordingLabel status={status} className="text-ui" />
+          {open ? (
+            <RecordingLabel status={status} className="text-ui whitespace-nowrap" />
+          ) : (
+            <RecDot paused={status.phase === "paused"} className="mx-[5px] size-1.5" />
+          )}
         </Link>
       )}
     </nav>
