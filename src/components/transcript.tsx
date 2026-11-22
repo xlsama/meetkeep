@@ -21,7 +21,7 @@ const styles = {
     head: "h-7 gap-2",
     name: "text-label",
     stamp: "text-tiny",
-    text: "text-body leading-[1.75]",
+    text: "text-body leading-[25px]",
     caret: "h-[17px]",
   },
   panel: {
