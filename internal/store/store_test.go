@@ -271,3 +271,28 @@ func TestReopenKeepsData(t *testing.T) {
 		t.Errorf("got %d meetings after reopening", len(meetings))
 	}
 }
+
+func TestStepsGoWithTheirMeeting(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	if err := s.CreateMeeting(ctx, Meeting{ID: "a", Title: "周会", StartedAt: 1000, Status: Processing, Directory: "/tmp/a", Apps: []config.AppRef{}}); err != nil {
+		t.Fatal(err)
+	}
+	first := Step{Run: 5000, Kind: "import", Name: "transcribe", StartedAt: 5200, DurationMs: 30100, MemoryPeak: 334 << 20, Detail: `{"sentences":848}`}
+	failed := Step{Run: 5000, Kind: "import", Name: "speakers", StartedAt: 35300, DurationMs: 12, Error: "区分说话人失败", Detail: "{}"}
+	for _, step := range []Step{first, failed} {
+		if err := s.AddStep(ctx, "a", step); err != nil {
+			t.Fatal(err)
+		}
+	}
+	steps, err := s.Steps(ctx, "a")
+	if err != nil || len(steps) != 2 || steps[0] != first || steps[1] != failed {
+		t.Fatalf("the steps read back as %+v, %v", steps, err)
+	}
+	if err := s.Delete(ctx, "a"); err != nil {
+		t.Fatal(err)
+	}
+	if steps, _ := s.Steps(ctx, "a"); len(steps) != 0 {
+		t.Errorf("the steps of a deleted meeting are still there: %+v", steps)
+	}
+}

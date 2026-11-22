@@ -346,7 +346,7 @@ func (l *Library) RegenerateNotes(ctx context.Context, id string) error {
 	if _, err := l.app.notes.model(); err != nil {
 		return err
 	}
-	go l.app.notes.finalize(context.Background(), id)
+	go l.app.notes.rewrite(id)
 	return nil
 }
 

@@ -128,6 +128,8 @@ type voiced struct {
 	// voices are the speakers' voiceprints, samples where each is heard.
 	voices  map[int][]float32
 	samples map[int]speech.Span
+	// spans is how many stretches of the track were listened to.
+	spans int
 }
 
 // listen takes the voiceprints of the sentences of a track, corrects who
@@ -188,6 +190,7 @@ func (p *Processor) listen(ctx context.Context, path string, sentences []store.U
 	for n, i := range order {
 		spans[n] = speech.Span{StartMs: int(sentences[i].StartMs), EndMs: int(sentences[i].EndMs)}
 	}
+	result.spans = len(spans)
 	prints, err := p.Speech.Embed(ctx, path, p.Recognition, spans)
 	if err != nil {
 		return result, err

@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -20,6 +21,22 @@ type Client struct {
 	Key     string
 	Model   string
 	HTTP    *http.Client
+
+	mu   sync.Mutex
+	used Usage
+}
+
+// Usage is what a client asked of the model so far.
+type Usage struct {
+	Requests         int
+	PromptTokens     int
+	CompletionTokens int
+}
+
+func (c *Client) Used() Usage {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.used
 }
 
 func New(baseURL, key, model string) (*Client, error) {
@@ -96,10 +113,19 @@ func (c *Client) send(ctx context.Context, r request) (string, error) {
 		Choices []struct {
 			Message Message `json:"message"`
 		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+		} `json:"usage"`
 	}
 	if err := json.Unmarshal(data, &result); err != nil {
 		return "", err
 	}
+	c.mu.Lock()
+	c.used.Requests++
+	c.used.PromptTokens += result.Usage.PromptTokens
+	c.used.CompletionTokens += result.Usage.CompletionTokens
+	c.mu.Unlock()
 	if len(result.Choices) == 0 {
 		return "", errors.New("模型没有返回内容")
 	}

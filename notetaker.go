@@ -11,6 +11,7 @@ import (
 	"github.com/xlsama/meetkeep/internal/llm"
 	"github.com/xlsama/meetkeep/internal/notes"
 	"github.com/xlsama/meetkeep/internal/recorder"
+	"github.com/xlsama/meetkeep/internal/trace"
 )
 
 // NotesState is what is known of a meeting's notes.
@@ -201,24 +202,40 @@ func (n *noteTaker) outline(ctx context.Context, id string) {
 }
 
 // finalize writes the notes of a meeting that was processed.
-func (n *noteTaker) finalize(ctx context.Context, id string) {
+func (n *noteTaker) finalize(ctx context.Context, id string) (trace.Detail, error) {
 	model, err := n.model()
 	if err != nil {
-		return
+		return trace.Detail{"skipped": err.Error()}, nil
 	}
 	meeting, err := n.app.store.Meeting(ctx, id)
 	if err != nil {
-		return
+		return nil, err
 	}
 	lines, err := n.lines(ctx, id)
-	if err != nil || len(lines) == 0 {
-		return
+	if err != nil {
+		return nil, err
+	}
+	detail := trace.Detail{"model": model.Model, "lines": len(lines)}
+	if len(lines) == 0 {
+		return detail, nil
 	}
 	n.busy(id, true)
 	defer n.busy(id, false)
 	written, err := notes.Finalize(ctx, model, meeting.Title, lines, n.app.current().ASR.Hotwords)
+	used := model.Used()
+	detail["requests"], detail["promptTokens"], detail["completionTokens"] = used.Requests, used.PromptTokens, used.CompletionTokens
 	n.save(ctx, id, written, err)
-	if err == nil {
-		n.app.windows.notesReady(meeting, written)
+	if err != nil {
+		return detail, err
 	}
+	detail["topics"], detail["todos"] = len(written.Topics), len(written.Todos)
+	n.app.windows.notesReady(meeting, written)
+	return detail, nil
+}
+
+// rewrite writes the final notes of a processed meeting again.
+func (n *noteTaker) rewrite(id string) {
+	_ = trace.Begin(n.app.store, id, "notes").Step("notes", func() (trace.Detail, error) {
+		return n.finalize(context.Background(), id)
+	})
 }

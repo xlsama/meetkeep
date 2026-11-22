@@ -106,6 +106,25 @@ type Utterance struct {
 	Uncertain bool `json:"uncertain"`
 }
 
+// Step is what one step of processing a meeting took.
+type Step struct {
+	// Run is when the processing the step belongs to was asked for, in
+	// Unix milliseconds: the steps of one processing share it.
+	Run int64 `json:"run"`
+	// Kind is what was asked for: process, import, speakers or notes.
+	Kind       string `json:"kind"`
+	Name       string `json:"name"`
+	StartedAt  int64  `json:"startedAt"`
+	DurationMs int64  `json:"durationMs"`
+	// MemoryPeak is the most memory the app held during the step, in
+	// bytes, or 0 when it was not measured.
+	MemoryPeak int64 `json:"memoryPeak"`
+	// Error tells why the step failed, or is "".
+	Error string `json:"error"`
+	// Detail is a JSON object of what the step worked on and made.
+	Detail string `json:"detail"`
+}
+
 var ErrNotFound = errors.New("找不到这场会议")
 
 // NewID returns the ID of a meeting that starts now: the time, so that
@@ -193,6 +212,21 @@ var migrations = [][]string{
 		`ALTER TABLE notes ADD COLUMN previous_data TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE notes ADD COLUMN previous_doc TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE notes ADD COLUMN previous_text TEXT NOT NULL DEFAULT ''`,
+	},
+	{
+		`CREATE TABLE steps (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			meeting_id TEXT NOT NULL REFERENCES meetings (id) ON DELETE CASCADE,
+			run INTEGER NOT NULL,
+			kind TEXT NOT NULL,
+			name TEXT NOT NULL,
+			started_at INTEGER NOT NULL,
+			duration_ms INTEGER NOT NULL,
+			memory_peak INTEGER NOT NULL DEFAULT 0,
+			error TEXT NOT NULL DEFAULT '',
+			detail TEXT NOT NULL DEFAULT '{}'
+		)`,
+		`CREATE INDEX steps_meeting ON steps (meeting_id, id)`,
 	},
 }
 
@@ -710,6 +744,30 @@ func meeting(row []any) Meeting {
 	}
 	_ = json.Unmarshal([]byte(row[8].(string)), &m.Apps)
 	return m
+}
+
+func (s *Store) AddStep(ctx context.Context, meetingID string, step Step) error {
+	_, err := s.db.Execute(ctx, `INSERT INTO steps (meeting_id, run, kind, name, started_at, duration_ms, memory_peak, error, detail)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, meetingID, step.Run, step.Kind, step.Name, step.StartedAt, step.DurationMs,
+		step.MemoryPeak, step.Error, step.Detail)
+	return err
+}
+
+// Steps returns the steps of every processing of a meeting, oldest first.
+func (s *Store) Steps(ctx context.Context, meetingID string) ([]Step, error) {
+	rows, err := s.db.Query(ctx, `SELECT run, kind, name, started_at, duration_ms, memory_peak, error, detail FROM steps
+		WHERE meeting_id = ? ORDER BY id`, meetingID)
+	if err != nil {
+		return nil, err
+	}
+	steps := make([]Step, 0, len(rows.Values))
+	for _, row := range rows.Values {
+		steps = append(steps, Step{
+			Run: row[0].(int64), Kind: row[1].(string), Name: row[2].(string), StartedAt: row[3].(int64),
+			DurationMs: row[4].(int64), MemoryPeak: row[5].(int64), Error: row[6].(string), Detail: row[7].(string),
+		})
+	}
+	return steps, nil
 }
 
 func (s *Store) AddUtterance(ctx context.Context, meetingID string, u Utterance) error {

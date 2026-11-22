@@ -2,16 +2,19 @@ package processor
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/xlsama/meetkeep/internal/asr"
 	"github.com/xlsama/meetkeep/internal/config"
 	"github.com/xlsama/meetkeep/internal/store"
+	"github.com/xlsama/meetkeep/internal/trace"
 	"github.com/xlsama/meetkeep/modules/speech"
 )
 
@@ -152,10 +155,35 @@ func newHarness(t *testing.T, transcriber fakeTranscriber) *harness {
 		Settings:    func() config.Settings { return config.Settings{} },
 		Transcriber: func(config.ASRSettings) (asr.Transcriber, error) { return transcriber, nil },
 		Progress:    func(Progress) {},
-		Summarize:   func(_ context.Context, id string) { h.summarized = append(h.summarized, id) },
-		Changed:     func(id string) { h.changed <- id },
+		Summarize: func(_ context.Context, id string) (trace.Detail, error) {
+			h.summarized = append(h.summarized, id)
+			return trace.Detail{"topics": 2}, nil
+		},
+		Changed: func(id string) { h.changed <- id },
 	}
 	return h
+}
+
+// steps returns the steps recorded of a meeting, each as its kind and name,
+// with a mark when it failed.
+func (h *harness) steps(t *testing.T, id string) []string {
+	t.Helper()
+	recorded, err := h.db.Steps(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, s := range recorded {
+		name := s.Kind + "/" + s.Name
+		if s.Error != "" {
+			name += "!"
+		}
+		if s.Run == 0 || s.StartedAt < s.Run || s.DurationMs < 0 || !json.Valid([]byte(s.Detail)) {
+			t.Errorf("step %s is recorded as %+v", name, s)
+		}
+		names = append(names, name)
+	}
+	return names
 }
 
 func (h *harness) meeting(t *testing.T, id string, files ...string) {
@@ -242,6 +270,17 @@ func TestProcessesBothTracks(t *testing.T) {
 	if len(h.summarized) != 1 || h.summarized[0] != "a" {
 		t.Errorf("notes were asked for %v", h.summarized)
 	}
+	steps := "process/queue process/transcribe process/transcribe process/mix process/speakers process/voices process/notes"
+	if got := strings.Join(h.steps(t, "a"), " "); got != steps {
+		t.Fatalf("the steps recorded are %q, want %q", got, steps)
+	}
+	recorded, _ := h.db.Steps(ctx, "a")
+	if got := recorded[4].Detail; got != `{"segments":3,"sentences":3,"speakers":2}` {
+		t.Errorf("telling the speakers apart is detailed as %s", got)
+	}
+	if got := recorded[6].Detail; got != `{"topics":2}` {
+		t.Errorf("the notes are detailed as %s", got)
+	}
 
 	if err := h.db.SetStatus(ctx, "a", store.Processing, ""); err != nil {
 		t.Fatal(err)
@@ -254,6 +293,12 @@ func TestProcessesBothTracks(t *testing.T) {
 	}
 	if got := h.engine.counts; len(got) != 2 || got[1] != 1 {
 		t.Errorf("asked for %v speakers", got)
+	}
+	if got := strings.Join(h.steps(t, "a")[7:], " "); got != "speakers/queue speakers/speakers speakers/voices" {
+		t.Errorf("telling the speakers apart again recorded %q", got)
+	}
+	if recorded, _ = h.db.Steps(ctx, "a"); recorded[7].Run == recorded[0].Run {
+		t.Error("the second processing is recorded as the first")
 	}
 }
 
@@ -308,6 +353,12 @@ func TestProcessesOneTrackAndImports(t *testing.T) {
 	h.p.Import("bad", "/tmp/notes.txt")
 	if m := h.wait(t, "bad"); m.Status != store.Failed || m.Error == "" {
 		t.Errorf("a text file was imported as %+v", m)
+	}
+	if got := strings.Join(h.steps(t, "bad"), " "); got != "import/queue import/import!" {
+		t.Errorf("the failed import recorded %q", got)
+	}
+	if got := strings.Join(h.steps(t, "file"), " "); got != "import/queue import/import import/transcribe import/speakers import/voices import/notes" {
+		t.Errorf("the import recorded %q", got)
 	}
 }
 
