@@ -21,12 +21,14 @@ import { useEffect, useState } from "react";
 import { Avatar } from "@/components/avatar";
 import { LevelMeter } from "@/components/level-meter";
 import { MeetingAside, type AsideTab } from "@/components/meeting-aside";
+import { HeaderSlot } from "@/components/header-slot";
 import { FaultNotice, Notice } from "@/components/notice";
 import { AudioBar, PlayerProvider, usePlayback, VideoStage } from "@/components/player";
 import { RecDot } from "@/components/rec-dot";
 import { SourceSummary } from "@/components/source-summary";
 import { TitleInput } from "@/components/title-input";
 import { Transcript } from "@/components/transcript";
+import { Workspace } from "@/components/workspace";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -71,7 +73,7 @@ export function MeetingPage() {
   useWindowTitle(meeting?.title ?? "MeetKeep");
 
   useEffect(() => {
-    if (detail.isError && !live) void navigate({ to: "/", replace: true });
+    if (detail.isError && !live) void navigate({ to: "/meetings", replace: true });
   }, [detail.isError, live, navigate]);
 
   const setTab = (next: AsideTab) =>
@@ -102,34 +104,38 @@ function LiveView({ meeting, tab, onTabChange }: { meeting: Meeting } & TabProps
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex h-[52px] shrink-0 items-center gap-3 border-b border-divider pr-5 pl-8">
+    <>
+      <HeaderSlot>
         <TitleInput id={meeting.id} title={meeting.title} className="text-title font-semibold" />
         <SourceSummary
           microphone={meeting.microphone}
           system={meeting.system}
           apps={meeting.apps}
           iconSize={13}
-          className="max-w-[45%] shrink-0 gap-1.5 text-label text-muted-foreground"
+          className="ml-auto max-w-[45%] shrink-0 gap-1.5 text-label text-muted-foreground"
         />
-      </header>
-      <div className="flex min-h-0 flex-1">
-        <section aria-label="文字稿" className="relative flex min-w-0 flex-[1.15_1_0] flex-col">
-          <FaultNotice className="mx-8 mt-4" />
-          <Transcript
-            meetingId={meeting.id}
-            live
-            variant="main"
-            paddingEnd={110}
-            activeSeq={focus?.seq ?? null}
-            revealSeq={focus?.seq ?? null}
-            revealKey={focus?.at}
-          />
-          <RecordingBar meeting={meeting} />
-        </section>
-        <MeetingAside meeting={meeting} live tab={tab} onTabChange={onTabChange} onJump={jump} />
-      </div>
-    </div>
+      </HeaderSlot>
+      <Workspace
+        cards={{
+          transcript: (
+            <section aria-label="文字稿" className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+              <FaultNotice className="mx-8 mt-4" />
+              <Transcript
+                meetingId={meeting.id}
+                live
+                variant="main"
+                paddingEnd={110}
+                activeSeq={focus?.seq ?? null}
+                revealSeq={focus?.seq ?? null}
+                revealKey={focus?.at}
+              />
+              <RecordingBar meeting={meeting} />
+            </section>
+          ),
+          notes: <MeetingAside meeting={meeting} live tab={tab} onTabChange={onTabChange} onJump={jump} />,
+        }}
+      />
+    </>
   );
 }
 
@@ -252,9 +258,9 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
   }, [t, ready, seek]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex h-[60px] shrink-0 items-center gap-2.5 border-b border-divider pr-5 pl-8">
-        <div className="flex min-w-0 flex-1 flex-col">
+    <>
+      <HeaderSlot>
+        <div className="flex min-w-0 flex-1 flex-col items-start">
           <TitleInput id={meeting.id} title={meeting.title} className="text-title leading-[1.35] font-semibold" />
           <span className="truncate text-label text-muted-foreground tabular-nums" data-testid="meeting-meta">
             {[meetingDate(meeting.startedAt), minutes(meeting.durationMs), sources.join(" + ")].filter(Boolean).join(" · ")}
@@ -265,10 +271,12 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
         )}
         <ExportMenu meetingId={meeting.id} onError={setError} />
         <MoreMenu meeting={meeting} onError={setError} />
-      </header>
+      </HeaderSlot>
       {processing && <ProgressBand meeting={meeting} progress={progress} />}
-      <div className="flex min-h-0 flex-1">
-        <section aria-label="文字稿" className="flex min-w-0 flex-[1.15_1_0] flex-col [container-type:size]">
+      <Workspace
+        cards={{
+          transcript: (
+        <section aria-label="文字稿" className="flex min-h-0 min-w-0 flex-1 flex-col [container-type:size]">
           {meeting.status === "failed" && (
             <Notice
               testId="meeting-failed"
@@ -305,6 +313,8 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
             onSelect={playable ? (line) => seek(line.startMs, true) : undefined}
           />
         </section>
+          ),
+          notes: (
         <MeetingAside
           meeting={meeting}
           live={false}
@@ -321,7 +331,9 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
           }}
           onRetry={meeting.status === "done" ? () => void run(setError, () => Library.regenerateNotes(meeting.id)) : undefined}
         />
-      </div>
+          ),
+        }}
+      />
       {playable && !video && (
         <AudioBar meetingId={meeting.id} durationMs={meeting.durationMs} groups={groups} spaceDisabled={tab === "board"} />
       )}
@@ -333,7 +345,7 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
           onOpenChange={setSpeakersOpen}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -409,7 +421,7 @@ function ProgressBand({ meeting, progress }: { meeting: Meeting; progress: Progr
   const current = Math.max(0, progress ? steps.indexOf(progress.step) : 0);
 
   return (
-    <div className="flex shrink-0 gap-1.5 border-b border-divider px-8 py-3.5" data-testid="processing">
+    <div className="card flex shrink-0 gap-1.5 px-8 py-3.5" data-testid="processing">
       {steps.map((step, index) => {
         const done = index < current;
         const active = index === current;
@@ -455,7 +467,7 @@ function MoreMenu({ meeting, onError }: { meeting: Meeting; onError: (error: str
     try {
       await Library.delete(meeting.id);
       setConfirming(false);
-      void navigate({ to: "/", replace: true });
+      void navigate({ to: "/meetings", replace: true });
     } catch (err) {
       setError(errorMessage(err));
     } finally {

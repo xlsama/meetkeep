@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
-import { Library, type Meeting, type MeetingDetail } from "@/mygo";
-import { meetingQuery, meetingsQuery, queryClient } from "@/lib/queries";
+import { Library, type Card, type Meeting, type MeetingDetail } from "@/mygo";
+import { cardsQuery, meetingQuery, meetingsQuery, queryClient } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 function retitle(id: string, title: string) {
@@ -9,6 +9,9 @@ function retitle(id: string, title: string) {
   );
   queryClient.setQueryData<Meeting[]>(meetingsQuery.queryKey, (list) =>
     list?.map((meeting) => (meeting.id === id ? { ...meeting, title } : meeting)),
+  );
+  queryClient.setQueryData<Card[]>(cardsQuery.queryKey, (list) =>
+    list?.map((card) => (card.meeting.id === id ? { ...card, meeting: { ...card.meeting, title } } : card)),
   );
 }
 
@@ -49,7 +52,7 @@ export function TitleInput({ id, title, className }: { id: string; title: string
         }
       }}
       className={cn(
-        "min-w-0 flex-1 truncate rounded-xs border-0 bg-transparent text-foreground outline-none",
+        "max-w-full min-w-[4ch] truncate rounded-xs border-0 bg-transparent text-foreground outline-none [field-sizing:content]",
         className,
       )}
     />

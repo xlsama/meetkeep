@@ -16,6 +16,20 @@ export interface AppRef {
   name: string;
 }
 
+/** Card is a meeting as a list of meetings shows it. */
+export interface Card {
+  meeting: Meeting;
+  /**
+   * Headline says what the meeting settled, once its notes are written,
+   * and Topics names what it went through.
+   */
+  headline: string;
+  topics: string[];
+  /** Opening is how the meeting begins. */
+  opening: string;
+  speakers: Speaker[];
+}
+
 export type EchoCancellation = "auto" | "on" | "off";
 
 /** Fault is something that went wrong while recording goes on. */
@@ -399,6 +413,8 @@ export const Library = {
    * or "" when it has none.
    */
   board: bind<[string], string>("Library.Board", (id: string) => [id]),
+  /** Cards returns the meetings as cards, the newest first. */
+  cards: bind<[], Card[]>("Library.Cards", () => []),
   /** Delete removes a meeting and moves its recordings to the trash. */
   delete: bind<[string], void>("Library.Delete", (id: string) => [id]),
   /**

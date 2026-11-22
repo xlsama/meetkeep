@@ -1,16 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate, useRouter, useRouterState, useSearch } from "@tanstack/react-router";
-import { Plus, Search, Settings, Users } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { AudioLines, House, Plus, Search, Settings, Users } from "lucide-react";
 import { isMyGo } from "mygo-runtime";
 import { useEffect, useRef, useState } from "react";
-import { RecDot } from "@/components/rec-dot";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { events, type Meeting, type Status } from "@/mygo";
-import { clock, dayGroup, listDate, minutes, type DayGroup } from "@/lib/format";
-import { useProgress } from "@/lib/progress";
-import { meetingsQuery, settingsQuery } from "@/lib/queries";
-import { useElapsed, useRecorder } from "@/lib/recorder";
+import { useHeader } from "@/components/header-slot";
+import { RecordingLabel } from "@/components/meeting-card";
+import { events } from "@/mygo";
+import { settingsQuery } from "@/lib/queries";
+import { isActive, useRecorder } from "@/lib/recorder";
 import { useSheet } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 import { NewSheet } from "@/routes/new-sheet";
@@ -26,33 +23,41 @@ export function MainLayout() {
     });
   }, [router]);
 
+  const setSlot = useHeader((s) => s.setSlot);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const bare = pathname === "/" || pathname.startsWith("/meetings");
+
   return (
-    <div className="flex h-full">
-      <Sidebar />
-      <main className="relative flex min-w-0 flex-1 flex-col">
-        <Outlet />
-      </main>
+    <div className="flex h-full flex-col bg-canvas">
+      <header className="drag flex h-[52px] shrink-0 items-center pr-4 pl-[248px]">
+        <div ref={setSlot} className="flex min-w-0 flex-1 items-center gap-2.5" />
+      </header>
+      <div className="flex min-h-0 flex-1 gap-2 px-2 pb-2">
+        <Sidebar />
+        <main className={cn("relative flex min-w-0 flex-1 flex-col gap-2", !bare && "card overflow-hidden")}>
+          <Outlet />
+        </main>
+      </div>
       <NewSheet />
     </div>
   );
 }
 
-const order: DayGroup[] = ["今天", "昨天", "本周", "更早"];
+const items = [
+  { to: "/", label: "首页", icon: House, testId: "nav-home", exact: true },
+  { to: "/meetings", label: "记录", icon: AudioLines, testId: "nav-records", exact: false },
+  { to: "/people", label: "人物", icon: Users, testId: "nav-people", exact: false },
+  { to: "/settings", label: "设置", icon: Settings, testId: "nav-settings", exact: false },
+] as const;
 
 function Sidebar() {
-  const meetings = useQuery(meetingsQuery);
   const status = useRecorder((s) => s.status);
   const sheetOpen = useSheet((s) => s.open);
   const setSheetOpen = useSheet((s) => s.setOpen);
 
-  const now = useNow();
-  const sections = order
-    .map((label) => ({ label, items: (meetings.data ?? []).filter((m) => dayGroup(m.startedAt, now) === label) }))
-    .filter((section) => section.items.length > 0);
-
   return (
-    <nav aria-label="会议" className="flex w-[232px] shrink-0 flex-col border-r border-line bg-sidebar">
-      <div className="flex items-center gap-1.5 px-2.5 py-3">
+    <nav aria-label="功能" className="card flex w-[200px] shrink-0 flex-col gap-px overflow-hidden p-2">
+      <div className="flex items-center gap-1.5 pb-2.5">
         <SearchBox />
         <button
           type="button"
@@ -67,49 +72,29 @@ function Sidebar() {
           <Plus className="size-[17px]" />
         </button>
       </div>
-      <ScrollArea className="min-h-0 flex-1" viewportClassName="px-2 py-0.5">
-        <div className="flex flex-col gap-[18px] pb-3">
-          {sections.map((section) => (
-            <div key={section.label} className="flex flex-col gap-px">
-              <div className="px-2.5 pb-1 text-tiny font-medium text-muted-foreground">{section.label}</div>
-              <AnimatePresence initial={false}>
-                {section.items.map((meeting) => (
-                  <motion.div
-                    key={meeting.id}
-                    layout="position"
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                  >
-                    <MeetingItem meeting={meeting} status={status} now={now} />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
-          ))}
-        </div>
-      </ScrollArea>
-      <div className="flex flex-col gap-px border-t border-line p-2">
+      {items.map((item) => (
         <Link
-          to="/people"
-          data-testid="nav-people"
-          className="flex h-8 items-center gap-2.5 rounded-sm px-2.5 text-ui text-secondary-foreground transition-colors hover:bg-accent"
-          activeProps={{ className: "bg-selected font-medium hover:bg-selected" }}
+          key={item.to}
+          to={item.to}
+          data-testid={item.testId}
+          activeOptions={{ exact: item.exact }}
+          className="flex h-9 items-center gap-2.5 rounded-sm px-2.5 text-ui text-secondary-foreground transition-colors hover:bg-accent"
+          activeProps={{ className: "bg-selected font-medium text-foreground hover:bg-selected" }}
         >
-          <Users className="size-[15px] shrink-0" />
-          <span>人物</span>
+          <item.icon className="size-4 shrink-0" />
+          <span>{item.label}</span>
         </Link>
+      ))}
+      {isActive(status) && status.meeting && (
         <Link
-          to="/settings"
-          data-testid="nav-settings"
-          className="flex h-8 items-center gap-2.5 rounded-sm px-2.5 text-ui text-secondary-foreground transition-colors hover:bg-accent"
-          activeProps={{ className: "bg-selected font-medium hover:bg-selected" }}
+          to="/meetings/$id"
+          params={{ id: status.meeting.id }}
+          data-testid="nav-live"
+          className="mt-auto flex h-9 items-center rounded-sm px-2.5 transition-colors hover:bg-accent"
         >
-          <Settings className="size-[15px] shrink-0" />
-          <span>设置</span>
+          <RecordingLabel status={status} className="text-ui" />
         </Link>
-      </div>
+      )}
     </nav>
   );
 }
@@ -174,59 +159,3 @@ function SearchBox() {
     </label>
   );
 }
-
-function MeetingItem({ meeting, status, now }: { meeting: Meeting; status: Status; now: Date }) {
-  const recording = meeting.status === "recording";
-  const progress = useProgress((s) => s.items[meeting.id]);
-  return (
-    <Link
-      to="/meetings/$id"
-      params={{ id: meeting.id }}
-      data-testid={`meeting-item-${meeting.id}`}
-      className="flex flex-col gap-px rounded-sm px-2.5 py-[7px] text-foreground transition-colors hover:bg-accent"
-      activeProps={{ className: "bg-selected hover:bg-selected" }}
-    >
-      <span className="truncate text-ui leading-[1.45] font-medium">{meeting.title}</span>
-      {recording ? (
-        <RecordingLabel status={status.meeting?.id === meeting.id ? status : null} />
-      ) : (
-        <span
-          className={cn(
-            "text-meta leading-normal tabular-nums",
-            meeting.status === "failed" ? "text-destructive" : "text-muted-foreground",
-          )}
-        >
-          {listDate(meeting.startedAt, now)} ·{" "}
-          {meeting.status === "processing"
-            ? progress
-              ? `整理中 ${progress.percent}%`
-              : "整理中"
-            : meeting.status === "failed"
-              ? "转写失败"
-              : minutes(meeting.durationMs)}
-        </span>
-      )}
-    </Link>
-  );
-}
-
-function RecordingLabel({ status }: { status: Status | null }) {
-  const elapsed = useElapsed(status ?? idleStatus);
-  return (
-    <span className="inline-flex items-center gap-1.5 text-meta leading-normal text-destructive tabular-nums">
-      <RecDot paused={status?.phase === "paused"} className="size-1.5" />
-      {status ? `录制中 · ${clock(elapsed)}` : "录制中"}
-    </span>
-  );
-}
-
-function useNow() {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 60_000);
-    return () => window.clearInterval(timer);
-  }, []);
-  return now;
-}
-
-const idleStatus: Status = { phase: "idle", meeting: null, elapsedMs: 0, at: 0 };

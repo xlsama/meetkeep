@@ -7,6 +7,7 @@ import { PanelPage } from "@/routes/panel";
 import { SearchPage } from "@/routes/search";
 import { DetectPage } from "@/routes/detect";
 import { PeoplePage } from "@/routes/people";
+import { RecordsPage } from "@/routes/records";
 import { SettingsPage } from "@/routes/settings";
 import { ToastPage } from "@/routes/toast";
 
@@ -21,6 +22,8 @@ const homeRoute = createRoute({
     search.new === 1 || search.new === "1" ? { new: 1 } : {},
   component: Home,
 });
+
+const recordsRoute = createRoute({ getParentRoute: () => mainRoute, path: "/meetings", component: RecordsPage });
 
 const meetingRoute = createRoute({
   getParentRoute: () => mainRoute,
@@ -69,7 +72,7 @@ const detectRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-  mainRoute.addChildren([homeRoute, meetingRoute, searchRoute, settingsRoute, peopleRoute]),
+  mainRoute.addChildren([homeRoute, recordsRoute, meetingRoute, searchRoute, settingsRoute, peopleRoute]),
   panelRoute,
   miniRoute,
   menuRoute,

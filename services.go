@@ -211,6 +211,55 @@ func (l *Library) List(ctx context.Context) ([]store.Meeting, error) {
 	return l.app.store.Meetings(ctx)
 }
 
+// Card is a meeting as a list of meetings shows it.
+type Card struct {
+	Meeting store.Meeting `json:"meeting"`
+	// Headline says what the meeting settled, once its notes are written,
+	// and Topics names what it went through.
+	Headline string   `json:"headline"`
+	Topics   []string `json:"topics"`
+	// Opening is how the meeting begins.
+	Opening  string          `json:"opening"`
+	Speakers []store.Speaker `json:"speakers"`
+}
+
+// openingLength is how many characters of a meeting's opening a card shows.
+const openingLength = 120
+
+// Cards returns the meetings as cards, the newest first.
+func (l *Library) Cards(ctx context.Context) ([]Card, error) {
+	meetings, err := l.app.store.Meetings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	glances, err := l.app.store.Glances(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cards := make([]Card, len(meetings))
+	for i, meeting := range meetings {
+		glance := glances[meeting.ID]
+		card := Card{Meeting: meeting, Topics: []string{}, Speakers: glance.Speakers}
+		if card.Speakers == nil {
+			card.Speakers = []store.Speaker{}
+		}
+		var written notes.Notes
+		if glance.Notes != "" && json.Unmarshal([]byte(glance.Notes), &written) == nil {
+			card.Headline = written.Headline
+			for _, topic := range written.Topics {
+				card.Topics = append(card.Topics, topic.Title)
+			}
+		}
+		if text := []rune(glance.Opening); len(text) > openingLength {
+			card.Opening = string(text[:openingLength])
+		} else {
+			card.Opening = glance.Opening
+		}
+		cards[i] = card
+	}
+	return cards, nil
+}
+
 // Get returns a meeting with what was said in it.
 func (l *Library) Get(ctx context.Context, id string) (MeetingDetail, error) {
 	meeting, err := l.app.store.Meeting(ctx, id)

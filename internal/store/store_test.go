@@ -296,3 +296,38 @@ func TestStepsGoWithTheirMeeting(t *testing.T) {
 		t.Errorf("the steps of a deleted meeting are still there: %+v", steps)
 	}
 }
+
+func TestGlances(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	for _, id := range []string{"a", "b"} {
+		if err := s.CreateMeeting(ctx, Meeting{ID: id, Title: id, StartedAt: 1000, Status: Done, Directory: "/tmp/" + id, Apps: []config.AppRef{}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	utterances := []Utterance{
+		{Seq: 1, Track: File, StartMs: 0, EndMs: 800, Text: "先定日期。", Speaker: 1},
+		{Seq: 2, Track: File, StartMs: 900, EndMs: 2400, Text: "十四号可以。", Speaker: 2},
+	}
+	speakers := []Speaker{{ID: 1, Name: "说话人 1"}, {ID: 2, Name: "林悦"}}
+	if err := s.ReplaceTranscript(ctx, "a", utterances, speakers, "audio.opus"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveNotes(ctx, "a", `{"headline":"上线定在十四号"}`, "上线定在十四号"); err != nil {
+		t.Fatal(err)
+	}
+	glances, err := s.Glances(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := glances["a"]
+	if a.Notes != `{"headline":"上线定在十四号"}` || a.Opening != "先定日期。十四号可以。" {
+		t.Errorf("the glance reads %+v", a)
+	}
+	if len(a.Speakers) != 2 || a.Speakers[1].Name != "林悦" {
+		t.Errorf("the speakers at a glance are %+v", a.Speakers)
+	}
+	if _, ok := glances["b"]; ok {
+		t.Error("a meeting with nothing to show has a glance")
+	}
+}

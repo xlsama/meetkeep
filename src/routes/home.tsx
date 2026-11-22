@@ -2,17 +2,21 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ChevronRight, LoaderCircle, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
+import { cardGrid, MeetingCard, useNow } from "@/components/meeting-card";
 import { SourceSummary } from "@/components/source-summary";
 import { Library } from "@/mygo";
-import { errorMessage, settingsQuery } from "@/lib/queries";
+import { cardsQuery, errorMessage, settingsQuery } from "@/lib/queries";
 import { isActive, useRecorder } from "@/lib/recorder";
 import { useSheet, useWindowTitle } from "@/lib/ui";
+import { cn } from "@/lib/utils";
 
 export function Home() {
   useWindowTitle("MeetKeep");
   const navigate = useNavigate();
   const search = useSearch({ strict: false });
   const settings = useQuery(settingsQuery);
+  const recent = (useQuery(cardsQuery).data ?? []).slice(0, 4);
+  const now = useNow();
   const status = useRecorder((s) => s.status);
   const setSheetOpen = useSheet((s) => s.setOpen);
   const sources = settings.data?.sources;
@@ -47,8 +51,8 @@ export function Home() {
   };
 
   return (
-    <div className="flex flex-1 items-center justify-center px-6 py-10">
-      <div className="flex flex-col items-center gap-[18px]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+      <div className="flex min-h-[300px] flex-1 flex-col items-center justify-center gap-[18px] px-6 py-10">
         <button
           type="button"
           data-testid="start-recording"
@@ -89,6 +93,16 @@ export function Home() {
           </p>
         )}
       </div>
+      {recent.length > 0 && (
+        <section className="flex shrink-0 flex-col gap-2">
+          <h2 className="m-0 px-1.5 text-label font-medium text-muted-foreground">最近</h2>
+          <div className={cn(cardGrid, "auto-rows-[0px] grid-rows-[auto] gap-y-0 overflow-hidden")} data-testid="home-recent">
+            {recent.map((card) => (
+              <MeetingCard key={card.meeting.id} card={card} now={now} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

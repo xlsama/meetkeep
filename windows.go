@@ -107,14 +107,16 @@ func (w *windows) showMain(route string) {
 
 func (w *windows) openMain(route string) {
 	win := mygo.NewWindow(mygo.WindowOptions{
-		Title:           "MeetKeep",
-		URL:             route,
-		Width:           1120,
-		Height:          740,
-		MinWidth:        880,
-		MinHeight:       560,
-		BackgroundColor: "#ffffff",
-		StateKey:        "main",
+		Title:                "MeetKeep",
+		URL:                  route,
+		Width:                1120,
+		Height:               740,
+		MinWidth:             880,
+		MinHeight:            560,
+		BackgroundColor:      "#ececec",
+		StateKey:             "main",
+		TitleBarStyle:        mygo.TitleBarHidden,
+		TrafficLightPosition: &mygo.Point{X: 18, Y: 20},
 	})
 	win.OnClose(func(e *mygo.CloseEvent) {
 		if !w.quitting {

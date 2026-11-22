@@ -716,6 +716,54 @@ func (s *Store) Meetings(ctx context.Context) ([]Meeting, error) {
 	return meetings, nil
 }
 
+// Glance is what a meeting shows of itself in a list.
+type Glance struct {
+	// Notes is what SaveNotes took, or "".
+	Notes string
+	// Opening is how the meeting begins.
+	Opening  string
+	Speakers []Speaker
+}
+
+// opening is how many utterances a meeting's opening is read from.
+const opening = 8
+
+// Glances returns a glance at every meeting that has something to show.
+func (s *Store) Glances(ctx context.Context) (map[string]Glance, error) {
+	glances := map[string]Glance{}
+	rows, err := s.db.Query(ctx, "SELECT meeting_id, data FROM notes WHERE data != ''")
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows.Values {
+		g := glances[row[0].(string)]
+		g.Notes = row[1].(string)
+		glances[row[0].(string)] = g
+	}
+	rows, err = s.db.Query(ctx, `SELECT meeting_id, group_concat(text, '') FROM
+		(SELECT meeting_id, text FROM utterances WHERE seq <= ? ORDER BY meeting_id, seq) GROUP BY meeting_id`, opening)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows.Values {
+		g := glances[row[0].(string)]
+		g.Opening, _ = row[1].(string)
+		glances[row[0].(string)] = g
+	}
+	rows, err = s.db.Query(ctx, "SELECT meeting_id, id, name, self, COALESCE(person_id, 0) FROM speakers ORDER BY meeting_id, id")
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows.Values {
+		g := glances[row[0].(string)]
+		g.Speakers = append(g.Speakers, Speaker{
+			ID: int(row[1].(int64)), Name: row[2].(string), Self: row[3].(int64) != 0, PersonID: int(row[4].(int64)),
+		})
+		glances[row[0].(string)] = g
+	}
+	return glances, nil
+}
+
 func (s *Store) Meeting(ctx context.Context, id string) (Meeting, error) {
 	rows, err := s.db.Query(ctx, "SELECT "+meetingColumns+" FROM meetings WHERE id = ?", id)
 	if err != nil {

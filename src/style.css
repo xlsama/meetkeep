@@ -39,6 +39,7 @@
   --color-success-bg: #edf7ef;
 
   --color-sidebar: #f7f7f7;
+  --color-canvas: #ececec;
   --color-line: #ececec;
   --color-divider: #f0f0f0;
   --color-selected: #e8e8e8;
@@ -224,6 +225,31 @@
   .notes-glue {
     white-space: nowrap;
   }
+}
+
+@utility card {
+  border-radius: 12px;
+  background: var(--color-background);
+}
+
+[data-separator] {
+  position: relative;
+  width: 8px;
+  outline: none;
+}
+[data-separator]::after {
+  content: "";
+  position: absolute;
+  inset: 12px 2.5px;
+  border-radius: 2px;
+  background: var(--color-faint);
+  opacity: 0;
+  transition: opacity 150ms;
+}
+[data-separator]:hover::after,
+[data-separator]:focus-visible::after,
+[data-separator="active"]::after {
+  opacity: 1;
 }
 
 @utility drag {

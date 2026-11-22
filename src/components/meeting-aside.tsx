@@ -27,7 +27,7 @@ export function MeetingAside({
   const label = !notes ? null : notes.final ? (tab === "summary" ? "定稿" : null) : `整理到 ${clock(notes.coveredMs)}`;
 
   return (
-    <aside aria-label="纪要与白板" className="flex min-w-0 flex-[1_1_0] flex-col border-l border-divider bg-panel">
+    <aside aria-label="纪要与白板" className="flex min-h-0 min-w-0 flex-1 flex-col">
       <Tabs value={tab} onValueChange={(value) => onTabChange(value === "board" ? "board" : "summary")} className="flex-1">
         <TabsList className="h-11 gap-[22px] border-divider px-7">
           <TabsTrigger value="summary" data-testid="tab-summary" className="text-row">

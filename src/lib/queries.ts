@@ -23,6 +23,11 @@ export const meetingsQuery = queryOptions({
   queryFn: () => Library.list(),
 });
 
+export const cardsQuery = queryOptions({
+  queryKey: ["meetings", "cards"],
+  queryFn: () => Library.cards(),
+});
+
 export const meetingQuery = (id: string) =>
   queryOptions({
     queryKey: ["meeting", id],
@@ -72,6 +77,7 @@ export function syncQueries() {
   events.processing.on(applyProgress);
   events.notes.on((state) => {
     queryClient.setQueryData(notesQuery(state.meetingId).queryKey, state);
+    if (!state.working) void queryClient.invalidateQueries({ queryKey: cardsQuery.queryKey });
   });
   events.settings.on((settings) => {
     queryClient.setQueryData(settingsQuery.queryKey, settings);
