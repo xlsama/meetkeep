@@ -54,6 +54,8 @@ type Meeting struct {
 	// Video names the file in Directory that holds the picture of an
 	// imported video, or is "".
 	Video string `json:"video"`
+	// Starred marks a meeting the user wants at hand.
+	Starred bool `json:"starred"`
 }
 
 // Speaker is someone who talks in a meeting.
@@ -227,6 +229,9 @@ var migrations = [][]string{
 			detail TEXT NOT NULL DEFAULT '{}'
 		)`,
 		`CREATE INDEX steps_meeting ON steps (meeting_id, id)`,
+	},
+	{
+		`ALTER TABLE meetings ADD COLUMN starred INTEGER NOT NULL DEFAULT 0`,
 	},
 }
 
@@ -687,6 +692,10 @@ func (s *Store) SearchLines(ctx context.Context, query string) ([]Line, error) {
 	return lines, nil
 }
 
+func (s *Store) Star(ctx context.Context, id string, starred bool) error {
+	return s.changed(s.db.Execute(ctx, "UPDATE meetings SET starred = ? WHERE id = ?", starred, id))
+}
+
 func (s *Store) Rename(ctx context.Context, id, title string) error {
 	return s.changed(s.db.Execute(ctx, "UPDATE meetings SET title = ? WHERE id = ?", title, id))
 }
@@ -702,7 +711,7 @@ func (s *Store) changed(result sqlite.Result, err error) error {
 	return err
 }
 
-const meetingColumns = "id, title, started_at, duration_ms, status, directory, microphone, system, apps, error, audio, video"
+const meetingColumns = "id, title, started_at, duration_ms, status, directory, microphone, system, apps, error, audio, video, starred"
 
 func (s *Store) Meetings(ctx context.Context) ([]Meeting, error) {
 	rows, err := s.db.Query(ctx, "SELECT "+meetingColumns+" FROM meetings ORDER BY started_at DESC")
@@ -789,6 +798,7 @@ func meeting(row []any) Meeting {
 		Error:      row[9].(string),
 		Audio:      row[10].(string),
 		Video:      row[11].(string),
+		Starred:    row[12].(int64) != 0,
 	}
 	_ = json.Unmarshal([]byte(row[8].(string)), &m.Apps)
 	return m

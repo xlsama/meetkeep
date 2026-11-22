@@ -12,6 +12,7 @@ import {
   Pause,
   Play,
   RotateCcw,
+  Star,
   Trash2,
   Upload,
   Volume2,
@@ -494,6 +495,13 @@ function MoreMenu({ meeting, onError }: { meeting: Meeting; onError: (error: str
           <TooltipContent>更多</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            data-testid="more-star"
+            onSelect={() => void run(onError, () => Library.star(meeting.id, !meeting.starred))}
+          >
+            <Star className={cn(meeting.starred && "fill-current")} />
+            {meeting.starred ? "取消收藏" : "收藏"}
+          </DropdownMenuItem>
           <DropdownMenuItem
             data-testid="more-save-recording"
             disabled={meeting.audio === "" || processing}

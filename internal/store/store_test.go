@@ -331,3 +331,26 @@ func TestGlances(t *testing.T) {
 		t.Error("a meeting with nothing to show has a glance")
 	}
 }
+
+func TestStar(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	if err := s.CreateMeeting(ctx, Meeting{ID: "a", Title: "周会", StartedAt: 1000, Status: Done, Directory: "/tmp/a", Apps: []config.AppRef{}}); err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := s.Meeting(ctx, "a"); m.Starred {
+		t.Error("a new meeting is starred")
+	}
+	if err := s.Star(ctx, "a", true); err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := s.Meeting(ctx, "a"); !m.Starred {
+		t.Error("the star did not stay")
+	}
+	if list, _ := s.Meetings(ctx); len(list) != 1 || !list[0].Starred {
+		t.Errorf("the list reads %+v", list)
+	}
+	if err := s.Star(ctx, "missing", true); !errors.Is(err, ErrNotFound) {
+		t.Errorf("starring a meeting that is not there returned %v", err)
+	}
+}

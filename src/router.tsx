@@ -23,7 +23,13 @@ const homeRoute = createRoute({
   component: Home,
 });
 
-const recordsRoute = createRoute({ getParentRoute: () => mainRoute, path: "/meetings", component: RecordsPage });
+const recordsRoute = createRoute({
+  getParentRoute: () => mainRoute,
+  path: "/meetings",
+  validateSearch: (search: Record<string, unknown>): { show?: "starred" } =>
+    search.show === "starred" ? { show: "starred" } : {},
+  component: RecordsPage,
+});
 
 const meetingRoute = createRoute({
   getParentRoute: () => mainRoute,

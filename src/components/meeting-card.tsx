@@ -1,8 +1,9 @@
 import { Link } from "@tanstack/react-router";
+import { Star } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Avatar } from "@/components/avatar";
 import { RecDot } from "@/components/rec-dot";
-import type { Card, Meeting, Status } from "@/mygo";
+import { Library, type Card, type Meeting, type Speaker, type Status } from "@/mygo";
 import { clock, listDate, minutes } from "@/lib/format";
 import { useProgress } from "@/lib/progress";
 import { useElapsed, useRecorder } from "@/lib/recorder";
@@ -13,16 +14,18 @@ export const cardGrid = "grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] ga
 
 export function MeetingCard({ card, now }: { card: Card; now: Date }) {
   const { meeting, speakers } = card;
-  const shown = [...speakers.filter((s) => !s.self), ...speakers.filter((s) => s.self)].slice(0, 5);
 
   return (
     <Link
       to="/meetings/$id"
       params={{ id: meeting.id }}
       data-testid={`meeting-card-${meeting.id}`}
-      className="card flex h-[164px] min-w-0 flex-col gap-2 p-4 text-foreground transition-shadow outline-none hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] focus-visible:shadow-[0_0_0_3px_rgba(0,0,0,0.12)]"
+      className="group/meeting card flex h-[164px] min-w-0 flex-col gap-2 p-4 text-foreground transition-shadow outline-none hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] focus-visible:shadow-[0_0_0_3px_rgba(0,0,0,0.12)]"
     >
-      <span className="truncate text-body leading-[1.4] font-semibold">{meeting.title}</span>
+      <span className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-body leading-[1.4] font-semibold">{meeting.title}</span>
+        <StarButton meeting={meeting} className="-my-1 -mr-1.5" />
+      </span>
       {card.headline ? (
         <p className="m-0 line-clamp-2 text-label leading-[1.6] text-secondary-foreground">{card.headline}</p>
       ) : (
@@ -41,23 +44,57 @@ export function MeetingCard({ card, now }: { card: Card; now: Date }) {
         </div>
       )}
       <div className="mt-auto flex items-center gap-2">
-        <span className="inline-flex">
-          {shown.map((speaker, index) => (
-            <Avatar
-              key={speaker.id}
-              name={speaker.name}
-              tone={speakerVoice(speaker, speakers).avatar}
-              className={cn("size-5 text-[10px] shadow-[0_0_0_2px_#ffffff]", index > 0 && "-ml-1")}
-            />
-          ))}
-        </span>
+        <Speakers speakers={speakers} />
         <MeetingState meeting={meeting} now={now} className="ml-auto" />
       </div>
     </Link>
   );
 }
 
-function MeetingState({ meeting, now, className }: { meeting: Meeting; now: Date; className?: string }) {
+export function Speakers({ speakers }: { speakers: Speaker[] }) {
+  const shown = [...speakers.filter((s) => !s.self), ...speakers.filter((s) => s.self)].slice(0, 5);
+  return (
+    <span className="inline-flex shrink-0">
+      {shown.map((speaker, index) => (
+        <Avatar
+          key={speaker.id}
+          name={speaker.name}
+          tone={speakerVoice(speaker, speakers).avatar}
+          className={cn("size-5 text-[10px] shadow-[0_0_0_2px_#ffffff]", index > 0 && "-ml-1")}
+        />
+      ))}
+    </span>
+  );
+}
+
+export function StarButton({ meeting, className }: { meeting: Meeting; className?: string }) {
+  const label = meeting.starred ? "取消收藏" : "收藏";
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={meeting.starred}
+      title={label}
+      data-testid={`star-${meeting.id}`}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void Library.star(meeting.id, !meeting.starred);
+      }}
+      className={cn(
+        "inline-flex size-7 shrink-0 items-center justify-center rounded-[8px] transition-[opacity,color,background-color] outline-none hover:bg-hover focus-visible:opacity-100 focus-visible:shadow-[0_0_0_2px_rgba(0,0,0,0.12)]",
+        meeting.starred
+          ? "text-star"
+          : "text-faint opacity-0 group-hover/meeting:opacity-100 hover:text-muted-foreground",
+        className,
+      )}
+    >
+      <Star className={cn("size-[15px]", meeting.starred && "fill-current")} />
+    </button>
+  );
+}
+
+export function MeetingState({ meeting, now, className }: { meeting: Meeting; now: Date; className?: string }) {
   const status = useRecorder((s) => s.status);
   const progress = useProgress((s) => s.items[meeting.id]);
   if (meeting.status === "recording") {
