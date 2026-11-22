@@ -24,8 +24,6 @@ type Client struct {
 
 	mu   sync.Mutex
 	used Usage
-	// thinks tells that the service refused a request not to think.
-	thinks bool
 }
 
 // Usage is what a client asked of the model so far.
@@ -64,11 +62,6 @@ type request struct {
 	MaxTokens      int       `json:"max_tokens,omitempty"`
 	Temperature    *float64  `json:"temperature,omitempty"`
 	ResponseFormat *format   `json:"response_format,omitempty"`
-	Thinking       *thinking `json:"thinking,omitempty"`
-}
-
-type thinking struct {
-	Type string `json:"type"`
 }
 
 type format struct {
@@ -92,42 +85,6 @@ func (c *Client) CompleteJSON(ctx context.Context, system, user string) (string,
 	})
 }
 
-// CompleteQuick is CompleteJSON for work that needs no reasoning: it asks
-// the model not to think before it answers, which makes a model that
-// would several times faster. A service that does not know that request
-// is asked again without it.
-func (c *Client) CompleteQuick(ctx context.Context, system, user string) (string, error) {
-	temperature := 0.2
-	r := request{
-		Model:          c.Model,
-		Messages:       []Message{{Role: "system", Content: system}, {Role: "user", Content: user}},
-		Temperature:    &temperature,
-		ResponseFormat: &format{Type: "json_object"},
-	}
-	c.mu.Lock()
-	thinks := c.thinks
-	c.mu.Unlock()
-	if thinks {
-		return c.send(ctx, r)
-	}
-	r.Thinking = &thinking{Type: "disabled"}
-	answer, err := c.send(ctx, r)
-	var refused *refusal
-	if !errors.As(err, &refused) {
-		return answer, err
-	}
-	c.mu.Lock()
-	c.thinks = true
-	c.mu.Unlock()
-	r.Thinking = nil
-	return c.send(ctx, r)
-}
-
-// refusal is the service's answer to a request it does not accept.
-type refusal struct{ message string }
-
-func (r *refusal) Error() string { return r.message }
-
 func (c *Client) send(ctx context.Context, r request) (string, error) {
 	body, err := json.Marshal(r)
 	if err != nil {
@@ -150,11 +107,7 @@ func (c *Client) send(ctx context.Context, r request) (string, error) {
 	}
 	if res.StatusCode != http.StatusOK {
 		text := []rune(strings.TrimSpace(string(data)))
-		message := fmt.Sprintf("%s 返回 %s：%s", c.Model, res.Status, string(text[:min(len(text), 160)]))
-		if res.StatusCode == http.StatusBadRequest || res.StatusCode == http.StatusUnprocessableEntity {
-			return "", &refusal{message}
-		}
-		return "", errors.New(message)
+		return "", fmt.Errorf("%s 返回 %s：%s", c.Model, res.Status, string(text[:min(len(text), 160)]))
 	}
 	var result struct {
 		Choices []struct {

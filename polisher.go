@@ -36,7 +36,7 @@ func (a *app) polish(ctx context.Context, utterances []store.Utterance) ([]store
 	}
 	detail := trace.Detail{
 		"model": model.Model, "lines": len(lines), "changed": len(edits) - fillers, "fillers": fillers,
-		"refused": result.Refused, "failed": result.Failed, "failure": result.Failure, "terms": result.Terms,
+		"refused": result.Refused, "failed": result.Failed, "failure": result.Failure, "unread": result.Unread, "terms": result.Terms,
 		"requests": used.Requests, "promptTokens": used.PromptTokens, "completionTokens": used.CompletionTokens,
 	}
 	if err != nil {
