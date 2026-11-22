@@ -18,7 +18,7 @@ const fade = 20;
 const styles = {
   main: {
     gap: 20,
-    paddingStart: 0,
+    paddingStart: 8,
     inset: "pr-10 pl-8",
     row: "gap-3",
     avatar: "size-[23px] text-micro",
