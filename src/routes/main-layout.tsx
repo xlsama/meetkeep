@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { isMyGo } from "mygo-runtime";
 import { useEffect, useRef, type ReactNode } from "react";
+import { FileDrop } from "@/components/file-drop";
 import { useHeader } from "@/components/header-slot";
 import { RecordingLabel } from "@/components/meeting-card";
 import { Notice } from "@/components/notice";
@@ -48,7 +49,7 @@ export function MainLayout() {
   const sheetOpen = useSheet((s) => s.open);
   const setSheetOpen = useSheet((s) => s.setOpen);
   const importer = useImporter();
-  const importFile = useImport();
+  const { pick } = useImport();
   const sidebar = useWorkspace((s) => s.sidebar);
   const toggleSidebar = useWorkspace((s) => s.toggleSidebar);
 
@@ -62,7 +63,7 @@ export function MainLayout() {
         <SearchTrigger />
         <div className="flex min-w-0 flex-1 basis-0 items-center justify-end gap-1">
           <div ref={setActions} className="flex min-w-0 items-center gap-2 pr-1.5" />
-          <HeaderButton label="导入录音或视频" testId="import" busy={importer.importing} onClick={() => void importFile()}>
+          <HeaderButton label="导入录音或视频" testId="import" busy={importer.importing} onClick={() => void pick()}>
             {importer.importing ? <LoaderCircle className="size-4 animate-spin" /> : <Upload className="size-4" />}
           </HeaderButton>
           <HeaderButton label="新录制" testId="new-recording" pressed={sheetOpen} onClick={() => setSheetOpen(true)}>
@@ -84,6 +85,7 @@ export function MainLayout() {
       </div>
       <NewSheet />
       <SearchDialog />
+      <FileDrop />
     </div>
   );
 }

@@ -22,7 +22,7 @@ export function Home() {
   const setSheetOpen = useSheet((s) => s.setOpen);
   const sources = settings.data?.sources;
   const importing = useImporter((s) => s.importing);
-  const importFile = useImport();
+  const { pick } = useImport();
 
   useEffect(() => {
     if (search.new !== 1) return;
@@ -41,41 +41,52 @@ export function Home() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
       <PageTitle title="首页" />
-      <div className="flex min-h-[300px] flex-1 flex-col items-center justify-center gap-[18px] px-6 py-10">
-        <button
-          type="button"
-          data-testid="start-recording"
-          onClick={start}
-          className="inline-flex h-12 items-center justify-center gap-2.5 rounded-full bg-primary pr-7 pl-6 text-lead font-semibold text-primary-foreground transition-colors outline-none hover:bg-[#262626] focus-visible:ring-[3px] focus-visible:ring-black/15"
-        >
-          <span aria-hidden className="size-2.5 rounded-full bg-rec" />
-          开始录制
-        </button>
-        <button
-          type="button"
-          data-testid="home-sources"
-          onClick={() => setSheetOpen(true)}
-          className="inline-flex h-5 items-center gap-[7px] text-ui text-subtle transition-colors outline-none hover:text-secondary-foreground"
-        >
-          {sources && <SourceSummary microphone={sources.microphone} system={sources.system} apps={sources.apps} />}
-          <ChevronRight className="size-[13px] shrink-0 text-placeholder" />
-        </button>
-        <span aria-hidden className="my-1.5 h-px w-8 bg-border" />
-        <button
-          type="button"
-          data-testid="home-import"
-          disabled={importing}
-          aria-busy={importing}
-          onClick={() => void importFile()}
-          className="inline-flex h-8 items-center gap-[7px] rounded-sm px-3 text-ui text-secondary-foreground transition-colors outline-none hover:bg-hover focus-visible:ring-[3px] focus-visible:ring-black/10 disabled:opacity-50"
-        >
-          {importing ? (
-            <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
-          ) : (
-            <Upload className="size-3.5 shrink-0" />
-          )}
-          导入录音或视频
-        </button>
+      <div className="flex min-h-[250px] flex-1 items-center justify-center px-6 py-8">
+        <div className="grid w-full max-w-[620px] grid-cols-2 gap-2">
+          <div className="card flex h-[200px] min-w-0 flex-col items-center justify-center gap-4 px-5">
+            <button
+              type="button"
+              data-testid="start-recording"
+              onClick={start}
+              className="inline-flex h-12 items-center justify-center gap-2.5 rounded-full bg-primary pr-7 pl-6 text-lead font-semibold text-primary-foreground transition-colors outline-none hover:bg-[#262626] focus-visible:ring-[3px] focus-visible:ring-black/15"
+            >
+              <span aria-hidden className="size-2.5 rounded-full bg-rec" />
+              开始录制
+            </button>
+            <button
+              type="button"
+              data-testid="home-sources"
+              onClick={() => setSheetOpen(true)}
+              className="inline-flex h-7 max-w-full items-center gap-[7px] rounded-md px-2 text-ui text-subtle transition-colors outline-none hover:bg-hover hover:text-secondary-foreground focus-visible:bg-hover"
+            >
+              {sources && (
+                <SourceSummary
+                  microphone={sources.microphone}
+                  system={sources.system}
+                  apps={sources.apps}
+                  className="min-w-0"
+                />
+              )}
+              <ChevronRight className="size-[13px] shrink-0 text-placeholder" />
+            </button>
+          </div>
+          <button
+            type="button"
+            data-testid="home-import"
+            disabled={importing}
+            aria-busy={importing}
+            onClick={() => void pick()}
+            className="flex h-[200px] min-w-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-[1.5px] border-dashed border-faint px-5 transition-colors outline-none hover:border-placeholder hover:bg-background/60 focus-visible:border-placeholder focus-visible:bg-background/60 disabled:cursor-default disabled:opacity-60"
+          >
+            <span className="inline-flex size-10 items-center justify-center rounded-full bg-black/[0.06] text-secondary-foreground">
+              {importing ? <LoaderCircle className="size-[18px] animate-spin" /> : <Upload className="size-[18px]" />}
+            </span>
+            <span className="flex flex-col items-center gap-0.5">
+              <span className="text-body font-medium text-foreground">导入录音或视频</span>
+              <span className="text-label text-muted-foreground">拖进窗口，或点击选择</span>
+            </span>
+          </button>
+        </div>
       </div>
       {recent.length > 0 && (
         <section className="flex shrink-0 flex-col gap-2">
