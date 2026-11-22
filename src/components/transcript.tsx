@@ -12,10 +12,13 @@ import { cn } from "@/lib/utils";
 
 type Variant = "main" | "panel";
 
+// The words fade out over this many pixels as they scroll under the heading.
+const fade = 20;
+
 const styles = {
   main: {
     gap: 20,
-    paddingStart: 16,
+    paddingStart: 0,
     inset: "pr-10 pl-8",
     row: "gap-3",
     avatar: "size-[23px] text-micro",
@@ -112,9 +115,13 @@ export function Transcript({
       data-testid="transcript-lines"
       className={cn(
         "min-h-0 flex-1 overflow-y-auto overscroll-contain",
-        variant === "main" && "[mask-image:linear-gradient(to_bottom,transparent,black_20px)]",
+        variant === "main" && "[mask-image:linear-gradient(to_bottom,transparent,black_var(--fade,0px))]",
         className,
       )}
+      onScroll={(event) => {
+        const box = event.currentTarget;
+        box.style.setProperty("--fade", `${Math.min(box.scrollTop, fade)}px`);
+      }}
     >
       <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
         {virtualizer.getVirtualItems().map((item) => {
