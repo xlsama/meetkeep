@@ -38,7 +38,7 @@ export function MainLayout() {
 
   return (
     <div className="flex h-full flex-col bg-canvas">
-      <header className="drag flex h-[52px] shrink-0 items-center gap-3 pr-3 pl-[88px]">
+      <header className="drag flex h-[52px] shrink-0 items-center gap-3 pr-3 pl-[94px]">
         <div ref={setTitle} className="flex min-w-0 flex-1 basis-0 flex-col items-start justify-center" />
         <SearchTrigger />
         <div className="flex min-w-0 flex-1 basis-0 items-center justify-end gap-1">
@@ -118,15 +118,15 @@ function Sidebar() {
   const status = useRecorder((s) => s.status);
 
   return (
-    <nav aria-label="功能" className="card flex w-[200px] shrink-0 flex-col gap-px overflow-hidden p-2">
+    <nav aria-label="功能" className="flex w-[176px] shrink-0 flex-col gap-0.5 pl-1">
       {items.map((item) => (
         <Link
           key={item.to}
           to={item.to}
           data-testid={item.testId}
           activeOptions={{ exact: item.exact }}
-          className="flex h-9 items-center gap-2.5 rounded-sm px-2.5 text-ui text-secondary-foreground transition-colors hover:bg-accent"
-          activeProps={{ className: "bg-selected font-medium text-foreground hover:bg-selected" }}
+          className="flex h-9 items-center gap-2.5 rounded-[10px] px-2.5 text-ui text-secondary-foreground transition-colors hover:bg-black/[0.05]"
+          activeProps={{ className: "bg-background font-medium text-foreground hover:bg-background" }}
         >
           <item.icon className="size-4 shrink-0" />
           <span>{item.label}</span>
@@ -137,7 +137,7 @@ function Sidebar() {
           to="/meetings/$id"
           params={{ id: status.meeting.id }}
           data-testid="nav-live"
-          className="mt-auto flex h-9 items-center rounded-sm px-2.5 transition-colors hover:bg-accent"
+          className="mt-auto flex h-9 items-center rounded-[10px] px-2.5 transition-colors hover:bg-black/[0.05]"
         >
           <RecordingLabel status={status} className="text-ui" />
         </Link>
