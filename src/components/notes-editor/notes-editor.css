@@ -43,7 +43,6 @@
   content: counter(notes-topic, decimal-leading-zero);
   display: inline-block;
   width: 24px;
-  font-family: var(--font-mono);
   font-size: var(--text-tiny);
   font-weight: 400;
   color: var(--color-placeholder);

@@ -304,7 +304,7 @@ export default function BoardCanvas({
               aria-label={`跳到 ${clock(atMs)}`}
               data-testid="board-source"
               onClick={() => onJump({ seq, atMs })}
-              className="absolute inset-y-0 left-full ml-1.5 inline-flex items-center rounded-lg border border-border bg-background px-2.5 font-mono text-tiny text-subtle tabular-nums shadow-[0_4px_14px_rgba(0,0,0,0.08)] transition-colors hover:text-foreground"
+              className="absolute inset-y-0 left-full ml-1.5 inline-flex items-center rounded-lg border border-border bg-background px-2.5 text-tiny text-subtle tabular-nums shadow-[0_4px_14px_rgba(0,0,0,0.08)] transition-colors hover:text-foreground"
             >
               {clock(atMs)}
             </button>

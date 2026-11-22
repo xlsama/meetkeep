@@ -102,7 +102,7 @@ function Results({ hits, filter, query }: { hits: SearchHit[]; filter: Filter; q
                 data-testid={`search-line-${hit.meeting.id}-${line.seq}`}
                 className="grid grid-cols-[44px_72px_minmax(0,1fr)] items-baseline gap-x-2.5 rounded-md px-3 py-2 text-foreground transition-colors hover:bg-hover"
               >
-                <span className="font-mono text-tiny text-muted-foreground tabular-nums">{clock(line.startMs)}</span>
+                <span className="text-tiny text-muted-foreground tabular-nums">{clock(line.startMs)}</span>
                 <span className="inline-flex min-w-0 items-center gap-1.5 text-label font-semibold">
                   <span
                     aria-hidden
@@ -125,7 +125,7 @@ function Results({ hits, filter, query }: { hits: SearchHit[]; filter: Filter; q
                 data-testid={`search-note-${hit.meeting.id}-${index}`}
                 className="grid grid-cols-[44px_72px_minmax(0,1fr)] items-baseline gap-x-2.5 rounded-md px-3 py-2 text-foreground transition-colors hover:bg-hover"
               >
-                <span className="font-mono text-tiny text-muted-foreground">纪要</span>
+                <span className="text-tiny text-muted-foreground">纪要</span>
                 <span className="inline-flex items-center">
                   <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-faint" />
                 </span>

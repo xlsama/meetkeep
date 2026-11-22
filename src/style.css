@@ -183,7 +183,6 @@
     border: 1px solid var(--color-border);
     border-radius: 5px;
     background: var(--color-background);
-    font-family: var(--font-mono);
     font-size: var(--text-micro);
     line-height: 16px;
     color: var(--color-muted-foreground);

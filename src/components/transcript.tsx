@@ -137,8 +137,8 @@ function GroupView({
       <Avatar name={group.voice.name} tone={group.voice.avatar} className={style.avatar} />
       <div className="flex min-w-0 flex-1 flex-col">
         <div className={cn("flex items-center", style.head)}>
-          <span className={cn("font-semibold text-foreground", style.name)}>{group.voice.name}</span>
-          <span className={cn("font-mono text-muted-foreground tabular-nums", style.stamp)}>
+          <span className={cn("text-subtle", style.name)}>{group.voice.name}</span>
+          <span className={cn("text-muted-foreground tabular-nums", style.stamp)}>
             {clock(group.startMs)}
           </span>
           {group.uncertain && <Badge>存疑</Badge>}
