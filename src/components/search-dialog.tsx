@@ -51,7 +51,7 @@ export function SearchDialog() {
         <DialogPrimitive.Content
           aria-describedby={undefined}
           data-testid="search-dialog"
-          className="fixed top-[14%] left-1/2 z-50 flex h-[min(520px,72%)] w-[600px] max-w-[calc(100%-48px)] -translate-x-1/2 flex-col overflow-hidden rounded-2xl bg-background shadow-[0_24px_64px_rgba(0,0,0,0.22),0_0_0_0.5px_rgba(0,0,0,0.12)] outline-none"
+          className="fixed top-1/2 left-1/2 z-50 flex h-[min(520px,calc(100%-48px))] w-[600px] max-w-[calc(100%-48px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-background shadow-[0_24px_64px_rgba(0,0,0,0.22),0_0_0_0.5px_rgba(0,0,0,0.12)] outline-none"
         >
           <DialogPrimitive.Title className="sr-only">搜索</DialogPrimitive.Title>
           <SearchBody close={() => setOpen(false)} />

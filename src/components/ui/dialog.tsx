@@ -37,12 +37,12 @@ function Sheet({
               <motion.div
                 data-slot="sheet"
                 className={cn(
-                  "fixed top-2.5 left-1/2 z-50 flex max-h-[calc(100%-20px)] w-[480px] max-w-[calc(100%-40px)] -translate-x-1/2 flex-col rounded-xl bg-background shadow-[0_24px_64px_rgba(0,0,0,0.18),0_0_0_0.5px_rgba(0,0,0,0.12)] outline-none",
+                  "fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100%-40px)] w-[480px] max-w-[calc(100%-40px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl bg-background shadow-[0_24px_64px_rgba(0,0,0,0.18),0_0_0_0.5px_rgba(0,0,0,0.12)] outline-none",
                   className,
                 )}
-                initial={{ opacity: 0, y: -12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
+                initial={{ opacity: 0, scale: 0.97 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
                 transition={{ type: "spring", duration: 0.32, bounce: 0 }}
               >
                 {children}
