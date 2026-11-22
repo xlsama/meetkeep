@@ -2,15 +2,18 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { motion } from "motion/react";
 import { Pencil } from "lucide-react";
 import { Popover } from "radix-ui";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Avatar } from "@/components/avatar";
 import { Highlight } from "@/components/highlight";
 import { SpeakerPopover } from "@/components/speaker-popover";
 import { clock } from "@/lib/format";
 import { useTranscript, type Group, type Line } from "@/lib/transcript";
 import { cn } from "@/lib/utils";
+import { wordAt, wordNear, wordsOf } from "@/lib/words";
 
 type Variant = "main" | "panel";
+
+export type Playhead = { now: () => number; playing: boolean; ms: number };
 
 // The words fade out over this many pixels as they scroll under the heading.
 const fade = 20;
@@ -52,7 +55,8 @@ export function Transcript({
   revealKey,
   query = "",
   findSeq = null,
-  onSelect,
+  playhead,
+  onSeek,
   className,
 }: {
   meetingId: string;
@@ -64,7 +68,8 @@ export function Transcript({
   revealKey?: number;
   query?: string;
   findSeq?: number | null;
-  onSelect?: (line: Line) => void;
+  playhead?: Playhead;
+  onSeek?: (ms: number) => void;
   className?: string;
 }) {
   "use no memo";
@@ -142,7 +147,8 @@ export function Transcript({
                 activeSeq={activeSeq}
                 query={query}
                 findSeq={findSeq}
-                onSelect={onSelect}
+                playhead={playhead}
+                onSeek={onSeek}
               />
             </div>
           );
@@ -159,7 +165,8 @@ function GroupView({
   activeSeq,
   query,
   findSeq,
-  onSelect,
+  playhead,
+  onSeek,
 }: {
   group: Group;
   meetingId: string;
@@ -167,7 +174,8 @@ function GroupView({
   activeSeq: number | null;
   query: string;
   findSeq: number | null;
-  onSelect: ((line: Line) => void) | undefined;
+  playhead: Playhead | undefined;
+  onSeek: ((ms: number) => void) | undefined;
 }) {
   const style = styles[variant];
   const { voice } = group;
@@ -224,7 +232,8 @@ function GroupView({
                 active={line.seq === activeSeq}
                 query={query}
                 found={line.seq === findSeq}
-                onSelect={onSelect}
+                playhead={line.seq === activeSeq ? playhead : undefined}
+                onSeek={onSeek}
               />
             ))}
           </div>
@@ -251,14 +260,16 @@ function LineView({
   active,
   query,
   found,
-  onSelect,
+  playhead,
+  onSeek,
 }: {
   line: Line;
   caret: string;
   active: boolean;
   query: string;
   found: boolean;
-  onSelect: ((line: Line) => void) | undefined;
+  playhead: Playhead | undefined;
+  onSeek: ((ms: number) => void) | undefined;
 }) {
   if (line.state === "done") {
     return (
@@ -266,20 +277,20 @@ function LineView({
         data-testid={`line-${line.seq}`}
         aria-current={active || undefined}
         onClick={
-          onSelect &&
-          (() => {
+          onSeek &&
+          ((event) => {
             if (window.getSelection()?.isCollapsed === false) return;
-            onSelect(line);
+            onSeek(wordNear(wordsOf(line), offsetAt(event))?.ms ?? line.startMs);
           })
         }
         className={cn(
           "-mx-1.5 block rounded-[6px] px-1.5 transition-colors",
-          onSelect && "cursor-pointer",
+          onSeek && "cursor-pointer",
           active && "bg-hover",
           found && "bg-mark/45",
         )}
       >
-        <Highlight text={line.text} query={query} />
+        {playhead ? <Spoken line={line} query={query} playhead={playhead} /> : <Highlight text={line.text} query={query} />}
       </span>
     );
   }
@@ -312,5 +323,51 @@ function LineView({
         />
       ))}
     </span>
+  );
+}
+
+function offsetAt(event: MouseEvent<HTMLElement>) {
+  const { clientX: x, clientY: y, currentTarget: root } = event;
+  const caret = document.caretRangeFromPoint(x, y);
+  if (!caret || !root.contains(caret.startContainer)) return 0;
+  const { startContainer: node, startOffset: at } = caret;
+  const range = document.createRange();
+  range.setStart(root, 0);
+  range.setEnd(node, at);
+  const offset = range.toString().length;
+  if (!(node instanceof Text)) return offset;
+  const over = (from: number) => {
+    if (from < 0 || from >= node.length) return false;
+    range.setStart(node, from);
+    range.setEnd(node, from + 1);
+    return [...range.getClientRects()].some((box) => x >= box.left && x <= box.right && y >= box.top && y <= box.bottom);
+  };
+  return !over(at) && over(at - 1) ? offset - 1 : offset;
+}
+
+function Spoken({ line, query, playhead }: { line: Line; query: string; playhead: Playhead }) {
+  const { now, playing, ms } = playhead;
+  const words = wordsOf(line);
+  const [heard, setHeard] = useState(() => wordAt(words, ms));
+
+  useEffect(() => {
+    if (!playing) return;
+    let frame = requestAnimationFrame(function tick() {
+      setHeard(wordAt(words, now()));
+      frame = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [words, now, playing]);
+
+  const word = words[playing ? heard : wordAt(words, ms)];
+  if (!word) return <Highlight text={line.text} query={query} />;
+  return (
+    <>
+      <Highlight text={line.text.slice(0, word.at)} query={query} />
+      <span data-testid="word-active" className="-mx-0.5 rounded-[4px] bg-primary box-decoration-clone px-0.5 text-primary-foreground">
+        {line.text.slice(word.at, word.end)}
+      </span>
+      <Highlight text={line.text.slice(word.end)} query={query} />
+    </>
   );
 }

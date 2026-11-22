@@ -84,6 +84,15 @@ export interface LiveUtterance {
   error?: string;
 }
 
+/**
+ * Mark is a place in an utterance's text, counted in UTF-16 code units as
+ * a web view counts them, and when what stands there is said.
+ */
+export interface Mark {
+  at: number;
+  ms: number;
+}
+
 export interface Meeting {
   id: string;
   title: string;
@@ -360,6 +369,16 @@ export interface Utterance {
    * the polished text is shown.
    */
   filler: boolean;
+  /**
+   * Marks tell when places in Text are said, in order. A meeting
+   * transcribed before they were kept has none.
+   */
+  marks?: Mark[];
+  /**
+   * PolishedMarks are Marks at their places in Polished. They are not
+   * stored: Moved works them out.
+   */
+  polishedMarks?: Mark[];
 }
 
 export type UtteranceState = "speaking" | "transcribing" | "done" | "dropped" | "failed";

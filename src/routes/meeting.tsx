@@ -266,6 +266,8 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
   const activeSeq = playback.started ? (lineAt(lines, playback.currentMs)?.seq ?? null) : null;
   const revealSeq = t === undefined ? null : (lineAt(lines, t)?.seq ?? null);
   const { seek, ready } = playback;
+  const playhead =
+    playback.started && playback.rate <= 2 ? { now: playback.now, playing: playback.playing, ms: playback.currentMs } : undefined;
   const sources = [meeting.microphone && "麦克风", meeting.system && systemLabel(meeting.apps)].filter(Boolean);
 
   useEffect(() => {
@@ -335,7 +337,8 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
             revealSeq={revealSeq}
             query={search.query}
             findSeq={search.current}
-            onSelect={playable ? (line) => seek(line.startMs, true) : undefined}
+            playhead={playhead}
+            onSeek={playable ? (ms) => seek(ms, true) : undefined}
           />
           {playable && !video && (
             <AudioBar

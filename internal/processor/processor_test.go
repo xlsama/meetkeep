@@ -117,7 +117,7 @@ func (f fakeTranscriber) TranscribeFile(_ context.Context, path string) ([]asr.P
 		return []asr.Phrase{{StartMs: 3000, EndMs: 4000, Text: "我来排。"}}, nil
 	}
 	return []asr.Phrase{
-		{StartMs: 500, EndMs: 2500, Text: "今天把日期定下来。"},
+		{StartMs: 500, EndMs: 2500, Text: "今天把日期定下来。", Marks: []asr.Mark{{At: 0, Ms: 500}, {At: 2, Ms: 900}}},
 		{StartMs: 5000, EndMs: 7000, Text: "十四号可以。"},
 		{StartMs: 7800, EndMs: 9000, Text: "价格页我来。"},
 	}, nil
@@ -277,6 +277,9 @@ func TestProcessesBothTracks(t *testing.T) {
 	}
 	if len(utterances) != len(want) {
 		t.Fatalf("stored %+v", utterances)
+	}
+	if marks := utterances[0].Marks; len(marks) != 2 || marks[1] != (store.Mark{At: 2, Ms: 900}) || utterances[1].Marks != nil {
+		t.Errorf("kept the marks %+v and %+v", marks, utterances[1].Marks)
 	}
 	for i, w := range want {
 		u := utterances[i]

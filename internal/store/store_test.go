@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/xlsama/meetkeep/internal/config"
@@ -364,7 +365,7 @@ func TestPolished(t *testing.T) {
 	utterances := []Utterance{
 		{Seq: 1, Track: File, StartMs: 0, EndMs: 800, Text: "呃，回韩必达。", Speaker: 1},
 		{Seq: 2, Track: File, StartMs: 900, EndMs: 1200, Text: "对对对。", Speaker: 2},
-		{Seq: 3, Track: File, StartMs: 1300, EndMs: 2400, Text: "明天上线。", Speaker: 1},
+		{Seq: 3, Track: File, StartMs: 1300, EndMs: 2400, Text: "明天上线。", Speaker: 1, Marks: []Mark{{0, 1300}, {2, 1900}}},
 	}
 	if err := s.ReplaceTranscript(ctx, "a", utterances, []Speaker{{ID: 1, Name: "甲"}, {ID: 2, Name: "乙"}}, "audio.opus"); err != nil {
 		t.Fatal(err)
@@ -387,6 +388,13 @@ func TestPolished(t *testing.T) {
 	}
 	if glances, _ := s.Glances(ctx); glances["a"].Opening != "回函必达。明天上线。" {
 		t.Errorf("the meeting opens with %q", glances["a"].Opening)
+	}
+	if err := s.ReplaceTranscript(ctx, "a", stored, []Speaker{{ID: 1, Name: "甲"}}, "audio.opus"); err != nil {
+		t.Fatal(err)
+	}
+	stored, _ = s.Utterances(ctx, "a")
+	if stored[0].Polished != "回函必达。" || !stored[1].Filler || stored[0].Marks != nil || !reflect.DeepEqual(stored[2].Marks, []Mark{{0, 1300}, {2, 1900}}) {
+		t.Errorf("telling the speakers apart again kept %+v", stored)
 	}
 	if err := s.SetPolished(ctx, "a", nil); err != nil {
 		t.Fatal(err)

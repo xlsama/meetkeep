@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf16"
+	"unicode/utf8"
 
 	"github.com/xlsama/meetkeep/internal/audio"
 )
@@ -32,6 +34,15 @@ type Phrase struct {
 	StartMs int64
 	EndMs   int64
 	Text    string
+	// Marks tell when places in Text are said, in order.
+	Marks []Mark
+}
+
+// Mark is a place in a text, counted in UTF-16 code units as a web view
+// counts them, and when what stands there is said.
+type Mark struct {
+	At int
+	Ms int64
 }
 
 // ErrNotConfigured means the service's address or key is missing.
@@ -78,11 +89,16 @@ type result struct {
 		Offset   int64  `json:"offsetMilliseconds"`
 		Duration int64  `json:"durationMilliseconds"`
 		Text     string `json:"text"`
-		Words    []struct {
-			Offset   int64 `json:"offsetMilliseconds"`
-			Duration int64 `json:"durationMilliseconds"`
-		} `json:"words"`
+		Words    []word `json:"words"`
 	} `json:"phrases"`
+}
+
+// word is what the service times: a letter of Chinese, or a word or a
+// number of other writing.
+type word struct {
+	Text     string `json:"text"`
+	Offset   int64  `json:"offsetMilliseconds"`
+	Duration int64  `json:"durationMilliseconds"`
 }
 
 type phraseList struct {
@@ -118,7 +134,7 @@ func (m *MAI) TranscribeFile(ctx context.Context, path string) ([]Phrase, error)
 		if text == "" {
 			continue
 		}
-		phrase := Phrase{StartMs: p.Offset, EndMs: p.Offset + p.Duration, Text: text}
+		phrase := Phrase{StartMs: p.Offset, EndMs: p.Offset + p.Duration, Text: text, Marks: marks(text, p.Words)}
 		if n := len(p.Words); n > 0 {
 			phrase.StartMs = p.Words[0].Offset
 			phrase.EndMs = p.Words[n-1].Offset + p.Words[n-1].Duration
@@ -126,6 +142,31 @@ func (m *MAI) TranscribeFile(ctx context.Context, path string) ([]Phrase, error)
 		phrases = append(phrases, phrase)
 	}
 	return phrases, nil
+}
+
+// reach is how many letters past the last word found the next one may
+// stand: a word the text spells otherwise is passed over.
+const reach = 12
+
+// marks returns where in text each of words starts and when it is said.
+func marks(text string, words []word) []Mark {
+	found := make([]Mark, 0, len(words))
+	at, units := 0, 0
+	for _, w := range words {
+		said := strings.Join(strings.Fields(w.Text), " ")
+		if said == "" {
+			continue
+		}
+		skip := strings.Index(text[at:], said)
+		if skip < 0 || utf8.RuneCountInString(text[at:at+skip]) > reach {
+			continue
+		}
+		units += len(utf16.Encode([]rune(text[at : at+skip])))
+		found = append(found, Mark{At: units, Ms: w.Offset})
+		units += len(utf16.Encode([]rune(said)))
+		at += skip + len(said)
+	}
+	return found
 }
 
 func (m *MAI) send(ctx context.Context, name string, data []byte, timestamps bool) (result, error) {

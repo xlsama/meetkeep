@@ -111,6 +111,12 @@ type Utterance struct {
 	// Filler marks an utterance that says nothing: it is left out where
 	// the polished text is shown.
 	Filler bool `json:"filler"`
+	// Marks tell when places in Text are said, in order. A meeting
+	// transcribed before they were kept has none.
+	Marks []Mark `json:"marks,omitempty"`
+	// PolishedMarks are Marks at their places in Polished. They are not
+	// stored: Moved works them out.
+	PolishedMarks []Mark `json:"polishedMarks,omitempty"`
 }
 
 // Step is what one step of processing a meeting took.
@@ -241,6 +247,9 @@ var migrations = [][]string{
 	{
 		`ALTER TABLE utterances ADD COLUMN polished TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE utterances ADD COLUMN filler INTEGER NOT NULL DEFAULT 0`,
+	},
+	{
+		`ALTER TABLE utterances ADD COLUMN marks TEXT NOT NULL DEFAULT ''`,
 	},
 }
 
@@ -459,9 +468,9 @@ func (s *Store) ReplaceTranscript(ctx context.Context, id string, utterances []U
 	}
 	for _, u := range utterances {
 		batch = append(batch, sqlite.Statement{
-			SQL: `INSERT INTO utterances (meeting_id, seq, track, start_ms, end_ms, text, speaker, uncertain)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			Args: []any{id, u.Seq, string(u.Track), u.StartMs, u.EndMs, u.Text, u.Speaker, u.Uncertain},
+			SQL: `INSERT INTO utterances (meeting_id, seq, track, start_ms, end_ms, text, speaker, uncertain, polished, filler, marks)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			Args: []any{id, u.Seq, string(u.Track), u.StartMs, u.EndMs, u.Text, u.Speaker, u.Uncertain, u.Polished, u.Filler, encodeMarks(u.Marks)},
 		})
 	}
 	batch = append(batch, sqlite.Statement{
@@ -879,14 +888,16 @@ func (s *Store) AddUtterance(ctx context.Context, meetingID string, u Utterance)
 }
 
 func (s *Store) Utterances(ctx context.Context, meetingID string) ([]Utterance, error) {
-	rows, err := s.db.Query(ctx, `SELECT seq, track, start_ms, end_ms, text, speaker, uncertain, polished, filler FROM utterances
+	rows, err := s.db.Query(ctx, `SELECT seq, track, start_ms, end_ms, text, speaker, uncertain, polished, filler, marks FROM utterances
 		WHERE meeting_id = ? ORDER BY start_ms, seq`, meetingID)
 	if err != nil {
 		return nil, err
 	}
 	utterances := make([]Utterance, 0, len(rows.Values))
 	for _, row := range rows.Values {
-		utterances = append(utterances, utterance(row))
+		u := utterance(row)
+		u.Marks = decodeMarks(row[9].(string))
+		utterances = append(utterances, u)
 	}
 	return utterances, nil
 }

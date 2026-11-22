@@ -271,6 +271,11 @@ func (l *Library) Get(ctx context.Context, id string) (MeetingDetail, error) {
 	if err != nil {
 		return MeetingDetail{}, err
 	}
+	for i, u := range utterances {
+		if u.Polished != "" {
+			utterances[i].PolishedMarks = store.Moved(u.Marks, u.Text, u.Polished)
+		}
+	}
 	speakers, err := l.app.store.Speakers(ctx, id)
 	detail := MeetingDetail{Meeting: meeting, Utterances: utterances, Speakers: speakers}
 	if progress, ok := l.app.processor.State(id); ok {

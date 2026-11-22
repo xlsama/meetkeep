@@ -298,8 +298,12 @@ func (p *Processor) process(ctx context.Context, j job) error {
 			}
 			detail["sentences"] = len(phrases)
 			for _, phrase := range phrases {
+				marks := make([]store.Mark, len(phrase.Marks))
+				for i, m := range phrase.Marks {
+					marks[i] = store.Mark{At: m.At, Ms: m.Ms}
+				}
 				utterances = append(utterances, store.Utterance{
-					Track: t.name, StartMs: phrase.StartMs, EndMs: phrase.EndMs, Text: phrase.Text,
+					Track: t.name, StartMs: phrase.StartMs, EndMs: phrase.EndMs, Text: phrase.Text, Marks: marks,
 				})
 			}
 			return detail, nil

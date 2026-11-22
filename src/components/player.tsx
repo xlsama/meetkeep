@@ -1,11 +1,14 @@
 import {
   defineTextTrack,
   Hotkey,
+  isMediaSeekCapable,
   selectPlayback,
+  selectPlaybackRate,
   selectTime,
   TimeSlider,
   useCreateTextTrack,
   useLatestRef,
+  useMedia,
   usePlayer,
   type TextCueInit,
 } from "@videojs/react";
@@ -75,7 +78,10 @@ function SampleBridge() {
 export function usePlayback() {
   const time = usePlayer(selectTime);
   const playback = usePlayer(selectPlayback);
+  const rate = usePlayer(selectPlaybackRate)?.playbackRate ?? 1;
+  const media = useMedia();
   const latest = useLatestRef({ time, playback });
+  const now = useCallback(() => Math.round((isMediaSeekCapable(media) ? media.currentTime : 0) * 1000), [media]);
   const seek = useCallback(
     (ms: number, play = false) => {
       void latest.current.time?.seek(ms / 1000);
@@ -87,6 +93,9 @@ export function usePlayback() {
     currentMs: (time?.currentTime ?? 0) * 1000,
     ready: (time?.duration ?? 0) > 0,
     started: playback?.started ?? false,
+    playing: playback ? !playback.paused : false,
+    rate,
+    now,
     seek,
   };
 }

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { LiveUtterance, Speaker, Track, UtteranceState } from "@/mygo";
+import type { LiveUtterance, Mark, Speaker, Track, UtteranceState } from "@/mygo";
 import { meetingQuery } from "@/lib/queries";
 import { useRecorder } from "@/lib/recorder";
 import { voiceOf, type Voice } from "@/lib/speakers";
@@ -11,6 +11,7 @@ export type Line = {
   startMs: number;
   endMs: number;
   text: string;
+  marks: Mark[];
   speaker: number;
   uncertain: boolean;
   state: UtteranceState;
@@ -27,6 +28,7 @@ export type Group = {
 
 const none: Record<number, LiveUtterance> = {};
 const nobody: Speaker[] = [];
+const unmarked: Mark[] = [];
 
 export function useTranscript(meetingId: string, live: boolean) {
   const detail = useQuery(meetingQuery(meetingId));
@@ -39,12 +41,12 @@ export function useTranscript(meetingId: string, live: boolean) {
   const merged = new Map<number, Line>();
   for (const u of utterances) {
     if (!original && u.filler) continue;
-    const text = original || u.polished === "" ? u.text : u.polished;
-    merged.set(u.seq, { seq: u.seq, track: u.track, startMs: u.startMs, endMs: u.endMs, text, speaker: u.speaker, uncertain: u.uncertain, state: "done" });
+    const shown = original || u.polished === "" ? { text: u.text, marks: u.marks } : { text: u.polished, marks: u.polishedMarks };
+    merged.set(u.seq, { seq: u.seq, track: u.track, startMs: u.startMs, endMs: u.endMs, text: shown.text, marks: shown.marks ?? unmarked, speaker: u.speaker, uncertain: u.uncertain, state: "done" });
   }
   for (const u of Object.values(items)) {
     if (u.state === "dropped") merged.delete(u.seq);
-    else merged.set(u.seq, { ...u, speaker: 0, uncertain: false });
+    else merged.set(u.seq, { ...u, marks: unmarked, speaker: 0, uncertain: false });
   }
   const lines = [...merged.values()].toSorted((a, b) => a.startMs - b.startMs || a.seq - b.seq);
 
