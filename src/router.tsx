@@ -47,7 +47,16 @@ const searchRoute = createRoute({
   component: SearchPage,
 });
 
-const settingsRoute = createRoute({ getParentRoute: () => mainRoute, path: "/settings", component: SettingsPage });
+const settingsRoute = createRoute({
+  getParentRoute: () => mainRoute,
+  path: "/settings",
+  component: () => <Navigate to="/settings/$section" params={{ section: "transcription" }} replace />,
+});
+const settingsSectionRoute = createRoute({
+  getParentRoute: () => mainRoute,
+  path: "/settings/$section",
+  component: SettingsPage,
+});
 const peopleRoute = createRoute({ getParentRoute: () => mainRoute, path: "/people", component: PeoplePage });
 
 const panelRoute = createRoute({ getParentRoute: () => rootRoute, path: "/panel", component: PanelPage });
@@ -72,7 +81,7 @@ const detectRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-  mainRoute.addChildren([homeRoute, recordsRoute, meetingRoute, searchRoute, settingsRoute, peopleRoute]),
+  mainRoute.addChildren([homeRoute, recordsRoute, meetingRoute, searchRoute, settingsRoute, settingsSectionRoute, peopleRoute]),
   panelRoute,
   miniRoute,
   menuRoute,

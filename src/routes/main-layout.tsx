@@ -1,8 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
-import { AudioLines, House, LoaderCircle, PanelLeft, PanelLeftClose, Plus, Settings, Upload, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  AudioLines,
+  House,
+  LoaderCircle,
+  PanelLeft,
+  PanelLeftClose,
+  Plus,
+  Settings,
+  Upload,
+  Users,
+} from "lucide-react";
 import { isMyGo } from "mygo-runtime";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useHeader } from "@/components/header-slot";
 import { RecordingLabel } from "@/components/meeting-card";
 import { Notice } from "@/components/notice";
@@ -13,6 +24,7 @@ import { events } from "@/mygo";
 import { useImport, useImporter } from "@/lib/importer";
 import { settingsQuery } from "@/lib/queries";
 import { isActive, useRecorder } from "@/lib/recorder";
+import { sections } from "@/lib/settings-sections";
 import { useSheet } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace";
@@ -114,53 +126,104 @@ function HeaderButton({
   );
 }
 
-const items = [
+const pages = [
   { to: "/", label: "首页", icon: House, testId: "nav-home", exact: true },
   { to: "/meetings", label: "记录", icon: AudioLines, testId: "nav-records", exact: false },
   { to: "/people", label: "人物", icon: Users, testId: "nav-people", exact: false },
-  { to: "/settings", label: "设置", icon: Settings, testId: "nav-settings", exact: false },
 ] as const;
 
+const item =
+  "flex h-9 shrink-0 items-center gap-2.5 rounded-[10px] px-2.5 text-ui text-secondary-foreground transition-colors outline-none hover:bg-black/[0.05] focus-visible:shadow-[inset_0_0_0_2px_rgba(0,0,0,0.12)]";
+const current = { className: "bg-background font-medium text-foreground hover:bg-background" };
+
 function Sidebar({ open }: { open: boolean }) {
+  const router = useRouter();
   const status = useRecorder((s) => s.status);
+  const href = useRouterState({ select: (s) => s.location.href });
+  const settings = href.startsWith("/settings");
+  const back = useRef("/");
+  useEffect(() => {
+    if (!settings) back.current = href;
+  }, [settings, href]);
+  const text = cn("whitespace-nowrap transition-opacity", !open && "opacity-0");
 
   return (
     <nav
-      aria-label="功能"
+      aria-label={settings ? "设置" : "功能"}
       data-open={open}
       className={cn(
         "flex shrink-0 flex-col gap-0.5 overflow-hidden pl-1 transition-[width] duration-200 ease-out",
         open ? "w-[176px]" : "w-10",
       )}
     >
-      {items.map((item) => (
-        <Link
-          key={item.to}
-          to={item.to}
-          data-testid={item.testId}
-          aria-label={item.label}
-          title={open ? undefined : item.label}
-          activeOptions={{ exact: item.exact }}
-          className="flex h-9 items-center gap-2.5 rounded-[10px] px-2.5 text-ui text-secondary-foreground transition-colors hover:bg-black/[0.05]"
-          activeProps={{ className: "bg-background font-medium text-foreground hover:bg-background" }}
-        >
-          <item.icon className="size-4 shrink-0" />
-          <span className={cn("whitespace-nowrap transition-opacity", !open && "opacity-0")}>{item.label}</span>
-        </Link>
-      ))}
-      {isActive(status) && status.meeting && (
-        <Link
-          to="/meetings/$id"
-          params={{ id: status.meeting.id }}
-          data-testid="nav-live"
-          className="mt-auto flex h-9 items-center rounded-[10px] px-2.5 transition-colors hover:bg-black/[0.05]"
-        >
-          {open ? (
-            <RecordingLabel status={status} className="text-ui whitespace-nowrap" />
-          ) : (
-            <RecDot paused={status.phase === "paused"} className="mx-[5px] size-1.5" />
-          )}
-        </Link>
+      {settings ? (
+        <>
+          {sections.map((section) => (
+            <Link
+              key={section.id}
+              to="/settings/$section"
+              params={{ section: section.id }}
+              data-testid={`settings-nav-${section.id}`}
+              aria-label={section.label}
+              title={open ? undefined : section.label}
+              className={item}
+              activeProps={current}
+            >
+              <section.icon className="size-4 shrink-0" />
+              <span className={text}>{section.label}</span>
+            </Link>
+          ))}
+          <button
+            type="button"
+            data-testid="settings-back"
+            aria-label="返回"
+            title={open ? undefined : "返回"}
+            onClick={() => router.history.push(back.current)}
+            className={cn(item, "mt-auto")}
+          >
+            <ArrowLeft className="size-4 shrink-0" />
+            <span className={text}>返回</span>
+          </button>
+        </>
+      ) : (
+        <>
+          {pages.map((page) => (
+            <Link
+              key={page.to}
+              to={page.to}
+              data-testid={page.testId}
+              aria-label={page.label}
+              title={open ? undefined : page.label}
+              activeOptions={{ exact: page.exact }}
+              className={item}
+              activeProps={current}
+            >
+              <page.icon className="size-4 shrink-0" />
+              <span className={text}>{page.label}</span>
+            </Link>
+          ))}
+          <div className="mt-auto flex flex-col gap-0.5">
+            {isActive(status) && status.meeting && (
+              <Link to="/meetings/$id" params={{ id: status.meeting.id }} data-testid="nav-live" className={item}>
+                {open ? (
+                  <RecordingLabel status={status} className="text-ui whitespace-nowrap" />
+                ) : (
+                  <RecDot paused={status.phase === "paused"} className="mx-[5px] size-1.5" />
+                )}
+              </Link>
+            )}
+            <Link
+              to="/settings"
+              data-testid="nav-settings"
+              aria-label="设置"
+              title={open ? undefined : "设置"}
+              className={item}
+            >
+              <Settings className="size-4 shrink-0" />
+              <span className={text}>设置</span>
+            </Link>
+          </div>
+        </>
       )}
     </nav>
   );

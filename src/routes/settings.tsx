@@ -1,5 +1,6 @@
 import { useForm, useStore } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
+import { useParams } from "@tanstack/react-router";
 import { Check, ChevronDown, LoaderCircle, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
@@ -17,6 +18,7 @@ import { Segmented, SegmentedItem } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import { Config, type Settings } from "@/mygo";
 import { errorMessage, queryClient, settingsPathQuery, settingsQuery } from "@/lib/queries";
+import { sections, type SectionId } from "@/lib/settings-sections";
 import { useWindowTitle } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 
@@ -42,19 +44,23 @@ const pick = (s: Settings): Values => ({ asr: s.asr, llm: s.llm, recording: s.re
 
 export function SettingsPage() {
   useWindowTitle("设置");
+  const { section: id } = useParams({ strict: false });
+  const section = sections.find((s) => s.id === id) ?? sections[0];
   const settings = useQuery(settingsQuery);
+  if (!section) return null;
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <div className="flex w-full max-w-[880px] flex-col gap-6 px-10 pt-7 pb-10">
+      <div className="mx-auto flex w-full max-w-[640px] flex-col gap-5 px-6 pt-9 pb-12" data-testid={`settings-${section.id}`}>
         <PageTitle title="设置" />
-        {settings.data && <SettingsForm settings={settings.data} />}
+        <h1 className="m-0 text-display font-semibold">{section.label}</h1>
+        {settings.data && <SettingsForm settings={settings.data} section={section.id} />}
         {settings.error && <p className="m-0 text-label text-destructive">{errorMessage(settings.error)}</p>}
       </div>
     </ScrollArea>
   );
 }
 
-function SettingsForm({ settings }: { settings: Settings }) {
+function SettingsForm({ settings, section }: { settings: Settings; section: SectionId }) {
   const path = useQuery(settingsPathQuery);
   const [saveError, setSaveError] = useState<string | null>(null);
   const editing = useRef<string | null>(null);
@@ -116,24 +122,25 @@ function SettingsForm({ settings }: { settings: Settings }) {
   return (
     <>
       {saveError && (
-        <p role="alert" data-testid="settings-error" className="m-0 -mt-3 text-label text-destructive">
+        <p role="alert" data-testid="settings-error" className="m-0 -mt-2 text-label text-destructive">
           {saveError}
         </p>
       )}
-      <Section title="转写">
+      {section === "transcription" && (
+      <Group>
         <Row label="服务">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
                 data-testid="settings-asr-service"
-                className="flex h-[34px] flex-1 items-center justify-between rounded-md border border-input bg-background px-3 text-ui text-foreground outline-none transition-colors hover:bg-muted focus-visible:border-border-strong focus-visible:ring-[3px] focus-visible:ring-black/5"
+                className="flex h-8 items-center gap-2 rounded-md border border-input bg-background pr-2.5 pl-3 text-ui text-foreground outline-none transition-colors hover:bg-muted focus-visible:border-border-strong focus-visible:ring-[3px] focus-visible:ring-black/5"
               >
                 MAI-Transcribe-2（Azure）
                 <ChevronDown className="size-3.5 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width)">
+            <DropdownMenuContent align="end">
               <DropdownMenuItem>
                 <span className="flex-1">MAI-Transcribe-2（Azure）</span>
                 <Check />
@@ -149,7 +156,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
                 data-testid="settings-asr-endpoint"
                 placeholder="https://[你的资源名].cognitiveservices.azure.com"
                 aria-invalid={field.state.meta.errors.length > 0}
-                className="flex-1 font-mono text-label"
+                className="w-[360px] font-mono text-label"
                 value={field.state.value}
                 onChange={(event) => field.handleChange(event.target.value)}
                 {...textProps(field.name, field.handleBlur)}
@@ -169,7 +176,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
                 type="password"
                 aria-label="转写密钥"
                 data-testid="settings-asr-key"
-                className="flex-1"
+                className="w-[252px]"
                 value={field.state.value}
                 onChange={(event) => field.handleChange(event.target.value)}
                 {...textProps(field.name, field.handleBlur)}
@@ -190,9 +197,10 @@ function SettingsForm({ settings }: { settings: Settings }) {
             </Row>
           )}
         </form.Field>
-      </Section>
-
-      <Section title="纪要与白板">
+      </Group>
+      )}
+      {section === "notes" && (
+      <Group>
         <form.Field name="llm.baseUrl" validators={{ onBlur: address }}>
           {(field) => (
             <Row label="服务地址" error={field.state.meta.errors[0]?.message}>
@@ -201,7 +209,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
                 data-testid="settings-llm-base-url"
                 placeholder="https://api.deepseek.com"
                 aria-invalid={field.state.meta.errors.length > 0}
-                className="flex-1 font-mono text-label"
+                className="w-[360px] font-mono text-label"
                 value={field.state.value}
                 onChange={(event) => field.handleChange(event.target.value)}
                 {...textProps(field.name, field.handleBlur)}
@@ -221,7 +229,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
                 type="password"
                 aria-label="模型密钥"
                 data-testid="settings-llm-key"
-                className="flex-1"
+                className="w-[252px]"
                 value={field.state.value}
                 onChange={(event) => field.handleChange(event.target.value)}
                 {...textProps(field.name, field.handleBlur)}
@@ -236,7 +244,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
                 aria-label="模型名"
                 data-testid="settings-llm-model"
                 placeholder="deepseek-chat"
-                className="flex-1 font-mono text-label"
+                className="w-[360px] font-mono text-label"
                 value={field.state.value}
                 onChange={(event) => field.handleChange(event.target.value)}
                 {...textProps(field.name, field.handleBlur)}
@@ -244,9 +252,10 @@ function SettingsForm({ settings }: { settings: Settings }) {
             </Row>
           )}
         </form.Field>
-      </Section>
-
-      <Section title="录制">
+      </Group>
+      )}
+      {section === "recording" && (
+      <Group>
         <form.Field name="recording.detectMeetings">
           {(field) => (
             <Row label="检测到会议时提醒">
@@ -306,10 +315,14 @@ function SettingsForm({ settings }: { settings: Settings }) {
             </Row>
           )}
         </form.Field>
+      </Group>
+      )}
+      {section === "storage" && (
+      <Group>
         <form.Field name="recording.directory">
           {(field) => (
             <Row label="录音保存到">
-              <span data-selectable className="min-w-0 flex-1 truncate font-mono text-label text-secondary-foreground">
+              <span data-selectable className="min-w-0 truncate font-mono text-label text-secondary-foreground">
                 {field.state.value}
               </span>
               <Button
@@ -333,7 +346,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
           )}
         </form.Field>
         <Row label="配置文件">
-          <span data-selectable className="min-w-0 flex-1 truncate font-mono text-label text-secondary-foreground">
+          <span data-selectable className="min-w-0 truncate font-mono text-label text-secondary-foreground">
             {path.data}
           </span>
           <Button
@@ -347,27 +360,34 @@ function SettingsForm({ settings }: { settings: Settings }) {
             打开
           </Button>
         </Row>
-      </Section>
+      </Group>
+      )}
     </>
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="flex flex-col rounded-2xl border border-line">
-      <h2 className="m-0 px-4 pt-3.5 pb-3 text-body font-semibold">{title}</h2>
-      {children}
-    </section>
-  );
+function Group({ children }: { children: ReactNode }) {
+  return <section className="flex flex-col rounded-xl border border-line">{children}</section>;
 }
 
-function Row({ label, error, children }: { label: string; error?: string; children: ReactNode }) {
+function Row({
+  label,
+  error,
+  note,
+  children,
+}: {
+  label: string;
+  error?: string;
+  note?: ReactNode;
+  children: ReactNode;
+}) {
   return (
-    <div className="grid min-h-[52px] grid-cols-[140px_minmax(0,1fr)] items-center gap-x-4 border-t border-border-subtle px-4 py-2">
-      <span className="text-ui text-secondary-foreground">{label}</span>
-      <div className="flex min-w-0 flex-col gap-1">
-        <div className="flex min-w-0 items-center gap-2">{children}</div>
+    <div className="flex min-h-[52px] items-center gap-4 border-t border-border-subtle px-4 py-2.5 first:border-t-0">
+      <span className="shrink-0 text-ui text-foreground">{label}</span>
+      <div className="flex min-w-0 flex-1 flex-col items-end gap-1">
+        <div className="flex max-w-full min-w-0 items-center justify-end gap-2">{children}</div>
         {error && <span className="text-meta text-invalid">{error}</span>}
+        {note}
       </div>
     </div>
   );
@@ -402,7 +422,26 @@ function TestRow({
   };
 
   return (
-    <Row label={label}>
+    <Row
+      label={label}
+      note={
+        shown.kind === "ok" ? (
+          <span data-testid={`${testId}-ok`} className="inline-flex items-center gap-[5px] text-label text-success-foreground">
+            <span aria-hidden className="size-1.5 rounded-full bg-success" />
+            可用
+          </span>
+        ) : shown.kind === "error" ? (
+          <span
+            data-testid={`${testId}-error`}
+            data-selectable
+            title={shown.message}
+            className="line-clamp-2 max-w-[380px] text-right text-label leading-snug break-words text-destructive"
+          >
+            {shown.message}
+          </span>
+        ) : undefined
+      }
+    >
       {children}
       <Button
         variant="outline"
@@ -415,22 +454,6 @@ function TestRow({
         {shown.kind === "testing" && <LoaderCircle className="size-[13px] animate-spin" />}
         测试
       </Button>
-      {shown.kind === "ok" && (
-        <span data-testid={`${testId}-ok`} className="inline-flex shrink-0 items-center gap-[5px] text-label text-success-foreground">
-          <span aria-hidden className="size-1.5 rounded-full bg-success" />
-          可用
-        </span>
-      )}
-      {shown.kind === "error" && (
-        <span
-          data-testid={`${testId}-error`}
-          data-selectable
-          title={shown.message}
-          className="line-clamp-2 max-w-[42%] shrink-0 text-label leading-snug break-words text-destructive"
-        >
-          {shown.message}
-        </span>
-      )}
     </Row>
   );
 }
@@ -448,7 +471,7 @@ function Hotwords({ value, onChange }: { value: string[]; onChange: (words: stri
   };
 
   return (
-    <span className="flex flex-wrap items-center gap-1.5">
+    <span className="flex flex-wrap items-center justify-end gap-1.5">
       {value.map((word) => (
         <span
           key={word}
