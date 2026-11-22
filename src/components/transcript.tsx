@@ -4,6 +4,7 @@ import { Pencil } from "lucide-react";
 import { Popover } from "radix-ui";
 import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/avatar";
+import { Highlight } from "@/components/highlight";
 import { SpeakerPopover } from "@/components/speaker-popover";
 import { clock } from "@/lib/format";
 import { useTranscript, type Group, type Line } from "@/lib/transcript";
@@ -46,6 +47,8 @@ export function Transcript({
   activeSeq = null,
   revealSeq = null,
   revealKey,
+  query = "",
+  findSeq = null,
   onSelect,
   className,
 }: {
@@ -56,6 +59,8 @@ export function Transcript({
   activeSeq?: number | null;
   revealSeq?: number | null;
   revealKey?: number;
+  query?: string;
+  findSeq?: number | null;
   onSelect?: (line: Line) => void;
   className?: string;
 }) {
@@ -87,6 +92,7 @@ export function Transcript({
     seq === null ? -1 : groups.findIndex((g) => g.lines.some((l) => l.seq === seq));
   const activeIndex = indexOf(activeSeq);
   const revealIndex = indexOf(revealSeq);
+  const findIndex = indexOf(findSeq);
 
   useEffect(() => {
     if (activeIndex >= 0) virtualizer.scrollToIndex(activeIndex, { align: "auto" });
@@ -95,6 +101,10 @@ export function Transcript({
   useEffect(() => {
     if (revealIndex >= 0) virtualizer.scrollToIndex(revealIndex, { align: "center" });
   }, [revealIndex, revealKey, virtualizer]);
+
+  useEffect(() => {
+    if (findIndex >= 0) virtualizer.scrollToIndex(findIndex, { align: "center" });
+  }, [findIndex, findSeq, virtualizer]);
 
   return (
     <div
@@ -119,6 +129,8 @@ export function Transcript({
                 meetingId={meetingId}
                 variant={variant}
                 activeSeq={activeSeq}
+                query={query}
+                findSeq={findSeq}
                 onSelect={onSelect}
               />
             </div>
@@ -134,12 +146,16 @@ function GroupView({
   meetingId,
   variant,
   activeSeq,
+  query,
+  findSeq,
   onSelect,
 }: {
   group: Group;
   meetingId: string;
   variant: Variant;
   activeSeq: number | null;
+  query: string;
+  findSeq: number | null;
   onSelect: ((line: Line) => void) | undefined;
 }) {
   const style = styles[variant];
@@ -195,6 +211,8 @@ function GroupView({
                 line={line}
                 caret={style.caret}
                 active={line.seq === activeSeq}
+                query={query}
+                found={line.seq === findSeq}
                 onSelect={onSelect}
               />
             ))}
@@ -220,11 +238,15 @@ function LineView({
   line,
   caret,
   active,
+  query,
+  found,
   onSelect,
 }: {
   line: Line;
   caret: string;
   active: boolean;
+  query: string;
+  found: boolean;
   onSelect: ((line: Line) => void) | undefined;
 }) {
   if (line.state === "done") {
@@ -243,9 +265,10 @@ function LineView({
           "-mx-1.5 block rounded-[6px] px-1.5 transition-colors",
           onSelect && "cursor-pointer",
           active && "bg-hover",
+          found && "bg-mark/45",
         )}
       >
-        {line.text}
+        <Highlight text={line.text} query={query} />
       </span>
     );
   }

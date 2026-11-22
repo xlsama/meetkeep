@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import {
+  Captions,
   Check,
+  Copy,
   Download,
   Ellipsis,
   FileText,
@@ -15,6 +17,7 @@ import {
   Star,
   Trash2,
   Upload,
+  UserSearch,
   Volume2,
 } from "lucide-react";
 import { isMyGo } from "mygo-runtime";
@@ -29,6 +32,7 @@ import { RecDot } from "@/components/rec-dot";
 import { SourceSummary } from "@/components/source-summary";
 import { TitleInput } from "@/components/title-input";
 import { Transcript } from "@/components/transcript";
+import { TranscriptHeader, transcriptIconButton, useTranscriptSearch } from "@/components/transcript-header";
 import { Workspace } from "@/components/workspace";
 import {
   AlertDialog,
@@ -56,7 +60,7 @@ import { seqOf, useNotes, type Jump } from "@/lib/notes";
 import { errorMessage, meetingQuery } from "@/lib/queries";
 import { useElapsed, useRecorder } from "@/lib/recorder";
 import { speakerVoice } from "@/lib/speakers";
-import { lineAt, useTranscript } from "@/lib/transcript";
+import { lineAt, useTranscript, type Group } from "@/lib/transcript";
 import { useWindowTitle } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 import { SpeakersSheet } from "@/routes/speakers-sheet";
@@ -98,6 +102,7 @@ type TabProps = { tab: AsideTab; onTabChange: (tab: AsideTab) => void };
 function LiveView({ meeting, tab, onTabChange }: { meeting: Meeting } & TabProps) {
   const { lines } = useTranscript(meeting.id, true);
   const [focus, setFocus] = useState<{ seq: number; at: number } | null>(null);
+  const search = useTranscriptSearch(lines);
 
   const jump = (target: Jump) => {
     const seq = seqOf(lines, target);
@@ -122,12 +127,15 @@ function LiveView({ meeting, tab, onTabChange }: { meeting: Meeting } & TabProps
         cards={{
           transcript: (
             <section aria-label="文字稿" className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+              <TranscriptHeader search={search} />
               <FaultNotice className="mx-8 mt-4" />
               <Transcript
                 meetingId={meeting.id}
                 live
                 variant="main"
                 paddingEnd={110}
+                query={search.query}
+                findSeq={search.current}
                 activeSeq={focus?.seq ?? null}
                 revealSeq={focus?.seq ?? null}
                 revealKey={focus?.at}
@@ -250,6 +258,7 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
   const playable = (meeting.audio !== "" || meeting.video !== "") && !processing;
   const [error, setError] = useState<string | null>(null);
   const [speakersOpen, setSpeakersOpen] = useState(false);
+  const search = useTranscriptSearch(lines);
   const playback = usePlayback();
   const activeSeq = playback.started ? (lineAt(lines, playback.currentMs)?.seq ?? null) : null;
   const revealSeq = t === undefined ? null : (lineAt(lines, t)?.seq ?? null);
@@ -280,6 +289,14 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
         cards={{
           transcript: (
         <section aria-label="文字稿" className="flex min-h-0 min-w-0 flex-1 flex-col [container-type:size]">
+          <TranscriptHeader
+            search={search}
+            menu={
+              meeting.status === "done" && lines.length > 0 ? (
+                <TranscriptMenu meetingId={meeting.id} groups={groups} onError={setError} />
+              ) : undefined
+            }
+          />
           {meeting.status === "failed" && (
             <Notice
               testId="meeting-failed"
@@ -313,6 +330,8 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
             paddingEnd={28}
             activeSeq={activeSeq}
             revealSeq={revealSeq}
+            query={search.query}
+            findSeq={search.current}
             onSelect={playable ? (line) => seek(line.startMs, true) : undefined}
           />
           {playable && !video && (
@@ -354,6 +373,76 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
         />
       )}
     </>
+  );
+}
+
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.append(area);
+    area.select();
+    const copied = document.execCommand("copy");
+    area.remove();
+    if (!copied) throw new Error("复制不了");
+  }
+}
+
+function TranscriptMenu({
+  meetingId,
+  groups,
+  onError,
+}: {
+  meetingId: string;
+  groups: Group[];
+  onError: (error: string | null) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const copy = () =>
+    run(onError, async () => {
+      await copyText(
+        groups
+          .map((group) => `${group.voice.name}  ${clock(group.startMs)}\n${group.lines.map((line) => line.text).join("\n")}`)
+          .join("\n\n"),
+      );
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    });
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" aria-label="文字记录的更多操作" data-testid="transcript-more" className={transcriptIconButton}>
+          {copied ? <Check className="size-4" /> : <Ellipsis className="size-4" />}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem data-testid="transcript-copy" onSelect={() => void copy()}>
+          <Copy />
+          复制全文
+        </DropdownMenuItem>
+        <DropdownMenuItem data-testid="transcript-export-text" onSelect={() => void run(onError, () => Library.export(meetingId, "text"))}>
+          <FileText />
+          导出为纯文本
+        </DropdownMenuItem>
+        <DropdownMenuItem data-testid="transcript-export-srt" onSelect={() => void run(onError, () => Library.export(meetingId, "srt"))}>
+          <Captions />
+          导出为 SRT 字幕
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          data-testid="transcript-reidentify"
+          onSelect={() => void run(onError, () => Library.reidentify(meetingId, 0))}
+        >
+          <UserSearch />
+          重新识别说话人
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
