@@ -22,7 +22,7 @@ import { segmentsOf } from "@/lib/segments";
 import type { Group } from "@/lib/transcript";
 import { cn } from "@/lib/utils";
 
-const rates = [1, 1.25, 1.5, 2];
+const rates = [5, 3, 2, 1.5, 1.25, 1];
 const collapsedKey = "meetkeep:video-collapsed";
 const speakers = defineTextTrack({ kind: "metadata", label: "speakers" });
 
