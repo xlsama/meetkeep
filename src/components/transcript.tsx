@@ -15,7 +15,7 @@ type Variant = "main" | "panel";
 const styles = {
   main: {
     gap: 20,
-    paddingStart: 28,
+    paddingStart: 16,
     inset: "pr-10 pl-8",
     row: "gap-3",
     avatar: "size-[23px] text-micro",
@@ -109,8 +109,12 @@ export function Transcript({
   return (
     <div
       ref={scrollRef}
-      data-testid="transcript"
-      className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain", className)}
+      data-testid="transcript-lines"
+      className={cn(
+        "min-h-0 flex-1 overflow-y-auto overscroll-contain",
+        variant === "main" && "[mask-image:linear-gradient(to_bottom,transparent,black_20px)]",
+        className,
+      )}
     >
       <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
         {virtualizer.getVirtualItems().map((item) => {

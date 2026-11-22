@@ -59,7 +59,7 @@ export function TranscriptHeader({ search, menu }: { search: TranscriptSearch; m
   }, [show]);
 
   return (
-    <div className="flex h-11 shrink-0 items-center gap-1 border-b border-divider pr-3 pl-7" data-testid="transcript-header">
+    <div className="flex h-11 shrink-0 items-center gap-1 pr-3 pl-7" data-testid="transcript-header">
       {open ? (
         <>
           <label className="-ml-2.5 flex h-7 min-w-0 flex-1 items-center gap-2 rounded-[8px] bg-secondary pr-1 pl-2.5">
