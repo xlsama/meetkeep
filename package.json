@@ -15,9 +15,9 @@
     "@dnd-kit/react": "^0.5.3",
     "@excalidraw/excalidraw": "0.18.1",
     "@tanstack/react-form": "^1.33.5",
-    "@tanstack/react-query": "^5.108.2",
+    "@tanstack/react-query": "^5.108.3",
     "@tanstack/react-router": "^1.170.46",
-    "@tanstack/react-virtual": "^3.14.26",
+    "@tanstack/react-virtual": "^3.14.28",
     "@videojs/core": "10.6.0",
     "@videojs/react": "10.6.0",
     "class-variance-authority": "^0.7.1",
@@ -45,9 +45,9 @@
     "mygo-cli": "^0.10.0",
     "oxc-transform-react": "^0.158.0",
     "oxlint": "^1.94.0",
-    "oxlint-tsgolint": "^7.0.2007",
+    "oxlint-tsgolint": "^7.0.2008",
     "tailwindcss": "^4.3.5",
-    "typescript": "^7",
-    "vite": "^8"
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
   }
 }
