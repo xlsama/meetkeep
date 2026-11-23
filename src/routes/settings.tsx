@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Segmented, SegmentedItem } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
-import { Config, type Settings } from "@/mygo";
+import { Config, type LLMProvider, type Settings } from "@/mygo";
 import { copyText } from "@/lib/clipboard";
 import { cliQuery, errorMessage, queryClient, settingsPathQuery, settingsQuery } from "@/lib/queries";
 import { sections, type SectionId } from "@/lib/settings-sections";
@@ -28,10 +28,25 @@ const address = z
   .trim()
   .refine((value) => value === "" || /^https?:\/\/\S+$/.test(value), "地址要以 http:// 或 https:// 开头");
 
+const service = z.object({ key: z.string().trim(), model: z.string().trim() });
+
+const providers: { id: LLMProvider; label: string }[] = [
+  { id: "anthropic", label: "Claude" },
+  { id: "deepseek", label: "DeepSeek" },
+  { id: "openrouter", label: "OpenRouter" },
+  { id: "custom", label: "自定义" },
+];
+
 const schema = z.object({
   general: z.object({ openAtLogin: z.boolean(), menuBar: z.boolean() }),
   asr: z.object({ endpoint: address, key: z.string().trim(), hotwords: z.array(z.string()), polish: z.boolean() }),
-  llm: z.object({ baseUrl: address, key: z.string().trim(), model: z.string().trim() }),
+  llm: z.object({
+    provider: z.enum(["anthropic", "deepseek", "openrouter", "custom"]),
+    anthropic: service,
+    deepseek: service,
+    openrouter: service,
+    custom: service.extend({ baseUrl: address }),
+  }),
   recording: z.object({
     directory: z.string(),
     detectMeetings: z.boolean(),
@@ -79,7 +94,8 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
       const name = `${group}.${field}`;
       const value = next[group][field];
       const current = form.getFieldValue(name as never) as unknown;
-      if (editing.current === name || JSON.stringify(current) === JSON.stringify(value)) return;
+      if (editing.current === name || editing.current?.startsWith(`${name}.`)) return;
+      if (JSON.stringify(current) === JSON.stringify(value)) return;
       form.setFieldValue(name as never, value as never, { dontUpdateMeta: true });
     };
     sync("general", "openAtLogin");
@@ -88,9 +104,11 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
     sync("asr", "key");
     sync("asr", "hotwords");
     sync("asr", "polish");
-    sync("llm", "baseUrl");
-    sync("llm", "key");
-    sync("llm", "model");
+    sync("llm", "provider");
+    sync("llm", "anthropic");
+    sync("llm", "deepseek");
+    sync("llm", "openrouter");
+    sync("llm", "custom");
     sync("recording", "directory");
     sync("recording", "detectMeetings");
     sync("recording", "showPanel");
@@ -261,28 +279,52 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
       )}
       {section === "notes" && (
       <Group>
-        <form.Field name="llm.baseUrl" validators={{ onBlur: address }}>
+        <form.Field name="llm.provider">
           {(field) => (
-            <Row label="服务地址" error={field.state.meta.errors[0]?.message}>
-              <Input
-                aria-label="模型服务地址"
-                data-testid="settings-llm-base-url"
-                placeholder="https://api.deepseek.com"
-                aria-invalid={field.state.meta.errors.length > 0}
-                className="w-[360px] font-mono text-label"
+            <Row label="服务">
+              <Segmented
+                aria-label="模型服务"
                 value={field.state.value}
-                onChange={(event) => field.handleChange(event.target.value)}
-                {...textProps(field.name, field.handleBlur)}
-              />
+                onValueChange={(value) => {
+                  const next = providers.find((p) => p.id === value);
+                  if (!next) return;
+                  field.handleChange(next.id);
+                  void save();
+                }}
+              >
+                {providers.map((p) => (
+                  <SegmentedItem key={p.id} value={p.id} data-testid={`settings-llm-provider-${p.id}`}>
+                    {p.label}
+                  </SegmentedItem>
+                ))}
+              </Segmented>
             </Row>
           )}
         </form.Field>
-        <form.Field name="llm.key">
+        {llm.provider === "custom" && (
+          <form.Field name="llm.custom.baseUrl" validators={{ onBlur: address }}>
+            {(field) => (
+              <Row label="服务地址" error={field.state.meta.errors[0]?.message}>
+                <Input
+                  aria-label="模型服务地址"
+                  data-testid="settings-llm-base-url"
+                  placeholder="https://api.openai.com/v1"
+                  aria-invalid={field.state.meta.errors.length > 0}
+                  className="w-[360px] font-mono text-label"
+                  value={field.state.value}
+                  onChange={(event) => field.handleChange(event.target.value)}
+                  {...textProps(field.name, field.handleBlur)}
+                />
+              </Row>
+            )}
+          </form.Field>
+        )}
+        <form.Field key={`${llm.provider}.key`} name={`llm.${llm.provider}.key`}>
           {(field) => (
             <TestRow
               label="密钥"
               testId="settings-llm-test"
-              signature={JSON.stringify([llm.baseUrl, llm.key, llm.model])}
+              signature={JSON.stringify([llm.provider, llm[llm.provider]])}
               run={() => Config.testModel(llm)}
             >
               <Input
@@ -297,13 +339,12 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
             </TestRow>
           )}
         </form.Field>
-        <form.Field name="llm.model">
+        <form.Field key={`${llm.provider}.model`} name={`llm.${llm.provider}.model`}>
           {(field) => (
             <Row label="模型名">
               <Input
                 aria-label="模型名"
                 data-testid="settings-llm-model"
-                placeholder="deepseek-chat"
                 className="w-[360px] font-mono text-label"
                 value={field.state.value}
                 onChange={(event) => field.handleChange(event.target.value)}

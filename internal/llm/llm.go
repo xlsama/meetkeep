@@ -10,12 +10,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go/v2"
+	"github.com/anthropics/anthropic-sdk-go/v2/option"
+
+	"github.com/xlsama/meetkeep/internal/config"
 )
 
 var ErrNotConfigured = errors.New("纪要服务还没有配置")
@@ -45,19 +47,40 @@ func (c *Client) Used() Usage {
 	return c.used
 }
 
+// From returns a client of the provider the settings name.
+func From(s config.LLMSettings) (*Client, error) {
+	switch s.Provider {
+	case config.LLMAnthropic:
+		return NewClaude(s.Anthropic.Key, s.Anthropic.Model)
+	case config.LLMDeepSeek:
+		return New("https://api.deepseek.com", s.DeepSeek.Key, s.DeepSeek.Model)
+	case config.LLMOpenRouter:
+		return New("https://openrouter.ai/api/v1", s.OpenRouter.Key, s.OpenRouter.Model)
+	}
+	return New(s.Custom.BaseURL, s.Custom.Key, s.Custom.Model)
+}
+
+// New returns a client of a service that speaks OpenAI's chat completions.
 func New(baseURL, key, model string) (*Client, error) {
 	if baseURL == "" || key == "" || model == "" {
 		return nil, ErrNotConfigured
 	}
-	c := &Client{
+	return &Client{
 		BaseURL: strings.TrimRight(baseURL, "/"),
 		Key:     key,
 		Model:   model,
 		HTTP:    &http.Client{Timeout: 5 * time.Minute},
+	}, nil
+}
+
+// NewClaude returns a client of Anthropic's Messages API.
+func NewClaude(key, model string) (*Client, error) {
+	if key == "" || model == "" {
+		return nil, ErrNotConfigured
 	}
-	if address, err := url.Parse(c.BaseURL); err == nil && address.Hostname() == claudeHost {
-		c.claude = newClaude(c)
-	}
+	c := &Client{Key: key, Model: model, HTTP: &http.Client{Timeout: 5 * time.Minute}}
+	client := anthropic.NewClient(option.WithAPIKey(key), option.WithHTTPClient(c.HTTP))
+	c.claude = &client
 	return c, nil
 }
 

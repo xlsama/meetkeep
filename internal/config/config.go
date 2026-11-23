@@ -34,7 +34,32 @@ type ASRSettings struct {
 	Polish bool `json:"polish"`
 }
 
+type LLMProvider string
+
+const (
+	LLMAnthropic  LLMProvider = "anthropic"
+	LLMDeepSeek   LLMProvider = "deepseek"
+	LLMOpenRouter LLMProvider = "openrouter"
+	LLMCustom     LLMProvider = "custom"
+)
+
+// LLMSettings keeps a key and a model for every provider, and names the one
+// that writes the notes.
 type LLMSettings struct {
+	Provider   LLMProvider `json:"provider"`
+	Anthropic  LLMService  `json:"anthropic"`
+	DeepSeek   LLMService  `json:"deepseek"`
+	OpenRouter LLMService  `json:"openrouter"`
+	Custom     CustomLLM   `json:"custom"`
+}
+
+type LLMService struct {
+	Key   string `json:"key"`
+	Model string `json:"model"`
+}
+
+// CustomLLM is a service that speaks OpenAI's chat completions at BaseURL.
+type CustomLLM struct {
 	BaseURL string `json:"baseUrl"`
 	Key     string `json:"key"`
 	Model   string `json:"model"`
@@ -75,7 +100,12 @@ func defaults() Settings {
 	return Settings{
 		General: GeneralSettings{OpenAtLogin: true},
 		ASR:     ASRSettings{Hotwords: []string{}, Polish: true},
-		LLM:     LLMSettings{BaseURL: "https://api.deepseek.com", Model: "deepseek-flash"},
+		LLM: LLMSettings{
+			Provider:   LLMDeepSeek,
+			Anthropic:  LLMService{Model: "claude-sonnet-5-5"},
+			DeepSeek:   LLMService{Model: "deepseek-flash"},
+			OpenRouter: LLMService{Model: "deepseek/deepseek-v4.1-flash"},
+		},
 		Recording: RecordingSettings{
 			Directory:        "~/Documents/MeetKeep",
 			DetectMeetings:   true,

@@ -37,9 +37,7 @@ func (c *Config) Get() config.Settings { return c.app.current() }
 func (c *Config) Save(s config.Settings) error {
 	s.ASR.Endpoint = strings.TrimSpace(s.ASR.Endpoint)
 	s.ASR.Key = strings.TrimSpace(s.ASR.Key)
-	s.LLM.BaseURL = strings.TrimSpace(s.LLM.BaseURL)
-	s.LLM.Key = strings.TrimSpace(s.LLM.Key)
-	s.LLM.Model = strings.TrimSpace(s.LLM.Model)
+	trimLLM(&s.LLM)
 	if s.ASR.Hotwords == nil {
 		s.ASR.Hotwords = []string{}
 	}
@@ -64,9 +62,18 @@ func (c *Config) TestTranscription(ctx context.Context, s config.ASRSettings) er
 	return err
 }
 
+func trimLLM(s *config.LLMSettings) {
+	for _, service := range []*config.LLMService{&s.Anthropic, &s.DeepSeek, &s.OpenRouter} {
+		service.Key, service.Model = strings.TrimSpace(service.Key), strings.TrimSpace(service.Model)
+	}
+	s.Custom.BaseURL = strings.TrimSpace(s.Custom.BaseURL)
+	s.Custom.Key, s.Custom.Model = strings.TrimSpace(s.Custom.Key), strings.TrimSpace(s.Custom.Model)
+}
+
 // TestModel asks the model for a word with the settings.
 func (c *Config) TestModel(ctx context.Context, s config.LLMSettings) error {
-	client, err := llm.New(strings.TrimSpace(s.BaseURL), strings.TrimSpace(s.Key), strings.TrimSpace(s.Model))
+	trimLLM(&s)
+	client, err := llm.From(s)
 	if err != nil {
 		return err
 	}

@@ -14,7 +14,7 @@ bun run check && bun run test
 
 需要 macOS 14.2+、Go 1.27+、Bun、Xcode、Rust。现在只在 macOS 上开发和验证；Windows 的现状和待办记在 `docs/plan.md`。
 
-转写用 Azure 的 MAI-Transcribe-2，纪要和白板用 Claude（服务地址填 `https://api.anthropic.com`）或任意 OpenAI 兼容的模型，都在应用的设置页里填。设置存在 `~/.config/meetkeep/settings.json`，会议存在同目录的 `meetkeep.db`，录音默认存在 `~/Documents/MeetKeep`。
+转写用 Azure 的 MAI-Transcribe-2，纪要和白板的模型在 Claude、DeepSeek、OpenRouter 和自定义的 OpenAI 兼容服务之间切换，各存各的密钥和模型名，都在应用的设置页里填。设置存在 `~/.config/meetkeep/settings.json`，会议存在同目录的 `meetkeep.db`，录音默认存在 `~/Documents/MeetKeep`。
 
 每次处理的每一步都记在 `meetkeep.db` 的 `steps` 表里：排队、导入、转写、混音、分人、声纹、纪要各用了多久、内存峰值多少、失败原因和这一步的数据量。`meetkeep steps <会议 ID>` 按处理的次数列出来。
 

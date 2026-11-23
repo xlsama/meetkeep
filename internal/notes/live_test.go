@@ -38,7 +38,7 @@ func TestWithTheConfiguredModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	model, err := llm.New(settings.LLM.BaseURL, settings.LLM.Key, settings.LLM.Model)
+	model, err := llm.From(settings.LLM)
 	if err != nil {
 		t.Fatal(err)
 	}

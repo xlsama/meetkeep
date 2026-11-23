@@ -7,17 +7,9 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go/v2"
-	"github.com/anthropics/anthropic-sdk-go/v2/option"
 )
 
-const claudeHost = "api.anthropic.com"
-
 const claudeMaxTokens = 32000
-
-func newClaude(c *Client) *anthropic.Client {
-	client := anthropic.NewClient(option.WithAPIKey(c.Key), option.WithHTTPClient(c.HTTP))
-	return &client
-}
 
 func (c *Client) sendClaude(ctx context.Context, system, user string, maxTokens int, object bool) (string, error) {
 	if maxTokens == 0 {

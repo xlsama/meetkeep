@@ -53,8 +53,7 @@ type noteTaker struct {
 }
 
 func (n *noteTaker) model() (*llm.Client, error) {
-	s := n.app.current().LLM
-	return llm.New(s.BaseURL, s.Key, s.Model)
+	return llm.From(n.app.current().LLM)
 }
 
 func (n *noteTaker) lines(ctx context.Context, id string) ([]notes.Line, error) {

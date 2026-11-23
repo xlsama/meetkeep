@@ -46,6 +46,13 @@ export interface Chapter {
   atMs: number;
 }
 
+/** CustomLLM is a service that speaks OpenAI's chat completions at BaseURL. */
+export interface CustomLLM {
+  baseUrl: string;
+  key: string;
+  model: string;
+}
+
 export type EchoCancellation = "auto" | "on" | "off";
 
 /** Fault is something that went wrong while recording goes on. */
@@ -75,10 +82,23 @@ export interface Known {
   people: Person[];
 }
 
-export interface LLMSettings {
-  baseUrl: string;
+export type LLMProvider = "anthropic" | "deepseek" | "openrouter" | "custom";
+
+export interface LLMService {
   key: string;
   model: string;
+}
+
+/**
+ * LLMSettings keeps a key and a model for every provider, and names the one
+ * that writes the notes.
+ */
+export interface LLMSettings {
+  provider: LLMProvider;
+  anthropic: LLMService;
+  deepseek: LLMService;
+  openrouter: LLMService;
+  custom: CustomLLM;
 }
 
 /** Levels are how loud the tracks are, from 0 to 1. */
