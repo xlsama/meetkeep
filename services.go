@@ -72,8 +72,7 @@ func (c *Config) TestModel(ctx context.Context, s config.LLMSettings) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	_, err = client.Complete(ctx, []llm.Message{{Role: "user", Content: "ping"}}, 1)
-	return err
+	return client.Ping(ctx)
 }
 
 // Path returns where the settings file is, with ~ for the home directory.

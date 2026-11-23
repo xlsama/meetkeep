@@ -13,7 +13,7 @@
 | 框架 | MyGo：界面用 TypeScript + React（系统 webview），业务用 Go |
 | 原生层 | macOS 用 Swift，Windows 用 Rust；跨平台的计算（说话人识别、解码）用 Rust |
 | 转写 | 只用云端。默认 MAI-Transcribe-2 批量接口，本地切句后逐句送，不用流式。做成可替换的接口 |
-| 纪要与白板的模型 | 任意 OpenAI 兼容服务，设置项是服务地址、密钥、模型名三项，默认 DeepSeek |
+| 纪要与白板的模型 | Anthropic 的 Messages API 或任意 OpenAI 兼容服务，按服务地址区分，设置项是服务地址、密钥、模型名三项，默认 DeepSeek |
 | 配置 | 存 `~/.config/meetkeep/settings.json`，密钥明文写在里面，不用钥匙串；文件权限 0600 |
 | 会中说话人 | 双轨区分：麦克风是「我」，电脑里的声音是「对方」 |
 | 会后说话人 | 本地识别（`modules/speech`，Rust），不用云端的。线下会议同样适用 |

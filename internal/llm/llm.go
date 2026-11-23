@@ -1,4 +1,5 @@
-// Package llm talks to a service that speaks OpenAI's chat completions.
+// Package llm talks to Anthropic's Messages API, or to a service that speaks
+// OpenAI's chat completions.
 package llm
 
 import (
@@ -9,9 +10,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/anthropics/anthropic-sdk-go/v2"
 )
 
 var ErrNotConfigured = errors.New("纪要服务还没有配置")
@@ -21,6 +25,8 @@ type Client struct {
 	Key     string
 	Model   string
 	HTTP    *http.Client
+
+	claude *anthropic.Client
 
 	mu   sync.Mutex
 	used Usage
@@ -43,12 +49,16 @@ func New(baseURL, key, model string) (*Client, error) {
 	if baseURL == "" || key == "" || model == "" {
 		return nil, ErrNotConfigured
 	}
-	return &Client{
+	c := &Client{
 		BaseURL: strings.TrimRight(baseURL, "/"),
 		Key:     key,
 		Model:   model,
 		HTTP:    &http.Client{Timeout: 5 * time.Minute},
-	}, nil
+	}
+	if address, err := url.Parse(c.BaseURL); err == nil && address.Hostname() == claudeHost {
+		c.claude = newClaude(c)
+	}
+	return c, nil
 }
 
 type Message struct {
@@ -68,14 +78,23 @@ type format struct {
 	Type string `json:"type"`
 }
 
-// Complete returns the model's answer to messages.
-func (c *Client) Complete(ctx context.Context, messages []Message, maxTokens int) (string, error) {
-	return c.send(ctx, request{Model: c.Model, Messages: messages, MaxTokens: maxTokens})
+// Ping asks the model for a word, which tells whether the settings work.
+func (c *Client) Ping(ctx context.Context) error {
+	var err error
+	if c.claude != nil {
+		_, err = c.sendClaude(ctx, "", "ping", 1, false)
+	} else {
+		_, err = c.send(ctx, request{Model: c.Model, Messages: []Message{{Role: "user", Content: "ping"}}, MaxTokens: 1})
+	}
+	return err
 }
 
 // CompleteJSON returns the model's answer to user under the instructions of
 // system, which ask for a JSON object.
 func (c *Client) CompleteJSON(ctx context.Context, system, user string) (string, error) {
+	if c.claude != nil {
+		return c.sendClaude(ctx, system, user, 0, true)
+	}
 	temperature := 0.2
 	return c.send(ctx, request{
 		Model:          c.Model,
