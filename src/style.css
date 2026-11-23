@@ -50,6 +50,7 @@
   --color-meter: #d9d9d9;
   --color-grip: #cfcfcf;
   --color-edge: #dcdcdc;
+  --color-drag: #3b82f6;
   --color-them: #0284c7;
   --color-them-soft: #7cc4ec;
   --color-them-2: #7c3aed;
@@ -233,20 +234,14 @@
   position: relative;
   width: 8px;
   outline: none;
+  cursor: col-resize;
 }
-[data-separator]::after {
+[data-separator]:focus-visible::after {
   content: "";
   position: absolute;
-  inset: 12px 2.5px;
+  inset: 12px 3px;
   border-radius: 2px;
-  background: var(--color-faint);
-  opacity: 0;
-  transition: opacity 150ms;
-}
-[data-separator]:hover::after,
-[data-separator]:focus-visible::after,
-[data-separator="active"]::after {
-  opacity: 1;
+  background: var(--color-drag);
 }
 
 @utility drag {

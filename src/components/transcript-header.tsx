@@ -2,6 +2,7 @@ import { ChevronDown, ChevronUp, Search } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Line } from "@/lib/transcript";
 import { cn } from "@/lib/utils";
+import { PaneGrip, usePaneHandle, usePaneMovable } from "@/components/workspace";
 
 export function useTranscriptSearch(lines: Line[]) {
   const [open, setOpen] = useState(false);
@@ -45,6 +46,8 @@ const iconButton =
 
 export function TranscriptHeader({ search, menu }: { search: TranscriptSearch; menu?: ReactNode }) {
   const input = useRef<HTMLInputElement>(null);
+  const handle = usePaneHandle();
+  const movable = usePaneMovable();
   const { open, show } = search;
 
   useEffect(() => {
@@ -59,7 +62,12 @@ export function TranscriptHeader({ search, menu }: { search: TranscriptSearch; m
   }, [show]);
 
   return (
-    <div className="flex h-11 shrink-0 items-center gap-1 pr-3 pl-7" data-testid="transcript-header">
+    <div
+      ref={handle}
+      className={cn("group/handle relative flex h-11 shrink-0 items-center gap-1 pr-3 pl-7", movable && "active:cursor-grabbing")}
+      data-testid="transcript-header"
+    >
+      <PaneGrip />
       {open ? (
         <>
           <label className="-ml-2.5 flex h-7 min-w-0 flex-1 items-center gap-2 rounded-[8px] bg-secondary pr-1 pl-2.5">

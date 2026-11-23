@@ -1,20 +1,82 @@
-import { DragDropProvider, useDraggable, useDroppable } from "@dnd-kit/react";
-import { GripHorizontal } from "lucide-react";
-import type { ReactNode } from "react";
+import { Feedback, PointerActivationConstraints } from "@dnd-kit/dom";
+import { DragDropProvider, KeyboardSensor, PointerSensor, useDraggable } from "@dnd-kit/react";
+import { ArrowLeftRight, Move } from "lucide-react";
+import { AnimatePresence, motion, useMotionValue } from "motion/react";
+import { createContext, use, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
-import { cn } from "@/lib/utils";
 import { useWorkspace, type CardId } from "@/lib/workspace";
+
+const labels: Record<CardId, string> = { transcript: "文字稿", notes: "纪要" };
+const controls = "button, a, input, textarea, select, label, [role=tab], [contenteditable=true]";
+const sensors = [
+  PointerSensor.configure({
+    activationConstraints: () => [new PointerActivationConstraints.Distance({ value: 4 })],
+    preventActivation: (event) => event.target instanceof Element && event.target.closest(controls) !== null,
+  }),
+  KeyboardSensor,
+];
+const still = [Feedback.configure({ feedback: "none" })];
+
+type Handle = (element: Element | null) => void;
+
+const HandleContext = createContext<Handle | null>(null);
+
+export function usePaneHandle() {
+  return use(HandleContext) ?? undefined;
+}
+
+export function usePaneMovable() {
+  return use(HandleContext) !== null;
+}
+
+export function PaneGrip() {
+  if (!usePaneMovable()) return null;
+  return (
+    <Move
+      aria-hidden
+      className="pointer-events-none absolute top-1/2 left-[7px] size-3.5 -translate-y-1/2 scale-75 text-placeholder opacity-0 transition-[opacity,scale] duration-150 ease-out group-hover/handle:scale-100 group-hover/handle:opacity-100 group-has-[button:hover,input:hover]/handle:opacity-0"
+    />
+  );
+}
+
+function cardOf(value: unknown): CardId | null {
+  return value === "transcript" || value === "notes" ? value : null;
+}
+
+function paneAt(point: { x: number; y: number }) {
+  return cardOf(document.elementFromPoint(point.x, point.y)?.closest<HTMLElement>("[data-pane]")?.dataset.pane);
+}
 
 export function Workspace({ cards }: { cards: Record<CardId, ReactNode> }) {
   const [first, second] = useWorkspace((s) => s.order);
   const swap = useWorkspace((s) => s.swap);
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({ id: "meeting-cards", storage: localStorage });
+  const [dragging, setDragging] = useState<CardId | null>(null);
+  const [over, setOver] = useState<CardId | null>(null);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
 
   return (
     <DragDropProvider
+      sensors={sensors}
+      onDragStart={(event) => {
+        const { current } = event.operation.position;
+        x.set(current.x);
+        y.set(current.y);
+        setDragging(cardOf(event.operation.source?.data.card));
+      }}
+      onDragMove={(event) => {
+        const point = event.to ?? event.operation.position.current;
+        x.set(point.x);
+        y.set(point.y);
+        setOver(paneAt(point));
+      }}
       onDragEnd={(event) => {
-        const { source, target } = event.operation;
-        if (!event.canceled && source && target && source.data.card !== target.id) swap();
+        const target = paneAt(event.operation.position.current);
+        setDragging(null);
+        setOver(null);
+        if (!event.canceled && dragging && target && target !== dragging) swap();
       }}
     >
       <Group
@@ -24,43 +86,95 @@ export function Workspace({ cards }: { cards: Record<CardId, ReactNode> }) {
         className="min-h-0 flex-1"
       >
         <Panel key={first} id={first} minSize={320} defaultSize="48.7%">
-          <WorkspaceCard id={first}>{cards[first]}</WorkspaceCard>
+          <WorkspaceCard id={first} slot={0} dragging={dragging} over={over}>
+            {cards[first]}
+          </WorkspaceCard>
         </Panel>
         <Separator key="separator" />
         <Panel key={second} id={second} minSize={320}>
-          <WorkspaceCard id={second}>{cards[second]}</WorkspaceCard>
+          <WorkspaceCard id={second} slot={1} dragging={dragging} over={over}>
+            {cards[second]}
+          </WorkspaceCard>
         </Panel>
       </Group>
+      {createPortal(
+        <AnimatePresence>
+          {dragging && (
+            <motion.div
+              key="chip"
+              data-testid="card-drag-chip"
+              style={{ x, y }}
+              initial={{ opacity: 0, scale: 0.85 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.85 }}
+              transition={{ duration: 0.14, ease: "easeOut" }}
+              className="pointer-events-none fixed top-3 left-3 z-[70] inline-flex h-8 items-center gap-1.5 rounded-full bg-primary pr-3 pl-2.5 text-ui font-medium text-primary-foreground shadow-[0_8px_24px_rgba(0,0,0,0.22)]"
+            >
+              <Move className="size-3.5" />
+              {labels[dragging]}
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </DragDropProvider>
   );
 }
 
-function WorkspaceCard({ id, children }: { id: CardId; children: ReactNode }) {
-  const { ref: droppable, isDropTarget } = useDroppable({ id });
-  const { ref: draggable, isDragSource } = useDraggable({ id: `grip-${id}`, data: { card: id } });
+function WorkspaceCard({
+  id,
+  slot,
+  dragging,
+  over,
+  children,
+}: {
+  id: CardId;
+  slot: number;
+  dragging: CardId | null;
+  over: CardId | null;
+  children: ReactNode;
+}) {
+  const element = useRef<HTMLDivElement>(null);
+  const { handleRef } = useDraggable({ id: `pane-${id}`, data: { card: id }, plugins: still, element });
+  const source = dragging === id;
+  const target = over === id && dragging !== null && !source;
 
   return (
-    <div
-      ref={droppable}
+    <motion.div
+      ref={element}
+      layout="position"
+      layoutDependency={slot}
+      animate={{ opacity: source ? 0.5 : 1, scale: source ? 0.985 : 1 }}
+      transition={{
+        layout: { type: "spring", duration: 0.5, bounce: 0.15 },
+        default: { duration: 0.15, ease: "easeOut" },
+      }}
       data-testid={`card-${id}`}
-      className={cn(
-        "group/card card relative flex h-full min-w-0 flex-col overflow-hidden transition-[opacity,box-shadow]",
-        isDragSource && "opacity-60",
-        isDropTarget && !isDragSource && "shadow-[inset_0_0_0_2px_var(--color-foreground)]",
-      )}
+      data-pane={id}
+      className="card relative flex h-full min-w-0 flex-col overflow-hidden"
     >
-      <div className="pointer-events-none absolute inset-x-0 top-1 z-10 flex justify-center">
-        <button
-          ref={draggable}
-          type="button"
-          aria-label="拖动换位置"
-          data-testid={`card-grip-${id}`}
-          className="pointer-events-auto inline-flex h-3.5 w-9 cursor-grab items-center justify-center rounded-full text-faint opacity-0 transition-opacity outline-none group-hover/card:opacity-100 hover:bg-hover hover:text-muted-foreground focus-visible:opacity-100 active:cursor-grabbing"
-        >
-          <GripHorizontal className="size-3.5" />
-        </button>
-      </div>
-      {children}
-    </div>
+      <HandleContext value={handleRef}>{children}</HandleContext>
+      <AnimatePresence>
+        {target && (
+          <motion.div
+            key="target"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.12, ease: "easeOut" }}
+            className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[12px] bg-drag/[0.06] shadow-[inset_0_0_0_2px_var(--color-drag)]"
+          >
+            <motion.span
+              initial={{ scale: 0.6 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", duration: 0.3, bounce: 0.3 }}
+              className="inline-flex size-11 items-center justify-center rounded-full bg-background text-drag shadow-[0_6px_20px_rgba(0,0,0,0.12),0_0_0_0.5px_rgba(0,0,0,0.08)]"
+            >
+              <ArrowLeftRight className="size-5" />
+            </motion.span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }

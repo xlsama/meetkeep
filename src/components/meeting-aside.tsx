@@ -5,6 +5,8 @@ import { NotesDoc } from "@/components/notes-doc";
 import { SpeakersPane } from "@/components/speakers-pane";
 import { TimelinePane } from "@/components/timeline-pane";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
+import { PaneGrip, usePaneHandle, usePaneMovable } from "@/components/workspace";
 import type { Meeting } from "@/mygo";
 import { copyText } from "@/lib/clipboard";
 import { clock } from "@/lib/format";
@@ -43,6 +45,8 @@ export function MeetingAside({
   const chapters = (!live && notes?.final && notes.chapters) || [];
   const withTimeline = chapters.length > 0;
   const shown = (tab === "speakers" && !withSpeakers) || (tab === "timeline" && !withTimeline) ? "summary" : tab;
+  const handle = usePaneHandle();
+  const movable = usePaneMovable();
   const copy = async () => {
     if (!state || !notes) return;
     const doc = stateDoc(state);
@@ -65,7 +69,11 @@ export function MeetingAside({
         onValueChange={(value) => onTabChange(asideTabs.find((item) => item === value) ?? "summary")}
         className="flex-1"
       >
-        <TabsList className="h-11 gap-[22px] border-divider px-7">
+        <TabsList
+          ref={handle}
+          className={cn("group/handle relative h-11 gap-[22px] border-divider px-7", movable && "active:cursor-grabbing")}
+        >
+          <PaneGrip />
           <TabsTrigger value="summary" data-testid="tab-summary" className="text-row">
             纪要
           </TabsTrigger>
