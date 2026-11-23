@@ -282,22 +282,34 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
         <form.Field name="llm.provider">
           {(field) => (
             <Row label="服务">
-              <Segmented
-                aria-label="模型服务"
-                value={field.state.value}
-                onValueChange={(value) => {
-                  const next = providers.find((p) => p.id === value);
-                  if (!next) return;
-                  field.handleChange(next.id);
-                  void save();
-                }}
-              >
-                {providers.map((p) => (
-                  <SegmentedItem key={p.id} value={p.id} data-testid={`settings-llm-provider-${p.id}`}>
-                    {p.label}
-                  </SegmentedItem>
-                ))}
-              </Segmented>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="模型服务"
+                    data-testid="settings-llm-provider"
+                    className="flex h-8 items-center gap-2 rounded-md border border-input bg-background pr-2.5 pl-3 text-ui text-foreground outline-none transition-colors hover:bg-muted focus-visible:border-border-strong focus-visible:ring-[3px] focus-visible:ring-black/5"
+                  >
+                    {providers.find((p) => p.id === field.state.value)?.label}
+                    <ChevronDown className="size-3.5 text-muted-foreground" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {providers.map((p) => (
+                    <DropdownMenuItem
+                      key={p.id}
+                      data-testid={`settings-llm-provider-${p.id}`}
+                      onSelect={() => {
+                        field.handleChange(p.id);
+                        void save();
+                      }}
+                    >
+                      <span className="flex-1">{p.label}</span>
+                      {p.id === field.state.value && <Check />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </Row>
           )}
         </form.Field>
@@ -593,12 +605,7 @@ function TestRow({
     <Row
       label={label}
       note={
-        shown.kind === "ok" ? (
-          <span data-testid={`${testId}-ok`} className="inline-flex items-center gap-[5px] text-label text-success-foreground">
-            <span aria-hidden className="size-1.5 rounded-full bg-success" />
-            可用
-          </span>
-        ) : shown.kind === "error" ? (
+        shown.kind === "error" ? (
           <span
             data-testid={`${testId}-error`}
             data-selectable
@@ -610,6 +617,15 @@ function TestRow({
         ) : undefined
       }
     >
+      {shown.kind === "ok" && (
+        <span
+          data-testid={`${testId}-ok`}
+          className="inline-flex shrink-0 items-center gap-[5px] text-label text-success-foreground"
+        >
+          <span aria-hidden className="size-1.5 rounded-full bg-success" />
+          可用
+        </span>
+      )}
       {children}
       <Button
         variant="outline"
