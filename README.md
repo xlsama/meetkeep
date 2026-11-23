@@ -24,7 +24,7 @@ bun run release
 
 仓库里配了 `MACOS_CERTIFICATE`、`MACOS_CERTIFICATE_PASSWORD`、`MACOS_SIGNING_IDENTITY` 这几个 secret 时，macOS 的包用 Developer ID 签名；再配 `APPLE_ID`、`APPLE_TEAM_ID`、`APPLE_APP_PASSWORD` 就同时公证。没配时是 ad-hoc 签名，别的 Mac 上会被 Gatekeeper 拦。Windows 的包没有签名，SmartScreen 会提示。
 
-转写用 Azure 的 MAI-Transcribe-2，或自定义的 OpenAI 兼容服务（`/audio/transcriptions`，自建的也行）；纪要和白板的模型在 Claude、DeepSeek、OpenRouter 和自定义的 OpenAI 兼容服务之间切换，各存各的密钥和模型名，都在应用的设置页里填。自定义服务可以加多个，各起一个名字，在「服务」下拉里和内置的排在一起。设置存在 `~/.config/meetkeep/settings.json`，会议存在同目录的 `meetkeep.db`，录音默认存在 `~/Documents/MeetKeep`。
+转写用 Azure 的 MAI-Transcribe-2、DeepSeek 的语音识别，或自定义的 OpenAI 兼容服务（`/audio/transcriptions`，自建的也行）；纪要和白板的模型在 Claude、DeepSeek、OpenRouter 和自定义的 OpenAI 兼容服务之间切换，各存各的密钥和模型名，都在应用的设置页里填。自定义服务可以加多个，各起一个名字，在「服务」下拉里和内置的排在一起。设置存在 `~/.config/meetkeep/settings.json`，会议存在同目录的 `meetkeep.db`，录音默认存在 `~/Documents/MeetKeep`。
 
 每次处理的每一步都记在 `meetkeep.db` 的 `steps` 表里：排队、导入、转写、混音、分人、声纹、纪要各用了多久、内存峰值多少、失败原因和这一步的数据量。`meetkeep steps <会议 ID>` 按处理的次数列出来。
 
@@ -70,7 +70,7 @@ meetkeep status <会议 ID>                   # 整理到哪一步了
 
 停止录制后（或导入一个音视频文件后）在后台整理：每条轨整段重新送去转写，拿到按句子切分、带时间的定稿（一口气说下来、服务没切开的长段，按句末标点和逐字时间再切成句子）；多人说话的那条轨在本地做说话人识别；两条轨混成一个文件供回放。失败时保留会中转写的文字稿，可以重试。
 
-自定义的转写服务只要求返回文字，不要求时间戳。录音在本地用 pyannote 找出语音（离麦克风远的人 silero-vad 听不到），在停顿和换人的地方切成最长 20 秒的段，8 段同时送去转写；每段的时间取切点，段里有几句就按字数分摊。热词作为 `prompt` 传给服务。
+DeepSeek 和自定义的转写服务只返回文字，没有时间戳。录音在本地用 pyannote 找出语音（离麦克风远的人 silero-vad 听不到），在停顿和换人的地方切成最长 20 秒的段，自定义服务 8 段、DeepSeek 16 段同时送去转写；每段的时间取切点，段里有几句就按字数分摊。热词作为 `prompt` 传给自定义服务；DeepSeek 的接口不收热词，听错的术语靠后面的润色纠正。
 
 ## 纪要和白板
 

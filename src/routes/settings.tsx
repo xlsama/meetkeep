@@ -46,14 +46,18 @@ const custom = z.object({
   model: z.string().trim(),
 });
 
-const transcribers: { id: ASRProvider; label: string }[] = [{ id: "mai", label: "MAI-Transcribe-2（Azure）" }];
+const transcribers: { id: ASRProvider; label: string }[] = [
+  { id: "mai", label: "MAI-Transcribe-2（Azure）" },
+  { id: "deepseek", label: "DeepSeek" },
+];
 
 const schema = z.object({
   general: z.object({ openAtLogin: z.boolean(), menuBar: z.boolean() }),
   asr: z.object({
-    provider: z.enum(["mai", "custom"]),
+    provider: z.enum(["mai", "deepseek", "custom"]),
     endpoint: address,
     key: z.string().trim(),
+    deepseek: z.object({ key: z.string().trim() }),
     service: z.string(),
     services: z.array(custom),
     hotwords: z.array(z.string()),
@@ -123,6 +127,7 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
     sync("asr", "provider");
     sync("asr", "endpoint");
     sync("asr", "key");
+    sync("asr", "deepseek");
     sync("asr", "service");
     sync("asr", "services");
     sync("asr", "hotwords");
@@ -275,6 +280,27 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
             onRemove={() => remove("asr", asrCustom.id)}
             test={(tried) => Config.testTranscription({ ...asr, service: tried.id, services: [tried] })}
           />
+        ) : asr.provider === "deepseek" ? (
+          <form.Field name="asr.deepseek.key">
+            {(field) => (
+              <TestRow
+                label="密钥"
+                testId="settings-asr-test"
+                signature={JSON.stringify(["deepseek", asr.deepseek.key])}
+                run={() => Config.testTranscription(asr)}
+              >
+                <Input
+                  type="password"
+                  aria-label="转写密钥"
+                  data-testid="settings-asr-key"
+                  className="w-[252px]"
+                  value={field.state.value}
+                  onChange={(event) => field.handleChange(event.target.value)}
+                  {...textProps(field.name, field.handleBlur)}
+                />
+              </TestRow>
+            )}
+          </form.Field>
         ) : (
           <>
             <form.Field name="asr.endpoint" validators={{ onBlur: address }}>

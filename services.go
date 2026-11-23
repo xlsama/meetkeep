@@ -65,6 +65,7 @@ func (c *Config) TestTranscription(ctx context.Context, s config.ASRSettings) er
 
 func trimASR(s *config.ASRSettings) {
 	s.Endpoint, s.Key = strings.TrimSpace(s.Endpoint), strings.TrimSpace(s.Key)
+	s.DeepSeek.Key = strings.TrimSpace(s.DeepSeek.Key)
 	s.Services = trimmed(s.Services)
 }
 

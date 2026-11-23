@@ -119,6 +119,27 @@ func TestOpenAICutsAFileWhereItIsQuietAndWhereTheSpeakerChanges(t *testing.T) {
 	}
 }
 
+func TestDeepSeekSendsAFileAndNothingElse(t *testing.T) {
+	server := service(t, func(r *http.Request, windows int) (int, string) {
+		if got := r.Header.Get("Authorization"); got != "Bearer sk-ds" || len(r.MultipartForm.Value) != 0 {
+			t.Errorf("authorized with %q, sent the fields %v", got, r.MultipartForm.Value)
+		}
+		return http.StatusOK, fmt.Sprintf(`{"request_id": "r", "text": "这一段有%d个窗。", "duration_ms": 2000}`, windows)
+	})
+	got, err := From(config.ASRSettings{Provider: config.ASRDeepSeek, DeepSeek: config.ASRService{Key: "sk-ds"}, Hotwords: []string{"函必达"}}, nil)
+	d, ok := got.(*DeepSeek)
+	if err != nil || !ok || d.URL != "https://api.deepseek.com/v1/tools/asr" {
+		t.Fatalf("got %+v (%v)", got, err)
+	}
+	d.URL = server.URL + "/v1/audio/transcriptions"
+	if text, err := d.Transcribe(context.Background(), make([]int16, 4*audio.Window)); err != nil || text != "这一段有4个窗。" {
+		t.Errorf("got %q (%v)", text, err)
+	}
+	if _, err := From(config.ASRSettings{Provider: config.ASRDeepSeek}, nil); err != ErrNotConfigured {
+		t.Errorf("DeepSeek without a key transcribes: %v", err)
+	}
+}
+
 func TestFromTakesTheServiceTheSettingsChoose(t *testing.T) {
 	settings := config.ASRSettings{
 		Provider: config.ASRCustom,

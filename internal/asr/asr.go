@@ -52,7 +52,10 @@ var ErrNotConfigured = errors.New("转写服务还没有配置")
 // From returns what transcribes with the settings. files reads the files a
 // service that times nothing is given in pieces.
 func From(s config.ASRSettings, files Files) (Transcriber, error) {
-	if s.Provider == config.ASRCustom {
+	switch s.Provider {
+	case config.ASRDeepSeek:
+		return NewDeepSeek(s.DeepSeek.Key, files)
+	case config.ASRCustom:
 		chosen := config.Chosen(s.Services, s.Service)
 		return NewOpenAI(chosen.BaseURL, chosen.Key, chosen.Model, s.Hotwords, files)
 	}

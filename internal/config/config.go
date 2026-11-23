@@ -29,8 +29,9 @@ type GeneralSettings struct {
 type ASRProvider string
 
 const (
-	ASRMAI    ASRProvider = "mai"
-	ASRCustom ASRProvider = "custom"
+	ASRMAI      ASRProvider = "mai"
+	ASRDeepSeek ASRProvider = "deepseek"
+	ASRCustom   ASRProvider = "custom"
 )
 
 type ASRSettings struct {
@@ -39,6 +40,8 @@ type ASRSettings struct {
 	// Endpoint and Key are those of MAI-Transcribe-2.
 	Endpoint string `json:"endpoint"`
 	Key      string `json:"key"`
+	// DeepSeek is the key of DeepSeek's speech recognition.
+	DeepSeek ASRService `json:"deepseek"`
 	// Service is the ID of the one of Services that transcribes when
 	// Provider is ASRCustom.
 	Service  string    `json:"service"`
@@ -47,6 +50,10 @@ type ASRSettings struct {
 	// Polish has the language model take the filler out of a transcript
 	// and set misheard names right.
 	Polish bool `json:"polish"`
+}
+
+type ASRService struct {
+	Key string `json:"key"`
 }
 
 // Service is a service of the user's own that speaks OpenAI's API at

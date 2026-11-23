@@ -51,8 +51,11 @@ func (r Recordings) Hear(ctx context.Context, path string) (speech.Hearing, erro
 func (r Recordings) Listen(path string) (speech.Audio, error) { return r.Engine.Listen(path) }
 
 const (
-	// parallel is how many utterances of a file are with the service at once.
+	// parallel is how many utterances of a file are with a service of the
+	// user's own at once, and busy how many are with DeepSeek, which takes
+	// 50 of an account.
 	parallel = 8
+	busy     = 16
 	// tail is how much silence follows an utterance sent to the service. One
 	// that hears speech as a stream waits for more where an utterance was
 	// cut, and leaves its last words out: the silence tells it the end.
@@ -74,6 +77,47 @@ func NewOpenAI(baseURL, key, model string, hotwords []string, files Files) (*Ope
 }
 
 func (o *OpenAI) Transcribe(ctx context.Context, pcm []int16) (string, error) {
+	fields := map[string]string{"model": o.Model, "response_format": "json"}
+	if len(o.Hotwords) > 0 {
+		fields["prompt"] = strings.Join(o.Hotwords, "、")
+	}
+	text, err := ask(ctx, o.Client, o.BaseURL+"/audio/transcriptions", o.Key, fields, pcm)
+	// Confucius ends what was cut off in the middle of a sentence with a bar.
+	return strings.TrimSpace(strings.TrimRight(text, "|")), err
+}
+
+func (o *OpenAI) TranscribeFile(ctx context.Context, path string) ([]Phrase, error) {
+	return pieces(ctx, o.Files, path, parallel, o.Transcribe)
+}
+
+// DeepSeek is DeepSeek's speech recognition. It gives text alone, of two
+// minutes at most, and takes no words to listen for: a file goes to it in
+// the pieces OpenAI's services get.
+type DeepSeek struct {
+	URL    string
+	Key    string
+	Files  Files
+	Client *http.Client
+}
+
+func NewDeepSeek(key string, files Files) (*DeepSeek, error) {
+	if key == "" {
+		return nil, ErrNotConfigured
+	}
+	return &DeepSeek{URL: "https://api.deepseek.com/v1/tools/asr", Key: key, Files: files, Client: &http.Client{}}, nil
+}
+
+func (d *DeepSeek) Transcribe(ctx context.Context, pcm []int16) (string, error) {
+	return ask(ctx, d.Client, d.URL, d.Key, nil, pcm)
+}
+
+func (d *DeepSeek) TranscribeFile(ctx context.Context, path string) ([]Phrase, error) {
+	return pieces(ctx, d.Files, path, busy, d.Transcribe)
+}
+
+// ask sends an utterance to url as a WAV file, with the fields, and returns
+// the text of the answer.
+func ask(ctx context.Context, client *http.Client, url, key string, fields map[string]string, pcm []int16) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
@@ -86,10 +130,6 @@ func (o *OpenAI) Transcribe(ctx context.Context, pcm []int16) (string, error) {
 	if _, err := file.Write(audio.EncodeWAV(append(slices.Clip(pcm), make([]int16, tail)...))); err != nil {
 		return "", err
 	}
-	fields := map[string]string{"model": o.Model, "response_format": "json"}
-	if len(o.Hotwords) > 0 {
-		fields["prompt"] = strings.Join(o.Hotwords, "、")
-	}
 	for name, value := range fields {
 		if err := form.WriteField(name, value); err != nil {
 			return "", err
@@ -99,15 +139,15 @@ func (o *OpenAI) Transcribe(ctx context.Context, pcm []int16) (string, error) {
 		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.BaseURL+"/audio/transcriptions", &body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &body)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Content-Type", form.FormDataContentType())
-	if o.Key != "" {
-		req.Header.Set("Authorization", "Bearer "+o.Key)
+	if key != "" {
+		req.Header.Set("Authorization", "Bearer "+key)
 	}
-	res, err := o.Client.Do(req)
+	res, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -125,16 +165,18 @@ func (o *OpenAI) Transcribe(ctx context.Context, pcm []int16) (string, error) {
 	if err := json.Unmarshal(answer, &parsed); err != nil {
 		return "", fmt.Errorf("转写服务的返回不是 JSON：%s", snippet(answer))
 	}
-	// Confucius ends what was cut off in the middle of a sentence with a bar.
-	return strings.Join(strings.Fields(strings.TrimRight(parsed.Text, "|")), " "), nil
+	return strings.Join(strings.Fields(parsed.Text), " "), nil
 }
 
-func (o *OpenAI) TranscribeFile(ctx context.Context, path string) ([]Phrase, error) {
-	heard, err := o.Files.Hear(ctx, path)
+// pieces cuts the file at path into utterances, at the pauses and where
+// another speaker starts to talk, has transcribe hear each, several at
+// once, and returns their sentences, said where the utterances were cut.
+func pieces(ctx context.Context, files Files, path string, several int, transcribe func(context.Context, []int16) (string, error)) ([]Phrase, error) {
+	heard, err := files.Hear(ctx, path)
 	if err != nil {
 		return nil, err
 	}
-	sound, err := o.Files.Listen(path)
+	sound, err := files.Listen(path)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +191,7 @@ func (o *OpenAI) TranscribeFile(ctx context.Context, path string) ([]Phrase, err
 		turns     = heard.Turns
 		said      []*[]Phrase
 		wait      sync.WaitGroup
-		slots     = make(chan struct{}, parallel)
+		slots     = make(chan struct{}, several)
 	)
 	send := func(events []audio.Event) {
 		for _, e := range events {
@@ -167,10 +209,10 @@ func (o *OpenAI) TranscribeFile(ctx context.Context, path string) ([]Phrase, err
 			go func() {
 				defer wait.Done()
 				defer func() { <-slots }()
-				text, err := o.Transcribe(ctx, e.PCM)
+				text, err := transcribe(ctx, e.PCM)
 				if err != nil && ctx.Err() == nil {
 					time.Sleep(time.Second)
-					text, err = o.Transcribe(ctx, e.PCM)
+					text, err = transcribe(ctx, e.PCM)
 				}
 				if err != nil {
 					cancel(err)

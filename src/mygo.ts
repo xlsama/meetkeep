@@ -4,7 +4,11 @@ import { bind, event, type Channel } from "mygo-runtime";
 
 // ---- Types ----
 
-export type ASRProvider = "mai" | "custom";
+export type ASRProvider = "mai" | "deepseek" | "custom";
+
+export interface ASRService {
+  key: string;
+}
 
 export interface ASRSettings {
   /** Provider names the service that transcribes. */
@@ -12,6 +16,8 @@ export interface ASRSettings {
   /** Endpoint and Key are those of MAI-Transcribe-2. */
   endpoint: string;
   key: string;
+  /** DeepSeek is the key of DeepSeek's speech recognition. */
+  deepseek: ASRService;
   /**
    * Service is the ID of the one of Services that transcribes when
    * Provider is ASRCustom.
