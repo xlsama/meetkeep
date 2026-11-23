@@ -23,7 +23,7 @@ export function Workspace({ cards }: { cards: Record<CardId, ReactNode> }) {
         onLayoutChanged={onLayoutChanged}
         className="min-h-0 flex-1"
       >
-        <Panel key={first} id={first} minSize={320} defaultSize="54%">
+        <Panel key={first} id={first} minSize={320} defaultSize="48.7%">
           <WorkspaceCard id={first}>{cards[first]}</WorkspaceCard>
         </Panel>
         <Separator key="separator" />

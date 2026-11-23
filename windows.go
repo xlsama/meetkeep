@@ -109,8 +109,8 @@ func (w *windows) openMain(route string) {
 	win := mygo.NewWindow(mygo.WindowOptions{
 		Title:                "MeetKeep",
 		URL:                  route,
-		Width:                1120,
-		Height:               740,
+		Width:                1253,
+		Height:               910,
 		MinWidth:             880,
 		MinHeight:            560,
 		BackgroundColor:      "#ececec",
