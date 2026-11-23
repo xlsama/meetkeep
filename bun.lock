@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "meetkeep-poc",
+      "name": "meetkeep",
       "dependencies": {
         "@dnd-kit/react": "^0.5.3",
         "@excalidraw/excalidraw": "0.18.1",
