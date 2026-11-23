@@ -82,6 +82,14 @@ func (c *Config) TestModel(ctx context.Context, s config.LLMSettings) error {
 	return client.Ping(ctx)
 }
 
+// Models lists the models the provider of the settings offers.
+func (c *Config) Models(ctx context.Context, s config.LLMSettings) ([]string, error) {
+	trimLLM(&s)
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	return llm.Models(ctx, s)
+}
+
 // Path returns where the settings file is, with ~ for the home directory.
 func (c *Config) Path() string { return config.Contract(config.Path()) }
 

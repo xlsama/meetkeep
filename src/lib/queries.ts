@@ -1,5 +1,5 @@
 import { QueryClient, queryOptions } from "@tanstack/react-query";
-import { Config, events, Library, People, Sources } from "@/mygo";
+import { Config, events, Library, People, Sources, type LLMSettings } from "@/mygo";
 import { applyProgress } from "@/lib/progress";
 
 export const queryClient = new QueryClient({
@@ -22,6 +22,13 @@ export const cliQuery = queryOptions({
   queryKey: ["cli"],
   queryFn: () => Config.cli(),
 });
+
+export const modelsQuery = (llm: LLMSettings) =>
+  queryOptions({
+    queryKey: ["models", llm.provider, llm[llm.provider].key, llm.provider === "custom" ? llm.custom.baseUrl : ""],
+    queryFn: () => Config.models(llm),
+    staleTime: 5 * 60_000,
+  });
 
 export const meetingsQuery = queryOptions({
   queryKey: ["meetings"],

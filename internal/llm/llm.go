@@ -53,9 +53,9 @@ func From(s config.LLMSettings) (*Client, error) {
 	case config.LLMAnthropic:
 		return NewClaude(s.Anthropic.Key, s.Anthropic.Model)
 	case config.LLMDeepSeek:
-		return New("https://api.deepseek.com", s.DeepSeek.Key, s.DeepSeek.Model)
+		return New(deepSeekURL, s.DeepSeek.Key, s.DeepSeek.Model)
 	case config.LLMOpenRouter:
-		return New("https://openrouter.ai/api/v1", s.OpenRouter.Key, s.OpenRouter.Model)
+		return New(openRouterURL, s.OpenRouter.Key, s.OpenRouter.Model)
 	}
 	return New(s.Custom.BaseURL, s.Custom.Key, s.Custom.Model)
 }

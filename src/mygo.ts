@@ -461,6 +461,8 @@ export const Config = {
    * it is, with ~ for the home directory.
    */
   installCLI: bind<[], string>("Config.InstallCLI", () => []),
+  /** Models lists the models the provider of the settings offers. */
+  models: bind<[LLMSettings], string[]>("Config.Models", (s: LLMSettings) => [s]),
   /** OpenFile opens the settings file in the editor of the system. */
   openFile: bind<[], void>("Config.OpenFile", () => []),
   /** Path returns where the settings file is, with ~ for the home directory. */

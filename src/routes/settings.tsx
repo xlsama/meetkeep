@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
 import { PageTitle } from "@/components/header-slot";
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,7 +19,7 @@ import { Segmented, SegmentedItem } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import { Config, type LLMProvider, type Settings } from "@/mygo";
 import { copyText } from "@/lib/clipboard";
-import { cliQuery, errorMessage, queryClient, settingsPathQuery, settingsQuery } from "@/lib/queries";
+import { cliQuery, errorMessage, modelsQuery, queryClient, settingsPathQuery, settingsQuery } from "@/lib/queries";
 import { sections, type SectionId } from "@/lib/settings-sections";
 import { useWindowTitle } from "@/lib/ui";
 import { cn } from "@/lib/utils";
@@ -147,6 +148,10 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
 
   const asr = useStore(form.store, (s) => s.values.asr);
   const llm = useStore(form.store, (s) => s.values.llm);
+  const models = useQuery({
+    ...modelsQuery({ ...settings.llm, provider: llm.provider }),
+    enabled: section === "notes",
+  });
 
   return (
     <>
@@ -354,12 +359,18 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
         <form.Field key={`${llm.provider}.model`} name={`llm.${llm.provider}.model`}>
           {(field) => (
             <Row label="模型">
-              <Input
+              <Combobox
                 aria-label="模型"
-                data-testid="settings-llm-model"
-                className="w-[360px] font-mono text-label"
+                testId="settings-llm-model"
+                className="w-[360px]"
                 value={field.state.value}
-                onChange={(event) => field.handleChange(event.target.value)}
+                options={models.data ?? []}
+                loading={models.isFetching}
+                onValueChange={field.handleChange}
+                onPick={(model) => {
+                  field.handleChange(model);
+                  void save();
+                }}
                 {...textProps(field.name, field.handleBlur)}
               />
             </Row>
