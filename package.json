@@ -27,7 +27,7 @@
     "clsx": "^2.1.1",
     "cn": "^0.5.2",
     "date-fns": "^4.4.0",
-    "lucide-react": "^1.77.0",
+    "lucide-react": "^1.78.0",
     "motion": "^14.14.0",
     "mygo-runtime": "^0.10.0",
     "prosekit": "^0.23.3",
