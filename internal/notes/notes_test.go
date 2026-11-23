@@ -104,13 +104,13 @@ func TestUpdateAppendsAndRewritesOnlyTheLastTopic(t *testing.T) {
 }
 
 func TestFinalize(t *testing.T) {
-	model := &scripted{answers: []string{`{"headline":"3 月 14 号上线","gist":"我和对方对齐上线前剩下的事","conclusions":[{"text":"3 月 14 号上线","seq":2},{"text":"没有出处的结论","seq":50}],"topics":[{"title":"上线日期","points":[{"text":"定在 3 月 14 号","seq":2}]}],
+	model := &scripted{answers: []string{`{"title":" 上线对齐会 ","headline":"3 月 14 号上线","gist":"我和对方对齐上线前剩下的事","conclusions":[{"text":"3 月 14 号上线","seq":2},{"text":"没有出处的结论","seq":50}],"topics":[{"title":"上线日期","points":[{"text":"定在 3 月 14 号","seq":2}]}],
 		"todos":[{"text":"排支付回归","owner":"我","due":"周五","seq":4}],"open":[{"text":"首页文案谁来写","seq":3},{"text":"编的","seq":40}]}`}}
 	notes, err := Finalize(context.Background(), model, "上线前对齐会", lines(4), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !notes.Final || notes.Headline != "3 月 14 号上线" || len(notes.Topics) != 1 || len(notes.Todos) != 1 || len(notes.Open) != 1 {
+	if !notes.Final || notes.Title != "上线对齐会" || notes.Headline != "3 月 14 号上线" || len(notes.Topics) != 1 || len(notes.Todos) != 1 || len(notes.Open) != 1 {
 		t.Fatalf("got %+v", notes)
 	}
 	if notes.Topics[0].Updating || notes.Open[0].AtMs != 20000 {

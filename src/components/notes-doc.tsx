@@ -1,8 +1,10 @@
 import { LoaderCircle } from "lucide-react";
 import { lazy, Suspense, useState } from "react";
+import { Avatar } from "@/components/avatar";
 import { Notice } from "@/components/notice";
-import type { NotesState } from "@/mygo";
+import type { NotesState, Speaker } from "@/mygo";
 import type { Jump } from "@/lib/notes";
+import { byTalk, speakerVoice } from "@/lib/speakers";
 import { cn } from "@/lib/utils";
 
 const NotesEditor = lazy(() => import("@/components/notes-editor/notes-editor"));
@@ -12,6 +14,8 @@ export function NotesDoc({
   state,
   live,
   pending = false,
+  speakers,
+  onSpeakers,
   onJump,
   onRetry,
 }: {
@@ -19,6 +23,8 @@ export function NotesDoc({
   state: NotesState | null;
   live: boolean;
   pending?: boolean;
+  speakers: Speaker[];
+  onSpeakers: () => void;
   onJump: (jump: Jump) => void;
   onRetry?: () => void;
 }) {
@@ -54,6 +60,22 @@ export function NotesDoc({
         </div>
       )}
       <Notice testId="notes-save-error" message={saveError} onDismiss={() => setSaveError(null)} className="mb-5" />
+      {speakers.length > 0 && (
+        <button
+          type="button"
+          aria-label="发言人"
+          data-testid="notes-speakers"
+          onClick={onSpeakers}
+          className="-mx-1.5 mb-3 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 rounded-md px-1.5 py-1 text-left text-label text-secondary-foreground transition-colors outline-none hover:bg-hover focus-visible:bg-hover"
+        >
+          {byTalk(speakers).map((speaker) => (
+            <span key={speaker.id} className="inline-flex items-center gap-1.5">
+              <Avatar name={speaker.name} tone={speakerVoice(speaker, speakers).avatar} className="size-[18px] text-micro" />
+              {speaker.name}
+            </span>
+          ))}
+        </button>
+      )}
       {state && (state.notes !== null || state.doc !== "") && (
         <Suspense fallback={null}>
           <NotesEditor

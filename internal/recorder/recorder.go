@@ -199,7 +199,8 @@ func (r *Recorder) Start(ctx context.Context, o Options) (store.Meeting, error) 
 		return store.Meeting{}, err
 	}
 	title := strings.TrimSpace(o.Title)
-	if title == "" {
+	named := title != ""
+	if !named {
 		title = now.Format("1月2日 15:04") + " 的会议"
 	}
 	if o.Apps == nil || !o.System {
@@ -213,7 +214,7 @@ func (r *Recorder) Start(ctx context.Context, o Options) (store.Meeting, error) 
 		r: r,
 		meeting: store.Meeting{
 			ID: id, Title: title, StartedAt: now.UnixMilli(), Status: store.Recording, Directory: directory,
-			Microphone: o.Microphone, System: o.System, Apps: o.Apps,
+			Microphone: o.Microphone, System: o.System, Apps: o.Apps, Named: named,
 		},
 		transcriber: transcriber,
 		slots:       make(chan struct{}, 4),
@@ -315,7 +316,7 @@ func (r *Recorder) Rename(id, title string) {
 	s.mu.Lock()
 	renamed := s.meeting.ID == id
 	if renamed {
-		s.meeting.Title = title
+		s.meeting.Title, s.meeting.Named = title, true
 	}
 	s.mu.Unlock()
 	if renamed {

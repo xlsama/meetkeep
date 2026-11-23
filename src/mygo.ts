@@ -117,6 +117,11 @@ export interface Meeting {
   video: string;
   /** Starred marks a meeting the user wants at hand. */
   starred: boolean;
+  /**
+   * Named tells that the user chose Title; until then the notes may give
+   * the meeting another.
+   */
+  named: boolean;
 }
 
 /** MeetingDetail is a meeting with what was said in it and by whom. */
@@ -141,9 +146,11 @@ export interface Notes {
    */
   final: boolean;
   /**
-   * Headline says in a sentence what the meeting settled, in final notes,
-   * Gist what it was about, and Conclusions what it agreed on.
+   * Title names the meeting, in final notes, Headline says in a sentence
+   * what it settled, Gist what it was about, and Conclusions what it
+   * agreed on.
    */
+  title: string;
   headline: string;
   gist: string;
   conclusions: Point[];

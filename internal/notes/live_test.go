@@ -45,7 +45,7 @@ func TestWithTheConfiguredModel(t *testing.T) {
 	ctx := context.Background()
 	show := func(what string, n Notes, began time.Time) {
 		var b strings.Builder
-		fmt.Fprintf(&b, "%s in %v, to %d s: %s\n", what, time.Since(began).Round(time.Millisecond), n.CoveredMs/1000, n.Headline)
+		fmt.Fprintf(&b, "%s in %v, to %d s: %s | %s\n", what, time.Since(began).Round(time.Millisecond), n.CoveredMs/1000, n.Title, n.Headline)
 		for _, topic := range n.Topics {
 			fmt.Fprintf(&b, "  %s %s (updating %v)\n", topic.ID, topic.Title, topic.Updating)
 			for _, p := range topic.Points {
@@ -78,12 +78,12 @@ func TestWithTheConfiguredModel(t *testing.T) {
 	}
 
 	began := time.Now()
-	final, err := Finalize(ctx, model, "上线前对齐会", meeting, nil)
+	final, err := Finalize(ctx, model, "3月14日 10:04 的会议", meeting, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	show("final notes", final, began)
-	if final.Headline == "" || len(final.Topics) < 2 || len(final.Todos) < 3 {
-		t.Errorf("the final notes hold a headline %q, %d topics and %d todos", final.Headline, len(final.Topics), len(final.Todos))
+	if final.Title == "" || strings.Contains(final.Title, "的会议") || final.Headline == "" || len(final.Topics) < 2 || len(final.Todos) < 3 {
+		t.Errorf("the final notes hold a title %q, a headline %q, %d topics and %d todos", final.Title, final.Headline, len(final.Topics), len(final.Todos))
 	}
 }

@@ -46,6 +46,10 @@ export function ordered(speakers: Speaker[]) {
   return [...speakers.filter((s) => !s.self), ...speakers.filter((s) => s.self)];
 }
 
+export function byTalk(speakers: Speaker[]) {
+  return speakers.toSorted((a, b) => b.durationMs - a.durationMs);
+}
+
 export function initial(name: string) {
   const numbered = /^说话人\s*(\d+)$/.exec(name.trim());
   return numbered?.[1] ?? Array.from(name.trim())[0] ?? "?";

@@ -71,11 +71,20 @@ func TestMeetingsAndUtterances(t *testing.T) {
 		t.Errorf("got %+v, want them in the order they were said", utterances)
 	}
 
+	if entitled, err := s.Entitle(ctx, "a", "上线对齐会"); err != nil || !entitled {
+		t.Fatalf("the notes could not title the meeting: %v, %v", entitled, err)
+	}
+	if m, _ := s.Meeting(ctx, "a"); m.Title != "上线对齐会" || m.Named {
+		t.Errorf("titled by its notes, the meeting is %+v", m)
+	}
 	if err := s.Rename(ctx, "a", "周会 · 复盘"); err != nil {
 		t.Fatal(err)
 	}
-	if m, _ := s.Meeting(ctx, "a"); m.Title != "周会 · 复盘" {
-		t.Errorf("renamed to %q", m.Title)
+	if entitled, err := s.Entitle(ctx, "a", "上线对齐会"); err != nil || entitled {
+		t.Errorf("the notes titled a meeting the user named: %v, %v", entitled, err)
+	}
+	if m, _ := s.Meeting(ctx, "a"); m.Title != "周会 · 复盘" || !m.Named {
+		t.Errorf("renamed to %+v", m)
 	}
 	if err := s.Delete(ctx, "a"); err != nil {
 		t.Fatal(err)

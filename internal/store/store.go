@@ -56,6 +56,9 @@ type Meeting struct {
 	Video string `json:"video"`
 	// Starred marks a meeting the user wants at hand.
 	Starred bool `json:"starred"`
+	// Named tells that the user chose Title; until then the notes may give
+	// the meeting another.
+	Named bool `json:"named"`
 }
 
 // Speaker is someone who talks in a meeting.
@@ -251,6 +254,9 @@ var migrations = [][]string{
 	{
 		`ALTER TABLE utterances ADD COLUMN marks TEXT NOT NULL DEFAULT ''`,
 	},
+	{
+		`ALTER TABLE meetings ADD COLUMN named INTEGER NOT NULL DEFAULT 0`,
+	},
 }
 
 type Store struct {
@@ -320,9 +326,9 @@ func (s *Store) CreateMeeting(ctx context.Context, m Meeting) error {
 		return err
 	}
 	_, err = s.db.Execute(ctx, `INSERT INTO meetings
-		(id, title, started_at, duration_ms, status, directory, microphone, system, apps, video)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		m.ID, m.Title, m.StartedAt, m.DurationMs, string(m.Status), m.Directory, m.Microphone, m.System, string(apps), m.Video)
+		(id, title, started_at, duration_ms, status, directory, microphone, system, apps, video, named)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		m.ID, m.Title, m.StartedAt, m.DurationMs, string(m.Status), m.Directory, m.Microphone, m.System, string(apps), m.Video, m.Named)
 	return err
 }
 
@@ -716,7 +722,14 @@ func (s *Store) Star(ctx context.Context, id string, starred bool) error {
 }
 
 func (s *Store) Rename(ctx context.Context, id, title string) error {
-	return s.changed(s.db.Execute(ctx, "UPDATE meetings SET title = ? WHERE id = ?", title, id))
+	return s.changed(s.db.Execute(ctx, "UPDATE meetings SET title = ?, named = 1 WHERE id = ?", title, id))
+}
+
+// Entitle gives a meeting the title its notes found for it, unless the user
+// named it, and tells whether it did.
+func (s *Store) Entitle(ctx context.Context, id, title string) (bool, error) {
+	result, err := s.db.Execute(ctx, "UPDATE meetings SET title = ? WHERE id = ? AND named = 0", title, id)
+	return err == nil && result.Changes > 0, err
 }
 
 func (s *Store) Delete(ctx context.Context, id string) error {
@@ -730,7 +743,7 @@ func (s *Store) changed(result sqlite.Result, err error) error {
 	return err
 }
 
-const meetingColumns = "id, title, started_at, duration_ms, status, directory, microphone, system, apps, error, audio, video, starred"
+const meetingColumns = "id, title, started_at, duration_ms, status, directory, microphone, system, apps, error, audio, video, starred, named"
 
 func (s *Store) Meetings(ctx context.Context) ([]Meeting, error) {
 	rows, err := s.db.Query(ctx, "SELECT "+meetingColumns+" FROM meetings ORDER BY started_at DESC")
@@ -819,6 +832,7 @@ func meeting(row []any) Meeting {
 		Audio:      row[10].(string),
 		Video:      row[11].(string),
 		Starred:    row[12].(int64) != 0,
+		Named:      row[13].(int64) != 0,
 	}
 	_ = json.Unmarshal([]byte(row[8].(string)), &m.Apps)
 	return m

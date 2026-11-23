@@ -11,6 +11,7 @@ import { notesToDoc, summaryMarkdown, type DocNode } from "@/lib/notes-doc";
 import { useQuery } from "@tanstack/react-query";
 import { useNotes, type Jump } from "@/lib/notes";
 import { meetingQuery } from "@/lib/queries";
+import { byTalk } from "@/lib/speakers";
 
 export type AsideTab = "summary" | "board" | "speakers";
 
@@ -36,8 +37,8 @@ export function MeetingAside({
   const state = useNotes(meeting.id);
   const [copied, setCopied] = useState(false);
   const notes = state?.notes ?? null;
-  const speakers = useQuery(meetingQuery(meeting.id)).data?.speakers.length ?? 0;
-  const withSpeakers = !live && speakers > 0;
+  const speakers = useQuery(meetingQuery(meeting.id)).data?.speakers ?? [];
+  const withSpeakers = !live && speakers.length > 0;
   const shown = tab === "speakers" && !withSpeakers ? "summary" : tab;
   const copy = async () => {
     if (!state || !notes) return;
@@ -50,7 +51,9 @@ export function MeetingAside({
       }
     }
     try {
-      await copyText(summaryMarkdown(doc));
+      const names = byTalk(speakers).map((speaker) => speaker.name);
+      const head = [meeting.title, ...(names.length > 0 ? [`发言人：${names.join("、")}`] : [])];
+      await copyText([...head, "", summaryMarkdown(doc)].join("\n"));
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
@@ -76,7 +79,7 @@ export function MeetingAside({
           {withSpeakers && (
             <TabsTrigger value="speakers" data-testid="tab-speakers" className="gap-1.5 text-row">
               发言人
-              <span className="text-label font-normal text-muted-foreground tabular-nums">{speakers}</span>
+              <span className="text-label font-normal text-muted-foreground tabular-nums">{speakers.length}</span>
             </TabsTrigger>
           )}
           <span className="ml-auto flex items-center gap-1.5 self-center">
@@ -100,7 +103,16 @@ export function MeetingAside({
           </span>
         </TabsList>
         <TabsContent value="summary" className="flex flex-col">
-          <NotesDoc meetingId={meeting.id} state={state} live={live} pending={pending} onJump={onJump} onRetry={onRetry} />
+          <NotesDoc
+            meetingId={meeting.id}
+            state={state}
+            live={live}
+            pending={pending}
+            speakers={withSpeakers ? speakers : []}
+            onSpeakers={() => onTabChange("speakers")}
+            onJump={onJump}
+            onRetry={onRetry}
+          />
         </TabsContent>
         <TabsContent value="board" className="flex flex-col">
           {shown === "board" && (

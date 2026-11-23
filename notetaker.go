@@ -231,6 +231,12 @@ func (n *noteTaker) finalize(ctx context.Context, id string) (trace.Detail, erro
 		return detail, err
 	}
 	detail["topics"], detail["todos"] = len(written.Topics), len(written.Todos)
+	if written.Title != "" {
+		if entitled, _ := n.app.store.Entitle(ctx, id, written.Title); entitled {
+			meeting.Title = written.Title
+			_ = libraryChanged.Broadcast(id)
+		}
+	}
 	n.app.windows.notesReady(meeting, written)
 	return detail, nil
 }

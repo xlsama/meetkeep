@@ -16,8 +16,10 @@ type Notes struct {
 	// Final tells the notes written after the meeting from those that
 	// grow during it.
 	Final bool `json:"final"`
-	// Headline says in a sentence what the meeting settled, in final notes,
-	// Gist what it was about, and Conclusions what it agreed on.
+	// Title names the meeting, in final notes, Headline says in a sentence
+	// what it settled, Gist what it was about, and Conclusions what it
+	// agreed on.
+	Title       string  `json:"title"`
 	Headline    string  `json:"headline"`
 	Gist        string  `json:"gist"`
 	Conclusions []Point `json:"conclusions"`
@@ -112,6 +114,7 @@ func (n Notes) Text() string {
 }
 
 type answer struct {
+	Title       string        `json:"title"`
 	Headline    string        `json:"headline"`
 	Gist        string        `json:"gist"`
 	Conclusions []answerPoint `json:"conclusions"`
@@ -215,14 +218,15 @@ const liveRules = `你在为一场正在进行的会议做实时纪要。纪要�
 const finalRules = `你在为一场已经结束的会议写定稿纪要。
 
 输入是一个 JSON 对象：
-- title：会议标题
+- title：会议现在的标题，可能只是录制时间或文件名
 - lines：全部发言，每句有 seq 编号、说话人和内容
 - glossary：专有名词的正确写法
 
 输出一个 JSON 对象，不要输出别的内容：
-{"headline":"一句话说清这场会定了什么","gist":"一句话交代这场会在谈什么","conclusions":[{"text":"定下来的一件事","seq":12}],"todos":[{"text":"要做的事","owner":"谁来做","due":"什么时候","seq":12}],"open":[{"text":"还没定的事，说清卡在哪","seq":12}],"topics":[{"title":"话题名","points":[{"text":"要点","seq":12}],"nodes":[{"text":"短语","seq":12,"uncertain":false}]}]}
+{"title":"这场会的名字","headline":"一句话说清这场会定了什么","gist":"一句话交代这场会在谈什么","conclusions":[{"text":"定下来的一件事","seq":12}],"todos":[{"text":"要做的事","owner":"谁来做","due":"什么时候","seq":12}],"open":[{"text":"还没定的事，说清卡在哪","seq":12}],"topics":[{"title":"话题名","points":[{"text":"要点","seq":12}],"nodes":[{"text":"短语","seq":12,"uncertain":false}]}]}
 
 规则：
+- title 不超过 14 个字，像日历上的会议名，说它是什么会、围绕什么事，比如"交付周会""定价方案评审"；不写结论，不带日期。输入的 title 已经是这样的名字时照用。
 - headline 不超过 30 个字，写结论，不写"本次会议讨论了"。
 - gist 不超过 40 个字，交代是谁和谁、围绕什么事在谈，让没到场的人知道背景；不重复 headline 里的结论。
 - conclusions 是这场会明确达成的共识或决定，最多 4 条，每条不超过 30 个字，按重要程度排。只写说定了的，没有就给空数组；不要为了凑数把讨论过程或还没定的事写进来。
@@ -232,7 +236,7 @@ const finalRules = `你在为一场已经结束的会议写定稿纪要。
 - todos 只写明确有人认领或被指派的事；随口一提、没人应下的不算。owner 写发言里的说话人称呼，不要猜人名；没提到期限时 due 留空字符串。
 - 提出来但没有说定的事写进 open，不写进 todos。有人只是表示"可以接""到时候看"而没有明确应下的，也算没说定。
 - 用发言所用的语言写。glossary 里的词按它的写法写。
-- 发言太少、没有可记的内容时，各项给空数组，headline 和 gist 给空字符串。`
+- 发言太少、没有可记的内容时，各项给空数组，title、headline 和 gist 给空字符串。`
 
 // Update brings the notes of a meeting in progress up to date with what
 // has been said: lines are all its utterances so far, in order.
@@ -353,6 +357,7 @@ func Finalize(ctx context.Context, model Completer, title string, lines []Line, 
 	bySeq := index(lines)
 	notes := Empty()
 	notes.Final = true
+	notes.Title = strings.TrimSpace(a.Title)
 	notes.Headline = strings.TrimSpace(a.Headline)
 	notes.Gist = strings.TrimSpace(a.Gist)
 	notes.Conclusions = cited(a.Conclusions, bySeq)

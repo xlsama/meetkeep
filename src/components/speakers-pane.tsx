@@ -8,7 +8,7 @@ import type { Speaker } from "@/mygo";
 import { clock } from "@/lib/format";
 import type { Jump } from "@/lib/notes";
 import { meetingQuery } from "@/lib/queries";
-import { speakerVoice } from "@/lib/speakers";
+import { byTalk, speakerVoice } from "@/lib/speakers";
 import { useTranscript, type Group } from "@/lib/transcript";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +41,7 @@ export function SpeakersPane({
   const { groups, lines } = useTranscript(meetingId, false);
   const duration = Math.max(durationMs, lines.at(-1)?.endMs ?? 0, 1);
   const total = speakers.reduce((sum, speaker) => sum + speaker.durationMs, 0);
-  const ordered = speakers.toSorted((a, b) => b.durationMs - a.durationMs);
+  const ordered = byTalk(speakers);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-7 py-5" data-testid="speakers-pane">

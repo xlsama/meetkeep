@@ -169,7 +169,7 @@ func TestRecordsBothTracks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if meeting.Title != "周会" || meeting.Status != store.Recording {
+	if meeting.Title != "周会" || !meeting.Named || meeting.Status != store.Recording {
 		t.Errorf("started %+v", meeting)
 	}
 	if _, err := r.Start(ctx, Options{Microphone: true}); !errors.Is(err, ErrBusy) {
