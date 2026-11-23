@@ -416,12 +416,23 @@ export type UtteranceState = "speaking" | "transcribing" | "done" | "dropped" | 
 /** Config reads and changes the settings. */
 export const Config = {
   /**
+   * CLI returns where the meetkeep command is, with ~ for the home
+   * directory, or "" when it is not installed or runs another copy of the
+   * app.
+   */
+  cli: bind<[], string>("Config.CLI", () => []),
+  /**
    * ChooseDirectory asks where recordings go and returns the choice, or ""
    * when the user canceled.
    */
   chooseDirectory: bind<[], string>("Config.ChooseDirectory", () => []),
   /** Get returns the settings. */
   get: bind<[], Settings>("Config.Get", () => []),
+  /**
+   * InstallCLI puts the meetkeep command in ~/.local/bin and returns where
+   * it is, with ~ for the home directory.
+   */
+  installCLI: bind<[], string>("Config.InstallCLI", () => []),
   /** OpenFile opens the settings file in the editor of the system. */
   openFile: bind<[], void>("Config.OpenFile", () => []),
   /** Path returns where the settings file is, with ~ for the home directory. */
@@ -551,8 +562,8 @@ export const Library = {
    */
   saveRecording: bind<[string], string>("Library.SaveRecording", (id: string) => [id]),
   /**
-   * Search finds the meetings whose titles or transcripts contain query, the
-   * newest first.
+   * Search finds the meetings whose titles, transcripts or notes contain
+   * query, the newest first.
    */
   search: bind<[string], SearchHit[]>("Library.Search", (query: string) => [query]),
 } as const;

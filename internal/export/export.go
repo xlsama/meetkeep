@@ -42,7 +42,9 @@ func Name(u store.Utterance, speakers []store.Speaker) string {
 	return "对方"
 }
 
-func clock(ms int64) string {
+// Clock writes a moment of a meeting as minutes and seconds, with hours
+// once it has them.
+func Clock(ms int64) string {
 	s := ms / 1000
 	if s >= 3600 {
 		return fmt.Sprintf("%d:%02d:%02d", s/3600, s/60%60, s%60)
@@ -65,14 +67,14 @@ func Render(m store.Meeting, utterances []store.Utterance, speakers []store.Spea
 	case Text:
 		fmt.Fprintf(&b, "%s\n%s\n\n", m.Title, heading(m))
 		for _, u := range utterances {
-			fmt.Fprintf(&b, "[%s] %s：%s\n", clock(u.StartMs), Name(u, speakers), u.Text)
+			fmt.Fprintf(&b, "[%s] %s：%s\n", Clock(u.StartMs), Name(u, speakers), u.Text)
 		}
 	default:
 		fmt.Fprintf(&b, "# %s\n\n%s\n", m.Title, heading(m))
 		last := ""
 		for _, u := range utterances {
 			if name := Name(u, speakers); name != last {
-				fmt.Fprintf(&b, "\n**%s** %s\n\n", name, clock(u.StartMs))
+				fmt.Fprintf(&b, "\n**%s** %s\n\n", name, Clock(u.StartMs))
 				last = name
 			}
 			b.WriteString(u.Text)

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/xlsama/meetkeep/internal/asr"
 	"github.com/xlsama/meetkeep/internal/config"
+	"github.com/xlsama/meetkeep/internal/control"
 	"github.com/xlsama/meetkeep/internal/processor"
 	"github.com/xlsama/meetkeep/internal/recorder"
 	"github.com/xlsama/meetkeep/internal/store"
@@ -125,6 +127,9 @@ func (a *app) start() error {
 	if err := mygo.Protocol.HandleFunc("recording", a.serveRecording); err != nil {
 		return err
 	}
+	if _, err := control.Listen(a.control); err != nil {
+		return err
+	}
 
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
 		a.windows.quitting = true
@@ -157,6 +162,25 @@ func (a *app) serveRecording(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+// control does what the command line asks for.
+func (a *app) control(ctx context.Context, request control.Request) (control.Answer, error) {
+	if request.Progress != "" {
+		progress, working := a.processor.State(request.Progress)
+		return control.Answer{Working: working, Step: string(progress.Step), Percent: progress.Percent}, nil
+	}
+	if !media[strings.ToLower(filepath.Ext(request.Import))] {
+		return control.Answer{}, errors.New("only audio and video files can be imported")
+	}
+	meeting, err := (&Library{a}).ImportFile(ctx, request.Import)
+	return control.Answer{Meeting: meeting}, err
+}
+
+// media are the kinds of files a meeting is made of.
+var media = map[string]bool{
+	".aac": true, ".aif": true, ".aiff": true, ".caf": true, ".flac": true, ".m4a": true, ".m4v": true, ".mkv": true,
+	".mov": true, ".mp3": true, ".mp4": true, ".oga": true, ".ogg": true, ".opus": true, ".wav": true, ".webm": true,
 }
 
 // alone reports whether this is the only instance of the app. A development

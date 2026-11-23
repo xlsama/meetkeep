@@ -1,6 +1,8 @@
 node_modules/
 /dist/
 /build/
+/resources/*/meetkeep
+/resources/*/meetkeep.exe
 /.mygo/
 mygo_windows_*.syso
 .env

@@ -18,6 +18,11 @@ export const settingsPathQuery = queryOptions({
   queryFn: () => Config.path(),
 });
 
+export const cliQuery = queryOptions({
+  queryKey: ["cli"],
+  queryFn: () => Config.cli(),
+});
+
 export const meetingsQuery = queryOptions({
   queryKey: ["meetings"],
   queryFn: () => Library.list(),

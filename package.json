@@ -8,6 +8,7 @@
     "generate": "mygo generate",
     "dev:web": "vite",
     "build:web": "vite build",
+    "build:cli": "go build -trimpath -ldflags=\"-s -w\" -o resources/$(go env GOOS)-$(go env GOARCH)/ ./cmd/meetkeep",
     "check": "TSRS_FAST=1 oxlint",
     "test": "go test ./..."
   },

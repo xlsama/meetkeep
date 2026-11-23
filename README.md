@@ -14,23 +14,37 @@ bun run check && bun run test
 
 转写用 Azure 的 MAI-Transcribe-2，纪要和白板用任意 OpenAI 兼容的模型，都在应用的设置页里填。设置存在 `~/.config/meetkeep/settings.json`，会议存在同目录的 `meetkeep.db`，录音默认存在 `~/Documents/MeetKeep`。
 
-每次处理的每一步都记在 `meetkeep.db` 的 `steps` 表里：排队、导入、转写、混音、分人、声纹、纪要各用了多久、内存峰值多少、失败原因和这一步的数据量。同一次处理的各行 `run` 相同：
+每次处理的每一步都记在 `meetkeep.db` 的 `steps` 表里：排队、导入、转写、混音、分人、声纹、纪要各用了多久、内存峰值多少、失败原因和这一步的数据量。`meetkeep steps <会议 ID>` 按处理的次数列出来。
+
+## 命令行和 skill
+
+`meetkeep` 是给 Agent 和脚本用的命令行（`cmd/meetkeep`），随应用一起打包，在「设置 → 存储 → 命令行工具」里安装到 `~/.local/bin`。它只读数据库；`import` 经应用监听的 socket（`~/.config/meetkeep/meetkeep.sock`）把文件交给运行中的应用，走和界面里导入相同的流程。输出默认是文本，`--json` 是 JSON，都是英文。
 
 ```sh
-sqlite3 ~/.config/meetkeep/meetkeep.db "SELECT name, duration_ms, memory_peak / 1048576 AS mb, error, detail FROM steps WHERE meeting_id = '<会议 ID>' ORDER BY id"
+meetkeep list --from -7d                    # 最近 7 天的会议
+meetkeep show latest                        # 纪要：结论、待办、还没定的事、话题、时间轴
+meetkeep transcript latest --around 30:13   # 这个时刻前后的原话
+meetkeep search 标书                        # 标题、纪要、逐字稿里找
+meetkeep todos --owner 我                   # 跨会议的待办
+meetkeep import ~/Downloads/访谈.wav --wait # 交给应用整理，等它完成
+meetkeep status <会议 ID>                   # 整理到哪一步了
 ```
+
+`skills/meetkeep` 是教 Agent 用它的 skill，`meetkeep skill show` 打印同一份内容。开发时用 `go run ./cmd/meetkeep`，`bun run build:cli` 只构建命令行。
 
 ## 结构
 
 | 位置 | 内容 |
 |---|---|
 | `main.go`、`windows.go`、`services.go`、`events.go` | 应用入口、窗口和菜单栏、给界面调用的服务和事件 |
+| `cmd/meetkeep`、`skills/meetkeep` | 命令行和教 Agent 用它的 skill |
 | `internal/recorder` | 录制流程：采集、切句、转写、入库 |
 | `internal/processor` | 会后流程：整段重新转写、区分说话人、按声音复核和认人、混音 |
 | `internal/notes` | 纪要：会中大纲、会后定稿、白板节点 |
 | `internal/audio` | 降采样、按语音概率切句 |
 | `internal/asr`、`internal/llm` | 转写服务和模型服务的客户端 |
-| `internal/store`、`internal/config`、`internal/export` | SQLite 存储、设置文件、导出 |
+| `internal/store`、`internal/config`、`internal/export` | SQLite 存储、设置文件、导出（逐字稿和纪要的 Markdown） |
+| `internal/library`、`internal/control` | 跨会议搜索；命令行向运行中的应用提请求的 socket |
 | `modules/capture` | 原生模块：麦克风和系统声音采集（macOS 用 Swift，Windows 用 Rust） |
 | `modules/speech` | 原生模块（Rust）：语音检测、录音编解码、导入音视频、说话人识别 |
 | `resources/models` | 说话人识别用的三个 ONNX 模型 |

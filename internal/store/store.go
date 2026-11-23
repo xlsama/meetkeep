@@ -264,6 +264,9 @@ type Store struct {
 	db *sqlite.DB
 }
 
+// Open opens the database at path for the app, which writes it: it brings
+// the tables up to date, and keeps a write-ahead log so that the command
+// line reads while the app records.
 func Open(ctx context.Context, path string) (*Store, error) {
 	db, err := sqlite.Open(ctx, path, sqlite.OpenOptions{})
 	if err != nil {
@@ -274,17 +277,49 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	_, _ = db.Query(ctx, "PRAGMA journal_mode = WAL")
+	return s, nil
+}
+
+// OpenReadOnly opens the database at path to read it, as the command line
+// does. It changes nothing, so the tables have to be those this program
+// knows.
+func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
+	db, err := sqlite.Open(ctx, path, sqlite.OpenOptions{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	s := &Store{db: db}
+	version, err := s.version(ctx)
+	switch {
+	case err != nil:
+	case version < len(migrations):
+		err = fmt.Errorf("the database is at version %d and this program reads %d: open MeetKeep once to bring it up to date", version, len(migrations))
+	case version > len(migrations):
+		err = fmt.Errorf("the database is at version %d and this program reads %d: install the command line again from the settings of MeetKeep", version, len(migrations))
+	}
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
 	return s, nil
 }
 
 func (s *Store) Close() error { return s.db.Close() }
 
-func (s *Store) migrate(ctx context.Context) error {
+func (s *Store) version(ctx context.Context) (int, error) {
 	rows, err := s.db.Query(ctx, "PRAGMA user_version")
+	if err != nil {
+		return 0, err
+	}
+	return int(rows.Values[0][0].(int64)), nil
+}
+
+func (s *Store) migrate(ctx context.Context) error {
+	version, err := s.version(ctx)
 	if err != nil {
 		return err
 	}
-	version := int(rows.Values[0][0].(int64))
 	if version > len(migrations) {
 		return fmt.Errorf("数据库来自更新的版本（%d）", version)
 	}

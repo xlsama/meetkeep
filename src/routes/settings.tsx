@@ -17,7 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Segmented, SegmentedItem } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import { Config, type Settings } from "@/mygo";
-import { errorMessage, queryClient, settingsPathQuery, settingsQuery } from "@/lib/queries";
+import { cliQuery, errorMessage, queryClient, settingsPathQuery, settingsQuery } from "@/lib/queries";
 import { sections, type SectionId } from "@/lib/settings-sections";
 import { useWindowTitle } from "@/lib/ui";
 import { cn } from "@/lib/utils";
@@ -63,6 +63,7 @@ export function SettingsPage() {
 
 function SettingsForm({ settings, section }: { settings: Settings; section: SectionId }) {
   const path = useQuery(settingsPathQuery);
+  const cli = useQuery(cliQuery);
   const [saveError, setSaveError] = useState<string | null>(null);
   const editing = useRef<string | null>(null);
   const form = useForm({ defaultValues: pick(settings) });
@@ -392,6 +393,29 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
           >
             打开
           </Button>
+        </Row>
+        <Row label="命令行工具">
+          {cli.data ? (
+            <span data-selectable data-testid="settings-cli-path" className="min-w-0 truncate font-mono text-label text-secondary-foreground">
+              {cli.data}
+            </span>
+          ) : (
+            <Button
+              variant="outline"
+              size="md"
+              data-testid="settings-cli-install"
+              onClick={async () => {
+                try {
+                  queryClient.setQueryData(cliQuery.queryKey, await Config.installCLI());
+                  setSaveError(null);
+                } catch (err) {
+                  setSaveError(errorMessage(err));
+                }
+              }}
+            >
+              安装
+            </Button>
+          )}
         </Row>
       </Group>
       )}

@@ -3,8 +3,10 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/xlsama/meetkeep/internal/config"
@@ -387,5 +389,50 @@ func TestPolished(t *testing.T) {
 	}
 	if stored, _ = s.Utterances(ctx, "a"); stored[0].Polished != "" || stored[1].Filler {
 		t.Errorf("polishing again kept %+v", stored)
+	}
+}
+
+func TestOpenReadOnly(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "test.db")
+	if _, err := OpenReadOnly(ctx, path); err == nil {
+		t.Fatal("it opens a database that is not there")
+	}
+	s, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if rows, err := s.db.Query(ctx, "PRAGMA journal_mode"); err != nil || rows.Values[0][0] != "wal" {
+		t.Errorf("the journal is %v (%v), want a write-ahead log", rows.Values, err)
+	}
+	meeting := Meeting{ID: "a", Title: "周会", StartedAt: 1000, Status: Recording, Apps: []config.AppRef{}}
+	if err := s.CreateMeeting(ctx, meeting); err != nil {
+		t.Fatal(err)
+	}
+
+	reader, err := OpenReadOnly(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	if err := reader.Rename(ctx, "a", "改名"); err == nil {
+		t.Error("a database opened to read is written")
+	}
+	meeting.ID = "b"
+	if err := s.CreateMeeting(ctx, meeting); err != nil {
+		t.Fatalf("the app cannot write while the database is read: %v", err)
+	}
+	if meetings, err := reader.Meetings(ctx); err != nil || len(meetings) != 2 || meetings[0].Title != "周会" {
+		t.Errorf("it reads %+v (%v), want both meetings as the app wrote them", meetings, err)
+	}
+
+	for change, want := range map[int]string{1: "install the command line again", -1: "open MeetKeep once"} {
+		if _, err := s.db.Execute(ctx, fmt.Sprintf("PRAGMA user_version = %d", len(migrations)+change)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := OpenReadOnly(ctx, path); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("at version %+d it says %v, want %q", change, err, want)
+		}
 	}
 }
