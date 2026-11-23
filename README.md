@@ -22,6 +22,8 @@ bun run release
 
 `bumpp` 改 `package.json` 里的版本号（`mygo.config.ts` 读它），提交、打 `v<版本>` 的 tag 并推送。tag 触发 `.github/workflows/release.yml`：macOS（arm64）和 Windows（amd64）各自构建，`.dmg` 和安装程序 `-setup-*.exe` 传到这个 tag 的 GitHub Release 并发布。在 Actions 里手动触发同一个 workflow 只构建、不发版，产物留在这次运行里。
 
+应用自己更新：`mygo.config.ts` 的 `updates` 指向这个仓库的 Release，发版时 `mygo build -upload` 把签过名的更新包和清单（`update-<平台>.json`）一起传上去，签名的私钥是仓库的 secret `MYGO_UPDATER_PRIVATE_KEY`（1Password 里也存了一份，丢了已安装的应用就再也更新不了）。装好的应用启动 15 秒后和之后每 4 小时查一次最新的 Release，有新版本就在后台下载、验签、放到位，标题旁出现蓝色的「更新」，点一下重启成新版本；不点的话下次启动也是新版本。录制中不显示这个按钮。开发构建不更新。
+
 仓库里配了 `MACOS_CERTIFICATE`、`MACOS_CERTIFICATE_PASSWORD`、`MACOS_SIGNING_IDENTITY` 这几个 secret 时，macOS 的包用 Developer ID 签名；再配 `APPLE_ID`、`APPLE_TEAM_ID`、`APPLE_APP_PASSWORD` 就同时公证。没配时是 ad-hoc 签名，别的 Mac 上会被 Gatekeeper 拦。Windows 的包没有签名，SmartScreen 会提示。
 
 转写用 Azure 的 MAI-Transcribe-2、DeepSeek 的语音识别，或自定义的 OpenAI 兼容服务（`/audio/transcriptions`，自建的也行）；纪要和白板的模型在 Claude、DeepSeek、OpenRouter 和自定义的 OpenAI 兼容服务之间切换，各存各的密钥和模型名，都在应用的设置页里填。自定义服务可以加多个，各起一个名字，在「服务」下拉里和内置的排在一起。设置存在 `~/.config/meetkeep/settings.json`，会议存在同目录的 `meetkeep.db`，录音默认存在 `~/Documents/MeetKeep`。
