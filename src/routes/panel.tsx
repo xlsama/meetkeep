@@ -50,7 +50,7 @@ export function PanelPage() {
         >
           <AppWindow className="size-4" />
         </IconButton>
-        <IconButton label="收起成小条" testId="panel-collapse" onClick={() => void Windows.collapsePanel()}>
+        <IconButton label="收起为小条" testId="panel-collapse" onClick={() => void Windows.collapsePanel()}>
           <PanelRightClose className="size-4" />
         </IconButton>
         <IconButton label="关闭" testId="panel-close" onClick={() => void Windows.hidePanel()}>

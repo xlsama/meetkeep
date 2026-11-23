@@ -69,7 +69,7 @@ export function TranscriptHeader({ search, menu }: { search: TranscriptSearch; m
               autoFocus
               type="search"
               placeholder="搜索"
-              aria-label="搜索文字记录"
+              aria-label="搜索文字稿"
               data-testid="transcript-search"
               spellCheck={false}
               autoComplete="off"
@@ -124,8 +124,8 @@ export function TranscriptHeader({ search, menu }: { search: TranscriptSearch; m
         </>
       ) : (
         <>
-          <h2 className="m-0 min-w-0 flex-1 truncate text-row font-semibold text-foreground">文字记录</h2>
-          <button type="button" aria-label="搜索文字记录" data-testid="transcript-search-open" onClick={show} className={iconButton}>
+          <h2 className="m-0 min-w-0 flex-1 truncate text-row font-semibold text-foreground">文字稿</h2>
+          <button type="button" aria-label="搜索文字稿" data-testid="transcript-search-open" onClick={show} className={iconButton}>
             <Search className="size-4" />
           </button>
           {menu}

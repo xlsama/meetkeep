@@ -591,7 +591,7 @@ func (l *Library) Polish(ctx context.Context, id string) error {
 		return err
 	}
 	if !l.app.current().ASR.Polish {
-		return errors.New("整理文字记录在设置里关着")
+		return errors.New("整理文字已在设置里关闭")
 	}
 	utterances, err := l.app.store.Utterances(ctx, id)
 	if err != nil {

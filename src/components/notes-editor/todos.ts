@@ -58,7 +58,7 @@ function decorate(doc: ProseMirrorNode, open: boolean) {
   if (last) {
     if (!open) for (const todo of rest) decorations.push(Decoration.node(todo.from, todo.to, { class: "notes-folded" }));
     const owners = [...new Set(rest.map((todo) => todo.owner).filter((owner) => owner !== ""))];
-    const names = owners.length === 0 ? "" : `（${owners.slice(0, named).join("、")}${owners.length > named ? " 等" : ""}）`;
+    const names = owners.length === 0 ? "" : `（${owners.slice(0, named).join("、")}${owners.length > named ? "等" : ""}）`;
     const label = open ? "收起" : `展开其余 ${rest.length} 条${names}`;
     decorations.push(
       Decoration.widget(open ? last.to : foldAt, toggle(open, label), { side: open ? 1 : -1, key: `${open}:${label}`, ignoreSelection: true }),

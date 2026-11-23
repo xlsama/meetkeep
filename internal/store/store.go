@@ -321,7 +321,7 @@ func (s *Store) migrate(ctx context.Context) error {
 		return err
 	}
 	if version > len(migrations) {
-		return fmt.Errorf("数据库来自更新的版本（%d）", version)
+		return fmt.Errorf("数据库来自更高版本（%d）", version)
 	}
 	for ; version < len(migrations); version++ {
 		var batch []sqlite.Statement

@@ -429,7 +429,7 @@ function TranscriptMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" aria-label="文字记录的更多操作" data-testid="transcript-more" className={transcriptIconButton}>
+        <button type="button" aria-label="文字稿的更多操作" data-testid="transcript-more" className={transcriptIconButton}>
           {polishing ? (
             <LoaderCircle className="size-4 animate-spin" />
           ) : copied ? (
@@ -535,7 +535,7 @@ function ExportMenu({ meetingId, onError }: { meetingId: string; onError: (error
 const stepLabel: Record<Step, string> = {
   import: "导入",
   transcribe: "重新转写",
-  speakers: "区分说话人",
+  speakers: "识别说话人",
   summary: "生成纪要",
 };
 

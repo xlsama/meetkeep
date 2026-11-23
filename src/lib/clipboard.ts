@@ -10,6 +10,6 @@ export async function copyText(text: string) {
     area.select();
     const copied = document.execCommand("copy");
     area.remove();
-    if (!copied) throw new Error("复制不了");
+    if (!copied) throw new Error("无法复制");
   }
 }

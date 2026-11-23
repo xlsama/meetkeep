@@ -291,7 +291,7 @@ func TestStepsGoWithTheirMeeting(t *testing.T) {
 		t.Fatal(err)
 	}
 	first := Step{Run: 5000, Kind: "import", Name: "transcribe", StartedAt: 5200, DurationMs: 30100, MemoryPeak: 334 << 20, Detail: `{"sentences":848}`}
-	failed := Step{Run: 5000, Kind: "import", Name: "speakers", StartedAt: 35300, DurationMs: 12, Error: "区分说话人失败", Detail: "{}"}
+	failed := Step{Run: 5000, Kind: "import", Name: "speakers", StartedAt: 35300, DurationMs: 12, Error: "识别说话人失败", Detail: "{}"}
 	for _, step := range []Step{first, failed} {
 		if err := s.AddStep(ctx, "a", step); err != nil {
 			t.Fatal(err)

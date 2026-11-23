@@ -268,7 +268,7 @@ func (p *Processor) process(ctx context.Context, j job) error {
 			detail := trace.Detail{"format": strings.TrimPrefix(strings.ToLower(filepath.Ext(j.source)), "."), "bytes": size(j.source)}
 			ms, err := p.Speech.Import(ctx, j.source, filepath.Join(meeting.Directory, audioFile))
 			if err != nil {
-				return detail, fmt.Errorf("读不了这个文件：%w", err)
+				return detail, fmt.Errorf("无法读取这个文件：%w", err)
 			}
 			detail["audioMs"] = ms
 			return detail, p.Store.SetDuration(ctx, j.id, int64(ms))
@@ -425,7 +425,7 @@ func (p *Processor) label(ctx context.Context, j job, found []track, utterances 
 	err := j.record.Step("speakers", func() (trace.Detail, error) {
 		segments, err := p.Speech.Separate(ctx, mixed.path, p.Models, j.count)
 		if err != nil {
-			return nil, fmt.Errorf("区分说话人失败：%w", err)
+			return nil, fmt.Errorf("识别说话人失败：%w", err)
 		}
 		who, uncertain = assign(phrases, segments)
 		told := map[int]bool{}
@@ -448,7 +448,7 @@ func (p *Processor) label(ctx context.Context, j job, found []track, utterances 
 	err = j.record.Step("voices", func() (trace.Detail, error) {
 		var err error
 		if heard, err = p.listen(ctx, mixed.path, sentences, who, uncertain); err != nil {
-			return nil, fmt.Errorf("区分说话人失败：%w", err)
+			return nil, fmt.Errorf("识别说话人失败：%w", err)
 		}
 		known, named, err := p.Store.Voices(ctx)
 		if err != nil {

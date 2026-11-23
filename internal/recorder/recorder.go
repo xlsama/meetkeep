@@ -110,11 +110,11 @@ type Recorder struct {
 }
 
 var (
-	ErrBusy       = errors.New("已经在录制了")
+	ErrBusy       = errors.New("已经在录制")
 	ErrIdle       = errors.New("没有在录制")
-	ErrNoSource   = errors.New("至少选择一个声音来源")
-	errMicDenied  = errors.New("没有麦克风权限，请在系统设置的「隐私与安全性」里允许 MeetKeep 使用麦克风")
-	errTapDenied  = errors.New("没有录制系统声音的权限，请在系统设置的「隐私与安全性」里允许 MeetKeep 录制系统音频")
+	ErrNoSource   = errors.New("请至少选择一个声音来源")
+	errMicDenied  = errors.New("没有麦克风权限，请在系统设置的「隐私与安全性」中允许 MeetKeep 使用麦克风")
+	errTapDenied  = errors.New("没有录制系统声音的权限，请在系统设置的「隐私与安全性」中允许 MeetKeep 录制系统声音")
 	startTimeout  = 2 * time.Minute
 	silentTimeout = 1500 * time.Millisecond
 )
@@ -277,7 +277,7 @@ func (r *Recorder) Start(ctx context.Context, o Options) (store.Meeting, error) 
 			}
 		case <-time.After(wait):
 			if t.name == store.Mic {
-				return fail(errors.New("麦克风没有声音进来"))
+				return fail(errors.New("麦克风未检测到声音"))
 			}
 		case <-ctx.Done():
 			return fail(ctx.Err())

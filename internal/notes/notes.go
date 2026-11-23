@@ -166,7 +166,7 @@ func parse(text string) (answer, error) {
 	}
 	var a answer
 	if err := json.Unmarshal([]byte(text[start:end+1]), &a); err != nil {
-		return answer{}, fmt.Errorf("模型返回的 JSON 读不了：%w", err)
+		return answer{}, fmt.Errorf("无法读取模型返回的 JSON：%w", err)
 	}
 	return a, nil
 }

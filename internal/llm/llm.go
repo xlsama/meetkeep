@@ -20,7 +20,7 @@ import (
 	"github.com/xlsama/meetkeep/internal/config"
 )
 
-var ErrNotConfigured = errors.New("纪要服务还没有配置")
+var ErrNotConfigured = errors.New("模型服务还没有配置")
 
 type Client struct {
 	BaseURL string

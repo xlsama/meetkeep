@@ -164,7 +164,7 @@ function Sidebar({ open }: { open: boolean }) {
 
   return (
     <nav
-      aria-label={settings ? "设置" : "功能"}
+      aria-label={settings ? "设置" : "导航"}
       data-open={open}
       className={cn(
         "flex shrink-0 flex-col gap-0.5 overflow-hidden pl-1 transition-[width] duration-200 ease-out",

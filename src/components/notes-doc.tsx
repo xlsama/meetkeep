@@ -63,7 +63,7 @@ export function NotesDoc({
       {speakers.length > 0 && (
         <button
           type="button"
-          aria-label="发言人"
+          aria-label="说话人"
           data-testid="notes-speakers"
           onClick={onSpeakers}
           className="-mx-1.5 mb-3 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 rounded-md px-1.5 py-1 text-left text-label text-secondary-foreground transition-colors outline-none hover:bg-hover focus-visible:bg-hover"

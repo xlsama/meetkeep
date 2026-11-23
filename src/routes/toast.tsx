@@ -26,7 +26,7 @@ export function ToastPage() {
       </span>
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-row font-semibold" data-testid="toast-title">
-          {title} · 纪要好了
+          {title} · 纪要已生成
         </span>
         {summary !== "" && (
           <span className="truncate text-label text-subtle" data-testid="toast-summary">

@@ -136,7 +136,7 @@ function SheetForm({
                 <SourceRow
                   icon={<Mic className="size-4 text-secondary-foreground" />}
                   title="麦克风"
-                  detail={microphone.data ? `${microphone.data} · 算作「我」` : "算作「我」"}
+                  detail={microphone.data ? `${microphone.data} · 记为「我」` : "记为「我」"}
                 >
                   {field.state.value && <MicMeter />}
                   <Switch
@@ -153,12 +153,12 @@ function SheetForm({
               {(field) => (
                 <SourceRow
                   icon={<Volume2 className="size-4 text-secondary-foreground" />}
-                  title="电脑里的声音"
-                  detail="算作「对方」"
+                  title="系统声音"
+                  detail="记为「对方」"
                 >
                   <Switch
                     data-testid="sheet-system"
-                    aria-label="录制电脑里的声音"
+                    aria-label="录制系统声音"
                     checked={field.state.value}
                     onCheckedChange={field.handleChange}
                   />

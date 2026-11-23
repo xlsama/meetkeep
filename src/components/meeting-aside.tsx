@@ -48,7 +48,7 @@ export function MeetingAside({
     const doc = stateDoc(state);
     try {
       const names = byTalk(speakers).map((speaker) => speaker.name);
-      const head = [meeting.title, ...(names.length > 0 ? [`发言人：${names.join("、")}`] : [])];
+      const head = [meeting.title, ...(names.length > 0 ? [`说话人：${names.join("、")}`] : [])];
       await copyText([...head, "", summaryMarkdown(doc)].join("\n"));
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
@@ -59,7 +59,7 @@ export function MeetingAside({
   const label = !notes ? null : notes.final ? (shown === "summary" ? "定稿" : null) : `整理到 ${clock(notes.coveredMs)}`;
 
   return (
-    <aside aria-label="纪要、时间轴、白板与发言人" className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <aside aria-label="纪要、时间轴、白板与说话人" className="flex min-h-0 min-w-0 flex-1 flex-col">
       <Tabs
         value={shown}
         onValueChange={(value) => onTabChange(asideTabs.find((item) => item === value) ?? "summary")}
@@ -79,7 +79,7 @@ export function MeetingAside({
           </TabsTrigger>
           {withSpeakers && (
             <TabsTrigger value="speakers" data-testid="tab-speakers" className="gap-1.5 text-row">
-              发言人
+              说话人
               <span className="text-label font-normal text-muted-foreground tabular-nums">{speakers.length}</span>
             </TabsTrigger>
           )}

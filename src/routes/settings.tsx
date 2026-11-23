@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 const address = z
   .string()
   .trim()
-  .refine((value) => value === "" || /^https?:\/\/\S+$/.test(value), "地址要以 http:// 或 https:// 开头");
+  .refine((value) => value === "" || /^https?:\/\/\S+$/.test(value), "地址需以 http:// 或 https:// 开头");
 
 const service = z.object({ key: z.string().trim(), model: z.string().trim() });
 
@@ -353,9 +353,9 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
         </form.Field>
         <form.Field key={`${llm.provider}.model`} name={`llm.${llm.provider}.model`}>
           {(field) => (
-            <Row label="模型名">
+            <Row label="模型">
               <Input
-                aria-label="模型名"
+                aria-label="模型"
                 data-testid="settings-llm-model"
                 className="w-[360px] font-mono text-label"
                 value={field.state.value}

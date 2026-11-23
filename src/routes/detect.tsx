@@ -52,7 +52,7 @@ export function DetectPage() {
               {error}
             </span>
           ) : (
-            <span className="truncate text-label text-subtle">录麦克风和{name}的声音</span>
+            <span className="truncate text-label text-subtle">录制麦克风和{name}的声音</span>
           )}
         </div>
         <button

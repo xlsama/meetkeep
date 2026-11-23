@@ -165,7 +165,7 @@ func Polish(ctx context.Context, model Completer, lines []Line, known []string) 
 		result.Failure = failure.Error()
 	}
 	if result.Failed == parts {
-		return result, fmt.Errorf("整理文字记录失败：%w", failure)
+		return result, fmt.Errorf("整理文字失败：%w", failure)
 	}
 
 	replacer, confirmed := strings.NewReplacer(pairs...), strings.NewReplacer(every...)

@@ -17,7 +17,7 @@ import (
 // the command line kept among the app's resources.
 func launcher() (path, script string, err error) {
 	if runtime.GOOS == "windows" {
-		return "", "", errors.New("Windows 上还不能安装命令行工具")
+		return "", "", errors.New("Windows 暂不支持安装命令行工具")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -29,7 +29,7 @@ func launcher() (path, script string, err error) {
 	}
 	program := filepath.Join(resources, "meetkeep")
 	if _, err := os.Stat(program); err != nil {
-		return "", "", errors.New("这个版本没有带命令行工具")
+		return "", "", errors.New("当前版本未包含命令行工具")
 	}
 	quoted := "'" + strings.ReplaceAll(program, "'", `'\''`) + "'"
 	return filepath.Join(home, ".local", "bin", "meetkeep"), fmt.Sprintf("#!/bin/sh\nexec %s \"$@\"\n", quoted), nil

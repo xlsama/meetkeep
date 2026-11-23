@@ -66,7 +66,7 @@ func (a *app) start() error {
 
 	settings, err := config.Load()
 	if err != nil {
-		return fmt.Errorf("设置文件 %s 读不了：%w", config.Path(), err)
+		return fmt.Errorf("无法读取配置文件 %s：%w", config.Path(), err)
 	}
 	a.settings = settings
 	userData, err := mygo.App.Path(mygo.PathUserData)

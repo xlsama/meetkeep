@@ -5,7 +5,7 @@ import type { Track } from "@/mygo";
 import { useRecorder } from "@/lib/recorder";
 import { cn } from "@/lib/utils";
 
-const trackLabel: Record<Track, string> = { mic: "麦克风", system: "电脑里的声音", file: "导入的文件" };
+const trackLabel: Record<Track, string> = { mic: "麦克风", system: "系统声音", file: "导入的文件" };
 
 export function Notice({
   message,

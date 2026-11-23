@@ -278,7 +278,7 @@ export default function BoardCanvas({
         <div className="pointer-events-auto relative">
           <div
             role="toolbar"
-            aria-label="画板工具"
+            aria-label="白板工具"
             className="flex gap-0.5 rounded-lg border border-border bg-background p-[3px] shadow-[0_4px_14px_rgba(0,0,0,0.08)]"
           >
             {tools.map(({ type, label, Icon }) => (
