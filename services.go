@@ -465,6 +465,10 @@ func matchingNotes(kept store.StoredNotes, query string) []SearchNote {
 		}
 	}
 	add(saved.Headline, 0)
+	add(saved.Gist, 0)
+	for _, p := range saved.Conclusions {
+		add(p.Text, p.AtMs)
+	}
 	for _, topic := range saved.Topics {
 		add(topic.Title, topic.AtMs)
 		for _, p := range topic.Points {

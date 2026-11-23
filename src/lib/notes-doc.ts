@@ -44,8 +44,13 @@ function topicBlocks(topic: Topic, live: boolean) {
   return [heading(2, topic.title, live && topic.updating), ...topic.points.map(pointItem)];
 }
 
+export const todosHeading = "待办";
+export const mine = "我";
+
 function todoBlocks(todos: Todo[]) {
-  return todos.length > 0 ? [heading(3, "待办"), ...todos.map(todoItem)] : [];
+  const own = (todo: Todo) => todo.owner.trim() === mine;
+  const ordered = [...todos.filter(own), ...todos.filter((todo) => !own(todo))];
+  return ordered.length > 0 ? [heading(3, todosHeading), ...ordered.map(todoItem)] : [];
 }
 
 export function notesToDoc(notes: Notes | null): DocNode {
@@ -55,6 +60,8 @@ export function notesToDoc(notes: Notes | null): DocNode {
     ? [...notes.topics.flatMap((topic) => topicBlocks(topic, true)), ...todoBlocks(notes.todos)]
     : [
         ...(notes.headline.trim() !== "" ? [heading(1, notes.headline)] : []),
+        ...((notes.gist ?? "").trim() !== "" ? [paragraph(text(notes.gist))] : []),
+        ...(notes.conclusions ?? []).map((point) => item("bullet", [...text(point.text), space, time(point)])),
         ...todoBlocks(notes.todos),
         ...(notes.open.length > 0
           ? [heading(3, "还没定"), ...notes.open.map((point) => item("bullet", [...text(point.text), space, time(point)]))]
@@ -62,4 +69,50 @@ export function notesToDoc(notes: Notes | null): DocNode {
         ...notes.topics.flatMap((topic) => topicBlocks(topic, false)),
       ];
   return { type: "doc", content: content.length > 0 ? content : [paragraph([])] };
+}
+
+function inline(nodes: DocNode[] | undefined): string {
+  return (nodes ?? [])
+    .map((node) => {
+      if (node.type === "text") return node.text ?? "";
+      if (node.type === "assignee") {
+        const label = [node.attrs?.owner, node.attrs?.due].filter((part) => typeof part === "string" && part !== "").join(" · ");
+        return label === "" ? "" : `（${label}）`;
+      }
+      if (node.type === "doubt") return "（存疑）";
+      if (node.type === "hardBreak") return "\n";
+      return "";
+    })
+    .join("")
+    .replaceAll(/[ \u2060]+/g, " ")
+    .replaceAll(" （", "（")
+    .trim();
+}
+
+function block(node: DocNode): string {
+  if (node.type === "heading") return `${Number(node.attrs?.level) === 1 ? "#" : "##"} ${inline(node.content)}`;
+  if (node.type === "list") {
+    const [first, ...rest] = node.content ?? [];
+    const mark = node.attrs?.kind === "task" ? (node.attrs.checked ? "- [x]" : "- [ ]") : "-";
+    const nested = rest.map((child) => block(child).replaceAll(/^/gm, "  ")).filter((line) => line.trim() !== "");
+    return [`${mark} ${first ? block(first) : ""}`, ...nested].join("\n");
+  }
+  if (node.content?.some((child) => child.type !== "text" && child.content)) return (node.content ?? []).map(block).join("\n");
+  return inline(node.content);
+}
+
+/** The head of a notes document as Markdown: what comes before its first topic. */
+export function summaryMarkdown(doc: DocNode) {
+  const blocks = doc.content ?? [];
+  const end = blocks.findIndex((node) => node.type === "heading" && Number(node.attrs?.level) === 2);
+  const lines: string[] = [];
+  let previous = "";
+  for (const node of end < 0 ? blocks : blocks.slice(0, end)) {
+    const text = block(node);
+    if (text.trim() === "") continue;
+    if (lines.length > 0 && !(node.type === "list" && previous === "list")) lines.push("");
+    lines.push(text);
+    previous = node.type;
+  }
+  return lines.join("\n");
 }

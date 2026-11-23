@@ -27,7 +27,7 @@ func lines(n int) []Line {
 	return out
 }
 
-func TestUpdateAppendsAndRewritesOnlyTheLastTopics(t *testing.T) {
+func TestUpdateAppendsAndRewritesOnlyTheLastTopic(t *testing.T) {
 	ctx := context.Background()
 	model := &scripted{answers: []string{
 		`{"topics":[
@@ -66,11 +66,11 @@ func TestUpdateAppendsAndRewritesOnlyTheLastTopics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(notes.Topics) != 3 || len(notes.Topics[0].Points) != 2 || !notes.Topics[2].Points[0].Uncertain {
+	if len(notes.Topics) != 3 || len(notes.Topics[0].Points) != 1 || !notes.Topics[2].Points[0].Uncertain {
 		t.Fatalf("second update gave %+v", notes.Topics)
 	}
-	if notes.Topics[0].Updating || !notes.Topics[1].Updating || !notes.Topics[2].Updating {
-		t.Errorf("the last two topics should be the ones still updating: %+v", notes.Topics)
+	if notes.Topics[0].Updating || notes.Topics[1].Updating || !notes.Topics[2].Updating {
+		t.Errorf("the last topic should be the one still updating: %+v", notes.Topics)
 	}
 	if len(notes.Todos) != 1 {
 		t.Errorf("a repeated todo was added: %+v", notes.Todos)
@@ -80,7 +80,7 @@ func TestUpdateAppendsAndRewritesOnlyTheLastTopics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(notes.Topics) != 4 || notes.Topics[0].Title != "上线日期" || len(notes.Topics[0].Points) != 2 {
+	if len(notes.Topics) != 4 || notes.Topics[0].Title != "上线日期" || len(notes.Topics[0].Points) != 1 {
 		t.Fatalf("a frozen topic was rewritten: %+v", notes.Topics)
 	}
 	if notes.Topics[2].Points[0].Text != "还没人认领" || notes.Topics[3].ID != "t4" || len(notes.Todos) != 2 {
@@ -95,16 +95,16 @@ func TestUpdateAppendsAndRewritesOnlyTheLastTopics(t *testing.T) {
 	if err := json.Unmarshal([]byte(model.asked[2]), &asked); err != nil {
 		t.Fatal(err)
 	}
-	if len(asked.Frozen) != 1 || len(asked.Open) != 2 || asked.Open[0].ID != "t2" {
+	if len(asked.Frozen) != 2 || len(asked.Open) != 1 || asked.Open[0].ID != "t3" {
 		t.Errorf("the third request froze %v and left open %v", asked.Frozen, asked.Open)
 	}
-	if len(asked.Lines) != 6 || asked.Lines[0].Seq != 3 {
-		t.Errorf("the third request carried %d lines from seq %d, want those since the open topics began", len(asked.Lines), asked.Lines[0].Seq)
+	if len(asked.Lines) != 3 || asked.Lines[0].Seq != 6 {
+		t.Errorf("the third request carried %d lines from seq %d, want those since the open topic began", len(asked.Lines), asked.Lines[0].Seq)
 	}
 }
 
 func TestFinalize(t *testing.T) {
-	model := &scripted{answers: []string{`{"headline":"3 月 14 号上线","topics":[{"title":"上线日期","points":[{"text":"定在 3 月 14 号","seq":2}]}],
+	model := &scripted{answers: []string{`{"headline":"3 月 14 号上线","gist":"我和对方对齐上线前剩下的事","conclusions":[{"text":"3 月 14 号上线","seq":2},{"text":"没有出处的结论","seq":50}],"topics":[{"title":"上线日期","points":[{"text":"定在 3 月 14 号","seq":2}]}],
 		"todos":[{"text":"排支付回归","owner":"我","due":"周五","seq":4}],"open":[{"text":"首页文案谁来写","seq":3},{"text":"编的","seq":40}]}`}}
 	notes, err := Finalize(context.Background(), model, "上线前对齐会", lines(4), nil)
 	if err != nil {
@@ -116,7 +116,10 @@ func TestFinalize(t *testing.T) {
 	if notes.Topics[0].Updating || notes.Open[0].AtMs != 20000 {
 		t.Errorf("got %+v", notes)
 	}
-	if text := notes.Text(); !strings.Contains(text, "首页文案谁来写") || !strings.Contains(text, "排支付回归") {
+	if notes.Gist != "我和对方对齐上线前剩下的事" || len(notes.Conclusions) != 1 || notes.Conclusions[0].AtMs != 10000 {
+		t.Errorf("the summary is %q with %+v", notes.Gist, notes.Conclusions)
+	}
+	if text := notes.Text(); !strings.Contains(text, "首页文案谁来写") || !strings.Contains(text, "排支付回归") || !strings.Contains(text, "对齐上线前") {
 		t.Errorf("the searchable text is %q", text)
 	}
 	if !strings.Contains(model.asked[0], "上线前对齐会") {

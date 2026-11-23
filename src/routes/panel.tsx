@@ -26,7 +26,7 @@ export function PanelPage() {
   const meetingId = meeting?.id ?? "";
   const notes = useNotes(meetingId);
   const { lines } = useTranscript(meetingId, true);
-  const [tab, setTab] = useState("transcript");
+  const [tab, setTab] = useState("summary");
   const [focus, setFocus] = useState<{ seq: number; at: number } | null>(null);
 
   const jump = (target: Jump) => {
@@ -60,14 +60,14 @@ export function PanelPage() {
       <Controls />
       <Tabs value={tab} onValueChange={setTab} className="flex-1">
         <TabsList className="h-[38px] gap-5 border-line px-[18px]">
-          <TabsTrigger value="transcript" data-testid="panel-tab-transcript" className="text-ui">
-            文字稿
-          </TabsTrigger>
           <TabsTrigger value="summary" data-testid="panel-tab-summary" className="text-ui">
             纪要
           </TabsTrigger>
           <TabsTrigger value="board" data-testid="panel-tab-board" className="text-ui">
             白板
+          </TabsTrigger>
+          <TabsTrigger value="transcript" data-testid="panel-tab-transcript" className="text-ui">
+            文字稿
           </TabsTrigger>
         </TabsList>
         <FaultNotice className="mx-[18px] mt-2.5" />
@@ -85,7 +85,7 @@ export function PanelPage() {
           )}
         </TabsContent>
         <TabsContent value="summary" className="flex flex-col">
-          <PanelNotes state={notes} onJump={jump} />
+          <PanelNotes state={notes} lines={lines} onJump={jump} />
         </TabsContent>
         <TabsContent value="board" className="flex flex-col">
           {meeting && (

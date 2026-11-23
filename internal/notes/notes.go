@@ -16,8 +16,11 @@ type Notes struct {
 	// Final tells the notes written after the meeting from those that
 	// grow during it.
 	Final bool `json:"final"`
-	// Headline says in a sentence what the meeting settled, in final notes.
-	Headline string `json:"headline"`
+	// Headline says in a sentence what the meeting settled, in final notes,
+	// Gist what it was about, and Conclusions what it agreed on.
+	Headline    string  `json:"headline"`
+	Gist        string  `json:"gist"`
+	Conclusions []Point `json:"conclusions"`
 	// CoveredMs is how far into the meeting the notes reach.
 	CoveredMs int64   `json:"coveredMs"`
 	Topics    []Topic `json:"topics"`
@@ -69,12 +72,13 @@ type Completer interface {
 	CompleteJSON(ctx context.Context, system, user string) (string, error)
 }
 
-// open is how many of the last topics an update may rewrite.
-const open = 2
+// open is how many of the last topics an update may rewrite: the one
+// being talked about. What is above it stays as it was read.
+const open = 1
 
 // Empty returns notes with nothing in them.
 func Empty() Notes {
-	return Notes{Topics: []Topic{}, Todos: []Todo{}, Open: []Point{}}
+	return Notes{Conclusions: []Point{}, Topics: []Topic{}, Todos: []Todo{}, Open: []Point{}}
 }
 
 // Text returns the words of the notes, for searching.
@@ -88,7 +92,10 @@ func (n Notes) Text() string {
 			}
 		}
 	}
-	add(n.Headline)
+	add(n.Headline, n.Gist)
+	for _, p := range n.Conclusions {
+		add(p.Text)
+	}
 	for _, t := range n.Topics {
 		add(t.Title)
 		for _, p := range t.Points {
@@ -105,8 +112,10 @@ func (n Notes) Text() string {
 }
 
 type answer struct {
-	Headline string `json:"headline"`
-	Topics   []struct {
+	Headline    string        `json:"headline"`
+	Gist        string        `json:"gist"`
+	Conclusions []answerPoint `json:"conclusions"`
+	Topics      []struct {
 		ID     string        `json:"id"`
 		Title  string        `json:"title"`
 		Points []answerPoint `json:"points"`
@@ -180,7 +189,7 @@ func (a answer) todos(lines map[int]Line, known []Todo) []Todo {
 	return todos
 }
 
-const liveRules = `你在为一场正在进行的会议做实时纪要。纪要是按话题排列的大纲，只往后追加：早先的话题已经定下，不能改；你只能改写「可更新的话题」，或者在它们后面追加新话题。
+const liveRules = `你在为一场正在进行的会议做实时纪要。纪要是按话题排列的大纲，只往后追加：早先的话题已经定下，不能改；你只能改写「可更新的话题」，也就是正在谈的那一个，或者在它后面追加新话题。
 
 输入是一个 JSON 对象：
 - frozen：已经定下的话题标题，只供了解前文
@@ -193,7 +202,7 @@ const liveRules = `你在为一场正在进行的会议做实时纪要。纪要�
 {"topics":[{"id":"沿用 open 里的 id，新话题留空字符串","title":"话题名","points":[{"text":"要点","seq":12,"uncertain":false}],"nodes":[{"text":"短语","seq":12,"uncertain":false}]}],"todos":[{"text":"要做的事","owner":"谁来做","due":"什么时候","seq":12}]}
 
 规则：
-- topics 里先按原顺序写回 open 里的每个话题，再写新话题。新发言属于已有话题就并进去，不要另开话题；没有新内容的话题原样写回。
+- topics 里先按原顺序写回 open 里的话题，再写新话题。新发言还在谈 open 里的话题就并进去；换了话题就开新话题，回头谈起 frozen 里的旧话题也开新话题。没有新内容的话题原样写回。
 - 话题名不超过 10 个字。要点写结论、决定、数字和分工，不写讨论过程；每条不超过 30 个字，每个话题最多 4 条。
 - nodes 是这个话题画在白板上的分支：把要点拆成更短的短语，一个节点只说一件事，每个不超过 12 个字，每个话题最多 4 个；没说定的在末尾加「？」并标 "uncertain": true。
 - 每条要点、节点和待办都要带 seq，指向它依据的那句发言。没有依据的内容不要写。
@@ -211,17 +220,19 @@ const finalRules = `你在为一场已经结束的会议写定稿纪要。
 - glossary：专有名词的正确写法
 
 输出一个 JSON 对象，不要输出别的内容：
-{"headline":"一句话说清这场会定了什么","topics":[{"title":"话题名","points":[{"text":"要点","seq":12}],"nodes":[{"text":"短语","seq":12,"uncertain":false}]}],"todos":[{"text":"要做的事","owner":"谁来做","due":"什么时候","seq":12}],"open":[{"text":"还没定的事，说清卡在哪","seq":12}]}
+{"headline":"一句话说清这场会定了什么","gist":"一句话交代这场会在谈什么","conclusions":[{"text":"定下来的一件事","seq":12}],"todos":[{"text":"要做的事","owner":"谁来做","due":"什么时候","seq":12}],"open":[{"text":"还没定的事，说清卡在哪","seq":12}],"topics":[{"title":"话题名","points":[{"text":"要点","seq":12}],"nodes":[{"text":"短语","seq":12,"uncertain":false}]}]}
 
 规则：
 - headline 不超过 30 个字，写结论，不写"本次会议讨论了"。
+- gist 不超过 40 个字，交代是谁和谁、围绕什么事在谈，让没到场的人知道背景；不重复 headline 里的结论。
+- conclusions 是这场会明确达成的共识或决定，最多 4 条，每条不超过 30 个字，按重要程度排。只写说定了的，没有就给空数组；不要为了凑数把讨论过程或还没定的事写进来。
 - topics 按会议里出现的顺序排。话题名不超过 10 个字。要点写结论、决定、数字和分工，不写讨论过程；每条不超过 30 个字，每个话题最多 5 条。
 - nodes 是这个话题画在白板上的分支：把要点拆成更短的短语，一个节点只说一件事，每个不超过 12 个字，每个话题最多 5 个；没说定的在末尾加「？」并标 "uncertain": true。
-- 每条要点、节点、待办和未定事项都要带 seq，指向它依据的那句发言。没有依据的内容不要写。
-- todos 只写明确有人认领或被指派的事。owner 写发言里的说话人称呼，不要猜人名；没提到期限时 due 留空字符串。
+- 每条结论、要点、节点、待办和未定事项都要带 seq，指向它依据的那句发言。没有依据的内容不要写。
+- todos 只写明确有人认领或被指派的事；随口一提、没人应下的不算。owner 写发言里的说话人称呼，不要猜人名；没提到期限时 due 留空字符串。
 - 提出来但没有说定的事写进 open，不写进 todos。有人只是表示"可以接""到时候看"而没有明确应下的，也算没说定。
 - 用发言所用的语言写。glossary 里的词按它的写法写。
-- 发言太少、没有可记的内容时，各项给空数组，headline 给空字符串。`
+- 发言太少、没有可记的内容时，各项给空数组，headline 和 gist 给空字符串。`
 
 // Update brings the notes of a meeting in progress up to date with what
 // has been said: lines are all its utterances so far, in order.
@@ -343,6 +354,8 @@ func Finalize(ctx context.Context, model Completer, title string, lines []Line, 
 	notes := Empty()
 	notes.Final = true
 	notes.Headline = strings.TrimSpace(a.Headline)
+	notes.Gist = strings.TrimSpace(a.Gist)
+	notes.Conclusions = cited(a.Conclusions, bySeq)
 	for _, t := range a.Topics {
 		points := cited(t.Points, bySeq)
 		title := strings.TrimSpace(t.Title)

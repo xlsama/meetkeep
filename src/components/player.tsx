@@ -89,6 +89,7 @@ export function usePlayback() {
     },
     [latest],
   );
+  const pause = useCallback(() => latest.current.playback?.pause(), [latest]);
   return {
     currentMs: (time?.currentTime ?? 0) * 1000,
     ready: (time?.duration ?? 0) > 0,
@@ -97,6 +98,7 @@ export function usePlayback() {
     rate,
     now,
     seek,
+    pause,
   };
 }
 

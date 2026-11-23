@@ -1,3 +1,4 @@
+import { LoaderCircle } from "lucide-react";
 import { lazy, Suspense, useState } from "react";
 import { Notice } from "@/components/notice";
 import type { NotesState } from "@/mygo";
@@ -10,12 +11,14 @@ export function NotesDoc({
   meetingId,
   state,
   live,
+  pending = false,
   onJump,
   onRetry,
 }: {
   meetingId: string;
   state: NotesState | null;
   live: boolean;
+  pending?: boolean;
   onJump: (jump: Jump) => void;
   onRetry?: () => void;
 }) {
@@ -44,6 +47,12 @@ export function NotesDoc({
           )
         }
       />
+      {pending && state?.notes?.final !== true && (
+        <div className="mb-5 flex items-center gap-2 text-label text-muted-foreground" data-testid="notes-pending">
+          <LoaderCircle className="size-3.5 animate-spin" />
+          正在生成完整纪要
+        </div>
+      )}
       <Notice testId="notes-save-error" message={saveError} onDismiss={() => setSaveError(null)} className="mb-5" />
       {state && (state.notes !== null || state.doc !== "") && (
         <Suspense fallback={null}>

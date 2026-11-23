@@ -23,7 +23,7 @@ import {
   Volume2,
 } from "lucide-react";
 import { isMyGo } from "mygo-runtime";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Avatar } from "@/components/avatar";
 import { LevelMeter } from "@/components/level-meter";
 import { MeetingAside, type AsideTab } from "@/components/meeting-aside";
@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Library, type Format, type Meeting, type Progress, type Speaker, type Step } from "@/mygo";
+import { copyText } from "@/lib/clipboard";
 import { useControls } from "@/lib/controls";
 import { clock, meetingDate, minutes, systemLabel } from "@/lib/format";
 import { clearProgress, useProgress } from "@/lib/progress";
@@ -265,7 +266,21 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
   const playback = usePlayback();
   const activeSeq = playback.started ? (lineAt(lines, playback.currentMs)?.seq ?? null) : null;
   const revealSeq = t === undefined ? null : (lineAt(lines, t)?.seq ?? null);
-  const { seek, ready } = playback;
+  const { seek, ready, pause, currentMs } = playback;
+  const quoted = useRef<{ from: number; to: number; entered: boolean } | null>(null);
+
+  useEffect(() => {
+    const quote = quoted.current;
+    if (!quote) return;
+    if (!quote.entered) {
+      quote.entered = currentMs >= quote.from - 500 && currentMs < quote.to;
+    } else if (currentMs >= quote.to) {
+      quoted.current = null;
+      pause();
+    } else if (currentMs < quote.from - 1500) {
+      quoted.current = null;
+    }
+  }, [currentMs, pause]);
   const playhead =
     playback.started && playback.rate <= 2 ? { now: playback.now, playing: playback.playing, ms: playback.currentMs } : undefined;
   const sources = [meeting.microphone && "麦克风", meeting.system && systemLabel(meeting.apps)].filter(Boolean);
@@ -338,7 +353,14 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
             query={search.query}
             findSeq={search.current}
             playhead={playhead}
-            onSeek={playable ? (ms) => seek(ms, true) : undefined}
+            onSeek={
+              playable
+                ? (ms) => {
+                    quoted.current = null;
+                    seek(ms, true);
+                  }
+                : undefined
+            }
           />
           {playable && !video && (
             <AudioBar
@@ -357,7 +379,9 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
           tab={tab}
           onTabChange={onTabChange}
           onJump={(target) => {
-            seek(target.atMs);
+            const line = lines.find((item) => item.seq === target.seq);
+            quoted.current = line ? { from: line.startMs, to: Math.max(line.endMs, line.startMs + 1200) + 150, entered: false } : null;
+            seek(target.atMs, playable);
             void navigate({
               to: "/meetings/$id",
               params: { id: meeting.id },
@@ -365,6 +389,7 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
               replace: true,
             });
           }}
+          pending={processing}
           onRetry={meeting.status === "done" ? () => void run(setError, () => Library.regenerateNotes(meeting.id)) : undefined}
         />
           ),
@@ -380,22 +405,6 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
       )}
     </>
   );
-}
-
-async function copyText(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    const area = document.createElement("textarea");
-    area.value = text;
-    area.style.position = "fixed";
-    area.style.opacity = "0";
-    document.body.append(area);
-    area.select();
-    const copied = document.execCommand("copy");
-    area.remove();
-    if (!copied) throw new Error("复制不了");
-  }
 }
 
 function TranscriptMenu({

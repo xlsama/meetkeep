@@ -23,6 +23,7 @@ import { defineStrike } from "prosekit/extensions/strike";
 import { defineText } from "prosekit/extensions/text";
 import { defineVirtualSelection } from "prosekit/extensions/virtual-selection";
 import type { ProseMirrorNode } from "prosekit/pm/model";
+import { defineTodos } from "@/components/notes-editor/todos";
 import { clock } from "@/lib/format";
 
 const glue = "\u2060";
@@ -143,6 +144,7 @@ export function defineNotesExtension() {
     defineTimestamp(),
     defineAssignee(),
     defineDoubt(),
+    defineTodos(),
     defineBaseKeymap(),
     defineBaseCommands(),
     defineHistory(),

@@ -208,3 +208,35 @@
   background-color: var(--color-selected);
   box-shadow: none;
 }
+
+.notes-doc > h1 + p {
+  margin-top: 6px;
+  color: var(--color-secondary-foreground);
+}
+
+.notes-doc .notes-folded {
+  display: none;
+}
+
+.notes-doc .notes-mine {
+  box-shadow: -11px 0 0 -9px var(--color-foreground);
+}
+
+.notes-doc .notes-fold {
+  display: block;
+  margin: 4px 0 0 26px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-label);
+  color: var(--color-muted-foreground);
+  cursor: pointer;
+  user-select: none;
+}
+
+.notes-doc .notes-fold:hover {
+  background: var(--color-hover);
+  color: var(--color-foreground);
+}

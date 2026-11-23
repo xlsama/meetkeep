@@ -140,8 +140,13 @@ export interface Notes {
    * grow during it.
    */
   final: boolean;
-  /** Headline says in a sentence what the meeting settled, in final notes. */
+  /**
+   * Headline says in a sentence what the meeting settled, in final notes,
+   * Gist what it was about, and Conclusions what it agreed on.
+   */
   headline: string;
+  gist: string;
+  conclusions: Point[];
   /** CoveredMs is how far into the meeting the notes reach. */
   coveredMs: number;
   topics: Topic[];

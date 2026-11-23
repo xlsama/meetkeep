@@ -1,9 +1,13 @@
+import { Check, Copy } from "lucide-react";
+import { useState } from "react";
 import { BoardPane } from "@/components/board";
 import { NotesDoc } from "@/components/notes-doc";
 import { SpeakersPane } from "@/components/speakers-pane";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Meeting } from "@/mygo";
+import { copyText } from "@/lib/clipboard";
 import { clock } from "@/lib/format";
+import { notesToDoc, summaryMarkdown, type DocNode } from "@/lib/notes-doc";
 import { useQuery } from "@tanstack/react-query";
 import { useNotes, type Jump } from "@/lib/notes";
 import { meetingQuery } from "@/lib/queries";
@@ -18,6 +22,7 @@ export function MeetingAside({
   tab,
   onTabChange,
   onJump,
+  pending = false,
   onRetry,
 }: {
   meeting: Meeting;
@@ -25,13 +30,33 @@ export function MeetingAside({
   tab: AsideTab;
   onTabChange: (tab: AsideTab) => void;
   onJump: (jump: Jump) => void;
+  pending?: boolean;
   onRetry?: () => void;
 }) {
   const state = useNotes(meeting.id);
+  const [copied, setCopied] = useState(false);
   const notes = state?.notes ?? null;
   const speakers = useQuery(meetingQuery(meeting.id)).data?.speakers.length ?? 0;
   const withSpeakers = !live && speakers > 0;
   const shown = tab === "speakers" && !withSpeakers ? "summary" : tab;
+  const copy = async () => {
+    if (!state || !notes) return;
+    let doc: DocNode = notesToDoc(notes);
+    if (state.doc !== "") {
+      try {
+        doc = JSON.parse(state.doc) as DocNode;
+      } catch {
+        doc = notesToDoc(notes);
+      }
+    }
+    try {
+      await copyText(summaryMarkdown(doc));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setCopied(false);
+    }
+  };
   const label = !notes ? null : notes.final ? (shown === "summary" ? "定稿" : null) : `整理到 ${clock(notes.coveredMs)}`;
 
   return (
@@ -54,14 +79,28 @@ export function MeetingAside({
               <span className="text-label font-normal text-muted-foreground tabular-nums">{speakers}</span>
             </TabsTrigger>
           )}
-          {label && (
-            <span className="ml-auto self-center text-meta text-muted-foreground tabular-nums" data-testid="notes-status">
-              {label}
-            </span>
-          )}
+          <span className="ml-auto flex items-center gap-1.5 self-center">
+            {label && (
+              <span className="text-meta text-muted-foreground tabular-nums" data-testid="notes-status">
+                {label}
+              </span>
+            )}
+            {shown === "summary" && notes?.final && (
+              <button
+                type="button"
+                aria-label="复制摘要和待办"
+                title="复制摘要和待办"
+                data-testid="notes-copy"
+                onClick={() => void copy()}
+                className="inline-flex size-7 items-center justify-center rounded-[8px] text-subtle transition-colors outline-none hover:bg-hover hover:text-foreground focus-visible:bg-hover"
+              >
+                {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+              </button>
+            )}
+          </span>
         </TabsList>
         <TabsContent value="summary" className="flex flex-col">
-          <NotesDoc meetingId={meeting.id} state={state} live={live} onJump={onJump} onRetry={onRetry} />
+          <NotesDoc meetingId={meeting.id} state={state} live={live} pending={pending} onJump={onJump} onRetry={onRetry} />
         </TabsContent>
         <TabsContent value="board" className="flex flex-col">
           {shown === "board" && (
