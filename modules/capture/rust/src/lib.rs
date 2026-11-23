@@ -1,5 +1,7 @@
 mod mygo;
 #[cfg(windows)]
+mod shell;
+#[cfg(windows)]
 mod win;
 
 use mygo::*;
@@ -30,12 +32,12 @@ impl Recorder for NativeRecorder {
     }
 
     fn headphones(&self) -> Result<bool, Error> {
-        Ok(false)
+        win::headphones().map_err(|e| Error::other(e.to_string()))
     }
 
     fn frames(&self, _ctx: &Context, source: Source, options: Options) -> Stream<Result<Vec<u8>, Error>> {
         match source {
-            Source::Microphone => win::frames(vec![win::Target::Microphone]),
+            Source::Microphone => win::frames(vec![win::Target::Microphone { echo: options.echo_cancellation }]),
             Source::System if options.apps.is_empty() => win::frames(vec![win::Target::AllBut(std::process::id())]),
             Source::System => win::frames(win::targets(&options.apps)),
         }

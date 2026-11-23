@@ -1,11 +1,12 @@
 import { defineConfig } from "mygo-cli";
+import pkg from "./package.json" with { type: "json" };
 
 declare const process: { env: Record<string, string | undefined> };
 
 export default defineConfig({
   name: "MeetKeep",
   identifier: "app.meetkeep.open",
-  version: "0.1.0",
+  version: pkg.version,
   // `mygo dev` runs devCommand and loads devUrl; `mygo build` runs
   // buildCommand and embeds frontendDist into the app.
   devUrl: "http://localhost:5173",
@@ -19,8 +20,14 @@ export default defineConfig({
     // Jane Doe (TEAMID)": .env sets it. Without one the app is signed ad hoc,
     // and macOS asks for the microphone again after every build.
     ...(process.env.MEETKEEP_SIGNING_IDENTITY ? { signingIdentity: process.env.MEETKEEP_SIGNING_IDENTITY } : {}),
+    // The release workflow keeps the notary's credentials in a keychain of
+    // its own, and names it here.
+    ...(process.env.NOTARY_KEYCHAIN
+      ? { notarize: { keychainProfile: "notary", keychain: process.env.NOTARY_KEYCHAIN } }
+      : {}),
     infoPlist: { LSEnvironment: { MallocLargeCache: "0" } },
   },
+  windows: { installerInclude: "scripts/installer.nsh" },
   // Phones: `mygo dev -platform ios` and `-platform android` run the app on a
   // simulator, an emulator or a device (`mygo devices` lists them, and
   // `mygo doctor` tells what is missing). What devices and stores need:

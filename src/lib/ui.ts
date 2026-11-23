@@ -14,7 +14,12 @@ export function useWindowTitle(title: string) {
   }, [title]);
 }
 
-const mac = navigator.userAgent.includes("Mac");
+export const mac = navigator.userAgent.includes("Mac");
+
+/** The shortcuts as the platform writes them. */
+export const shortcuts = mac
+  ? { panel: "⌥⌘M", search: "⌘K", settings: "⌘,", quit: "⌘Q" }
+  : { panel: "Ctrl+Alt+M", search: "Ctrl+K", settings: "Ctrl+,", quit: undefined };
 
 /** Whether a key is pressed with the key of the platform's shortcuts, alone: ⌘ on macOS, Ctrl elsewhere. */
 export function withCommand(event: KeyboardEvent) {

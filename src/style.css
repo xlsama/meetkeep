@@ -3,8 +3,8 @@
 @import "./components/videojs/styles/tailwind.css";
 
 @theme {
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --font-mono: "SF Mono", ui-monospace, Menlo, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, "Cascadia Mono", Consolas, monospace;
 
   --color-background: #ffffff;
   --color-foreground: #0d0d0d;
@@ -120,6 +120,10 @@
     -webkit-user-select: none;
     user-select: none;
     cursor: default;
+  }
+  :root[data-platform="windows"] * {
+    scrollbar-width: thin;
+    scrollbar-color: #d4d4d4 transparent;
   }
   :root[data-window="main"],
   :root[data-window="main"] body,

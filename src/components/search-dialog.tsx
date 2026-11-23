@@ -7,7 +7,7 @@ import { create } from "zustand";
 import { Highlight } from "@/components/highlight";
 import { clock, meetingDate, minutes } from "@/lib/format";
 import { cardsQuery, searchQuery } from "@/lib/queries";
-import { withCommand } from "@/lib/ui";
+import { shortcuts, withCommand } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 
 export const useSearchDialog = create<{ open: boolean; setOpen: (open: boolean) => void }>()((set) => ({
@@ -26,7 +26,7 @@ export function SearchTrigger() {
     >
       <Search className="size-3.5 shrink-0" />
       <span className="min-w-0 flex-1 truncate text-left text-ui">搜索</span>
-      <kbd className="shrink-0 font-sans text-tiny text-placeholder">⌘K</kbd>
+      <kbd className="shrink-0 font-sans text-tiny text-placeholder">{shortcuts.search}</kbd>
     </button>
   );
 }

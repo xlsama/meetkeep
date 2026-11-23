@@ -21,7 +21,7 @@ import { Config, type LLMProvider, type Settings } from "@/mygo";
 import { copyText } from "@/lib/clipboard";
 import { cliQuery, errorMessage, modelsQuery, queryClient, settingsPathQuery, settingsQuery } from "@/lib/queries";
 import { sections, type SectionId } from "@/lib/settings-sections";
-import { useWindowTitle } from "@/lib/ui";
+import { mac, shortcuts, useWindowTitle } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 
 const address = z
@@ -179,9 +179,9 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
         </form.Field>
         <form.Field name="general.menuBar">
           {(field) => (
-            <Row label="在菜单栏显示">
+            <Row label={mac ? "在菜单栏显示" : "在系统托盘显示"}>
               <Switch
-                aria-label="在菜单栏显示"
+                aria-label={mac ? "在菜单栏显示" : "在系统托盘显示"}
                 data-testid="settings-menu-bar"
                 checked={field.state.value}
                 onCheckedChange={(checked) => {
@@ -412,7 +412,7 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
         </form.Field>
         <Row label="侧边面板快捷键">
           <kbd className="inline-flex h-6 items-center rounded-[7px] border border-input bg-muted px-2 font-sans text-label text-secondary-foreground">
-            ⌥⌘M
+            {shortcuts.panel}
           </kbd>
         </Row>
         <form.Field name="recording.echoCancellation">

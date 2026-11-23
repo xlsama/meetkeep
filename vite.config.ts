@@ -21,7 +21,7 @@ export default defineConfig({
     rolldownOptions: { plugins: [offlineExcalidraw()] },
   },
   resolve: {
-    alias: { "@": new URL("./src", import.meta.url).pathname },
+    alias: { "@": "/src" },
   },
   server: {
     port: 5173,

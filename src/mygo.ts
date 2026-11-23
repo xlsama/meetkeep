@@ -457,7 +457,8 @@ export const Config = {
   /** Get returns the settings. */
   get: bind<[], Settings>("Config.Get", () => []),
   /**
-   * InstallCLI puts the meetkeep command in ~/.local/bin and returns where
+   * InstallCLI puts the meetkeep command on the user's path, in ~/.local/bin
+   * or the folder Windows keeps for the user's commands, and returns where
    * it is, with ~ for the home directory.
    */
   installCLI: bind<[], string>("Config.InstallCLI", () => []),

@@ -7,12 +7,14 @@ import { createRoot } from "react-dom/client";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { queryClient, syncQueries } from "@/lib/queries";
 import { startRecorder } from "@/lib/recorder";
+import { mac } from "@/lib/ui";
 import { router } from "@/router";
 import "@/style.css";
 
 const surfaces = ["panel", "mini", "menu", "toast", "detect"] as const;
 const surface = surfaces.find((name) => location.pathname.startsWith(`/${name}`)) ?? "main";
 document.documentElement.dataset.window = surface;
+document.documentElement.dataset.platform = mac ? "mac" : "windows";
 
 if (isMyGo()) {
   syncQueries();

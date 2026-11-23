@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronUp, Search } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Line } from "@/lib/transcript";
+import { withCommand } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 import { PaneGrip, usePaneHandle, usePaneMovable } from "@/components/workspace";
 
@@ -52,7 +53,7 @@ export function TranscriptHeader({ search, menu }: { search: TranscriptSearch; m
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() !== "f" || !event.metaKey || event.shiftKey || event.altKey) return;
+      if (event.key.toLowerCase() !== "f" || !withCommand(event)) return;
       event.preventDefault();
       show();
       input.current?.select();

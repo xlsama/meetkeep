@@ -11,6 +11,7 @@ import { useControls } from "@/lib/controls";
 import { clock, dayLabel } from "@/lib/format";
 import { errorMessage, meetingQuery, meetingsQuery, settingsQuery } from "@/lib/queries";
 import { isActive, useElapsed, useRecorder } from "@/lib/recorder";
+import { shortcuts } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 
 export function MenuPage() {
@@ -52,7 +53,7 @@ export function MenuPage() {
       <Separator />
       {active && status.meeting ? (
         <>
-          <Item testId="menu-show-panel" icon={<PanelRightOpen />} shortcut="⌥⌘M" onClick={() => void Windows.showPanel()}>
+          <Item testId="menu-show-panel" icon={<PanelRightOpen />} shortcut={shortcuts.panel} onClick={() => void Windows.showPanel()}>
             显示侧边面板
           </Item>
           <Item
@@ -85,10 +86,10 @@ export function MenuPage() {
       )}
       <Recent exclude={active ? status.meeting?.id : undefined} />
       <Separator />
-      <Item testId="menu-settings" shortcut="⌘," onClick={() => void Windows.showMain("/settings")}>
+      <Item testId="menu-settings" shortcut={shortcuts.settings} onClick={() => void Windows.showMain("/settings")}>
         设置…
       </Item>
-      <Item testId="menu-quit" shortcut="⌘Q" onClick={() => void Windows.quit()}>
+      <Item testId="menu-quit" shortcut={shortcuts.quit} onClick={() => void Windows.quit()}>
         退出 MeetKeep
       </Item>
     </div>

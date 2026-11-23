@@ -25,7 +25,7 @@ import { useImport, useImporter } from "@/lib/importer";
 import { settingsQuery } from "@/lib/queries";
 import { isActive, useRecorder } from "@/lib/recorder";
 import { sections } from "@/lib/settings-sections";
-import { useSheet, withCommand } from "@/lib/ui";
+import { mac, useSheet, withCommand } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace";
 import { NewSheet } from "@/routes/new-sheet";
@@ -64,7 +64,12 @@ export function MainLayout() {
 
   return (
     <div className="flex h-full flex-col bg-canvas">
-      <header className="drag flex h-[52px] shrink-0 items-center gap-3 pr-3 pl-[82px]">
+      <header
+        className={cn(
+          "drag flex h-[52px] shrink-0 items-center gap-3",
+          mac ? "pr-3 pl-[82px]" : "pr-[calc(var(--mygo-titlebar-inset-right,0px)+8px)] pl-3",
+        )}
+      >
         <HeaderButton label={sidebar ? "收起侧边栏" : "展开侧边栏"} testId="sidebar-toggle" onClick={toggleSidebar}>
           {sidebar ? <PanelLeftClose className="size-4" /> : <PanelLeft className="size-4" />}
         </HeaderButton>

@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -107,7 +108,7 @@ func defaults() Settings {
 			OpenRouter: LLMService{Model: "deepseek/deepseek-v4.1-flash"},
 		},
 		Recording: RecordingSettings{
-			Directory:        "~/Documents/MeetKeep",
+			Directory:        Contract(filepath.Join(home(), "Documents", "MeetKeep")),
 			DetectMeetings:   true,
 			ShowPanel:        true,
 			EchoCancellation: EchoAuto,
@@ -124,8 +125,7 @@ func Dir() string {
 	if dir := os.Getenv("MEETKEEP_HOME"); dir != "" {
 		return dir
 	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "meetkeep")
+	return filepath.Join(home(), ".config", "meetkeep")
 }
 
 func Path() string { return filepath.Join(Dir(), "settings.json") }
@@ -169,9 +169,15 @@ func Save(s Settings) error {
 	return os.Rename(tmp, Path())
 }
 
-// Contract writes the home directory at the start of path as ~.
+func home() string {
+	dir, _ := os.UserHomeDir()
+	return dir
+}
+
+// Contract writes the home directory at the start of path as ~, where
+// paths are written so: Windows keeps the path whole.
 func Contract(path string) string {
-	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(path, home+string(filepath.Separator)) {
+	if home := home(); runtime.GOOS != "windows" && home != "" && strings.HasPrefix(path, home+string(filepath.Separator)) {
 		return "~" + filepath.ToSlash(strings.TrimPrefix(path, home))
 	}
 	return path
@@ -180,8 +186,7 @@ func Contract(path string) string {
 // Expand turns a leading ~ into the home directory.
 func Expand(path string) string {
 	if path == "~" || strings.HasPrefix(path, "~/") {
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, path[1:])
+		return filepath.Join(home(), path[1:])
 	}
 	return path
 }

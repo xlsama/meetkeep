@@ -1,5 +1,6 @@
 {
   "name": "meetkeep",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +9,8 @@
     "generate": "mygo generate",
     "dev:web": "vite",
     "build:web": "vite build",
-    "build:cli": "go build -trimpath -ldflags=\"-s -w\" -o resources/$(go env GOOS)-$(go env GOARCH)/ ./cmd/meetkeep",
+    "build:cli": "bun scripts/build-cli.mjs",
+    "release": "bumpp --commit \"Release v%s\"",
     "check": "TSRS_FAST=1 oxlint",
     "test": "go test ./..."
   },
@@ -45,6 +47,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",
+    "bumpp": "^12.3.0",
     "mygo-cli": "^0.10.0",
     "oxc-transform-react": "^0.158.0",
     "oxlint": "^1.94.0",

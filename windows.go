@@ -3,7 +3,10 @@ package main
 import (
 	_ "embed"
 	"fmt"
+	"log"
 	"net/url"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,7 +31,8 @@ const (
 	miniWidth     = 440
 	miniHeight    = 44
 	miniMargin    = 16
-	panelShortcut = "Alt+Cmd+M"
+	panelShortcut = "Alt+CmdOrCtrl+M"
+	titleBar      = 52
 	toastWidth    = 380
 	toastHeight   = 96
 	toastStays    = 10 * time.Second
@@ -69,7 +73,7 @@ type windows struct {
 func (w *windows) start() error {
 	w.width = panelWidth
 	if err := mygo.GlobalShortcut.Register(panelShortcut, w.togglePanel); err != nil {
-		return err
+		log.Print(err)
 	}
 	go w.clock()
 	go w.app.watch()
@@ -107,9 +111,13 @@ func (w *windows) showTray(show bool) error {
 	if err != nil {
 		return err
 	}
-	if recording {
-		_ = tray.SetIcon(trayRecordingIcon, false)
-	}
+	drawTray(tray, recording)
+	tray.OnAppearanceChange(func() {
+		w.mu.Lock()
+		recording := w.active
+		w.mu.Unlock()
+		drawTray(tray, recording)
+	})
 	tray.OnClick(w.toggleMenu)
 	w.mu.Lock()
 	w.tray = tray
@@ -157,6 +165,7 @@ func (w *windows) openMain(route string) {
 		BackgroundColor:      "#ececec",
 		StateKey:             "main",
 		TitleBarStyle:        mygo.TitleBarHidden,
+		TitleBarHeight:       titleBar,
 		TrafficLightPosition: &mygo.Point{X: 18, Y: 20},
 	})
 	win.OnClose(func(e *mygo.CloseEvent) {
@@ -342,14 +351,14 @@ func (w *windows) follow(s recorder.Status) {
 	case active && !was:
 		w.closeNotice()
 		if tray != nil {
-			_ = tray.SetIcon(trayRecordingIcon, false)
+			drawTray(tray, true)
 		}
 		if w.app.current().Recording.ShowPanel {
 			w.setMode(panelOpen)
 		}
 	case !active && was:
 		if tray != nil {
-			_ = tray.SetIcon(trayIcon, true)
+			drawTray(tray, false)
 			tray.SetTitle("")
 		}
 		w.setMode(panelHidden)
@@ -457,6 +466,9 @@ func (w *windows) clock() {
 		if tray := w.item(); tray != nil && (title != shown || tray != on) {
 			shown, on = title, tray
 			tray.SetTitle(title)
+			if runtime.GOOS != "darwin" {
+				tray.SetToolTip(strings.TrimSpace("MeetKeep " + title))
+			}
 		}
 	}
 }

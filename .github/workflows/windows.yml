@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  validate:
+  test:
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -12,7 +12,6 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - uses: oven-sh/setup-bun@v2
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
@@ -53,7 +52,7 @@ jobs:
           go test -v -count=1 ./modules/capture
 
       - name: Settings, storage and the recorder
-        run: go test -count=1 ./internal/...
+        run: go test -count=1 ./internal/... ./cmd/...
 
       - name: Speech fixtures
         shell: bash
@@ -73,12 +72,57 @@ jobs:
           mygo native build -target host modules/speech
           MEETKEEP_SPEECH_FIXTURES="$PWD/fixtures" go test -v -count=1 ./modules/speech
 
-      - name: Build the app
+      - name: The app itself
+        run: go test -count=1 .
+
+  # The app run as a user runs it, on the runner's desktop: its windows, a
+  # recording from the virtual sound card, the command line. Pictures of
+  # every step are kept with the run.
+  smoke:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: oven-sh/setup-bun@v2
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            modules/capture/rust
+            modules/speech/rust
+      - uses: LABSN/sound-ci-helpers@v1
+
+      - name: Let desktop apps use the microphone
+        shell: pwsh
         run: |
-          bun install
-          bunx mygo build -skip-installer
+          foreach ($hive in 'HKLM', 'HKCU') {
+            reg add "$hive\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone" /v Value /t REG_SZ /d Allow /f
+          }
+          Set-DisplayResolution -Width 1920 -Height 1080 -Force
+
+      - name: Play a tone from another process
+        shell: pwsh
+        run: |
+          $wav = (Resolve-Path modules/capture/testdata/tone.wav).Path
+          Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile', '-Command', "while (1) { (New-Object System.Media.SoundPlayer '$wav').PlaySync() }"
+
+      - name: Build the app with the automation plugin
+        env:
+          GOFLAGS: -tags=e2e
+        run: |
+          bun install --frozen-lockfile
+          bun run build -- -debug -skip-installer
+          Get-ChildItem -Recurse build/windows-amd64 | Select-Object FullName, Length
+
+      - name: Run it
+        run: go run -tags e2e ./cmd/smoke build/windows-amd64/MeetKeep.exe smoke modules/capture/testdata/tone.wav
 
       - uses: actions/upload-artifact@v5
+        if: always()
         with:
-          name: meetkeep-windows
-          path: build/windows-amd64
+          name: smoke
+          path: |
+            smoke/*.png
+            smoke/app.log

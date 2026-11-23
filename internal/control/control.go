@@ -11,7 +11,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"syscall"
 
 	"github.com/xlsama/meetkeep/internal/config"
 	"github.com/xlsama/meetkeep/internal/store"
@@ -88,7 +87,7 @@ func Listen(handle func(context.Context, Request) (Answer, error)) (net.Listener
 func Send(ctx context.Context, request Request) (Answer, error) {
 	var dialer net.Dialer
 	conn, err := dialer.DialContext(ctx, "unix", path())
-	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ECONNREFUSED) {
+	if errors.Is(err, fs.ErrNotExist) || refused(err) {
 		return Answer{}, ErrNotRunning
 	}
 	if err != nil {

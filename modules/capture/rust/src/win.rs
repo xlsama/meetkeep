@@ -1,13 +1,18 @@
 use crate::mygo::{stream_of, App, CaptureError, Error, Stream};
+use crate::shell;
 use std::collections::{BTreeMap, VecDeque};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::sync::Arc;
 use sysinfo::{Pid, ProcessesToUpdate, System};
 use wasapi::{
-    initialize_mta, AudioClient, DeviceEnumerator, Direction, SampleType, SessionState, StreamMode,
-    WasapiError, WaveFormat,
+    initialize_mta, AudioClient, AudioClientProperties, DeviceEnumerator, Direction, SampleType, SessionState,
+    StreamCategory, StreamMode, WasapiError, WaveFormat,
 };
+use windows::Win32::Media::Audio::{Headphones, Headset, PKEY_AudioEndpoint_FormFactor};
+use windows::Win32::System::Com::StructuredStorage::{PropVariantClear, PropVariantToUInt32};
+use windows::Win32::System::Com::STGM_READ;
 
 const ACCESS_DENIED: i32 = 0x80070005u32 as i32;
 const FRAME_BYTES: usize = 9600;
@@ -17,7 +22,9 @@ type Failure = Box<dyn std::error::Error>;
 
 #[derive(Clone, Copy)]
 pub enum Target {
-    Microphone,
+    /// The microphone, as a call records it when echo is set: the system
+    /// takes what the speakers play out of it, where the device can.
+    Microphone { echo: bool },
     /// Everything the system plays but the process and its children.
     AllBut(u32),
     /// The process and its children alone.
@@ -118,14 +125,24 @@ fn capture(target: Target, stop: &AtomicBool, mut emit: impl FnMut(Vec<u8>) -> b
     initialize_mta().ok()?;
     let format = WaveFormat::new(16, 16, SampleType::Int, 48000, 1, None);
     let mut client = match target {
-        Target::Microphone => DeviceEnumerator::new()?
-            .get_default_device(Direction::Capture)?
-            .get_iaudioclient()?,
+        Target::Microphone { echo } => {
+            let client = DeviceEnumerator::new()?.get_default_device(Direction::Capture)?.get_iaudioclient()?;
+            if echo {
+                let _ = client.set_properties(AudioClientProperties::new().set_category(StreamCategory::Communications));
+            }
+            client
+        }
         Target::AllBut(process) => AudioClient::new_application_loopback_client(process, false)?,
         Target::Only(process) => AudioClient::new_application_loopback_client(process, true)?,
     };
     let mode = StreamMode::EventsShared { autoconvert: true, buffer_duration_hns: 0 };
     client.initialize_client(&format, Direction::Capture, mode, None)?;
+    if matches!(target, Target::Microphone { echo: true }) && client.is_aec_supported().unwrap_or(false) {
+        let speakers = DeviceEnumerator::new()?.get_default_device(Direction::Render).and_then(|device| device.get_id());
+        if let (Ok(control), Ok(speakers)) = (client.get_aec_control(), speakers) {
+            let _ = control.set_echo_cancellation_render_endpoint(Some(speakers));
+        }
+    }
     let event = client.set_get_eventhandle()?;
     let reader = client.get_audiocaptureclient()?;
     client.start_stream()?;
@@ -152,6 +169,20 @@ fn capture(target: Target, stop: &AtomicBool, mut emit: impl FnMut(Vec<u8>) -> b
 pub fn microphone() -> Result<String, Failure> {
     initialize_mta().ok()?;
     Ok(DeviceEnumerator::new()?.get_default_device(Direction::Capture)?.get_friendlyname()?)
+}
+
+/// Whether the default output is worn: headphones or a headset.
+pub fn headphones() -> Result<bool, Failure> {
+    initialize_mta().ok()?;
+    let device = DeviceEnumerator::new()?.get_default_device(Direction::Render)?;
+    let kind = unsafe {
+        let store = device.as_immdevice().OpenPropertyStore(STGM_READ)?;
+        let mut value = store.GetValue(&PKEY_AudioEndpoint_FormFactor)?;
+        let kind = PropVariantToUInt32(&value);
+        let _ = PropVariantClear(&mut value);
+        kind?
+    };
+    Ok(kind == Headphones.0 as u32 || kind == Headset.0 as u32)
 }
 
 fn processes() -> Result<System, Failure> {
@@ -192,26 +223,34 @@ fn sessions(direction: Direction) -> Result<Vec<App>, Failure> {
     initialize_mta().ok()?;
     let system = processes()?;
     let own = name(&system, std::process::id());
-    let mut found: BTreeMap<String, bool> = BTreeMap::new();
+    let mut found: BTreeMap<String, (bool, Option<PathBuf>)> = BTreeMap::new();
     for device in &DeviceEnumerator::new()?.get_device_collection(direction)? {
         let sessions = device?.get_iaudiosessionmanager()?.get_audiosessionenumerator()?;
         for i in 0..sessions.get_count()? {
             let session = sessions.get_session(i)?;
-            let Some(id) = name(&system, session.get_process_id()?) else { continue };
+            let process = session.get_process_id()?;
+            let Some(id) = name(&system, process) else { continue };
             if Some(&id) == own.as_ref() {
                 continue;
             }
             let playing = session.get_state()? == SessionState::Active;
-            *found.entry(id).or_default() |= playing;
+            let app = found.entry(id).or_default();
+            app.0 |= playing;
+            if app.1.is_none() {
+                app.1 = system.process(Pid::from_u32(root(&system, process))).and_then(|p| p.exe()).map(PathBuf::from);
+            }
         }
     }
     let mut apps: Vec<App> = found
         .into_iter()
-        .map(|(id, playing)| App {
-            name: id.trim_end_matches(".exe").to_string(),
-            id,
-            icon: Vec::new(),
-            playing,
+        .map(|(id, (playing, program))| {
+            let look = program.map(|path| shell::look(&path)).unwrap_or_default();
+            App {
+                name: if look.name.is_empty() { id.trim_end_matches(".exe").to_string() } else { look.name },
+                id,
+                icon: look.icon,
+                playing,
+            }
         })
         .collect();
     apps.sort_by_key(|app| !app.playing);
@@ -287,7 +326,7 @@ mod tests {
     fn the_tone_player_is_listed_and_found() {
         let Some(process) = tone() else { return };
         let listed = apps().expect("apps");
-        println!("apps: {:?}", listed.iter().map(|a| (&a.id, a.playing)).collect::<Vec<_>>());
+        println!("apps: {:?}", listed.iter().map(|a| (&a.id, &a.name, a.icon.len(), a.playing)).collect::<Vec<_>>());
         let system = processes().expect("processes");
         let player = name(&system, process).expect("the player's name");
         assert!(listed.iter().any(|a| a.id == player && a.playing), "{player} is not listed as playing");
@@ -326,8 +365,22 @@ mod tests {
     #[test]
     fn microphone_yields_frames() {
         let Some(_) = tone() else { return };
-        let (count, peak) = loudest(Target::Microphone, Duration::from_secs(2));
+        let (count, peak) = loudest(Target::Microphone { echo: false }, Duration::from_secs(2));
         println!("microphone: {count} frames, peak rms {peak:.4}");
         assert!(count >= 10, "got {count} frames in 2 s");
+    }
+
+    #[test]
+    fn microphone_of_a_call_yields_frames() {
+        let Some(_) = tone() else { return };
+        let (count, peak) = loudest(Target::Microphone { echo: true }, Duration::from_secs(2));
+        println!("microphone without echo: {count} frames, peak rms {peak:.4}");
+        assert!(count >= 10, "got {count} frames in 2 s");
+    }
+
+    #[test]
+    fn the_output_tells_whether_it_is_worn() {
+        let Some(_) = tone() else { return };
+        println!("headphones: {}", headphones().expect("headphones"));
     }
 }
