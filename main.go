@@ -67,7 +67,11 @@ func (a *app) start() error {
 		return fmt.Errorf("设置文件 %s 读不了：%w", config.Path(), err)
 	}
 	a.settings = settings
-	if err := os.MkdirAll(config.Dir(), 0o700); err != nil {
+	userData, err := mygo.App.Path(mygo.PathUserData)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(userData, 0o700); err != nil {
 		return err
 	}
 	ctx := context.Background()
