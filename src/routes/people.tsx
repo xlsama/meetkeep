@@ -7,7 +7,7 @@ import {
   tableFeatures,
   useTable,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, Ellipsis, LoaderCircle, Mic, Pencil, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Ellipsis, LoaderCircle, Pencil, Trash2 } from "lucide-react";
 import { createContext, use, useEffect, useMemo, useRef, useState, type Ref, type RefObject } from "react";
 import { Avatar } from "@/components/avatar";
 import { PageTitle } from "@/components/header-slot";
@@ -239,32 +239,22 @@ function SampleCell({ entry }: { entry: Entry }) {
   const { act } = useEditor();
   const person = entry.person;
 
-  if (!person) {
-    return (
-      <span className="inline-flex items-center gap-2.5">
-        <span className="inline-flex size-[30px] items-center justify-center text-subtle">
-          <Mic className="size-4" />
-        </span>
-        麦克风
-      </span>
-    );
-  }
+  if (!person) return <span className="text-muted-foreground">麦克风</span>;
   return (
-    <span className="inline-flex items-center gap-2.5">
-      <SampleButton
-        sampleKey={`person-${person.id}`}
-        label={`试听${person.name}`}
-        testId={`person-listen-${person.id}`}
-        size={11}
-        disabled={person.sampleMeeting === "" || person.sampleEndMs <= person.sampleStartMs}
-        onClick={() =>
-          void act(() =>
-            toggleSample(`person-${person.id}`, person.sampleMeeting, person.sampleStartMs, person.sampleEndMs),
-          )
-        }
-      />
+    <SampleButton
+      sampleKey={`person-${person.id}`}
+      label={`试听${person.name}`}
+      testId={`person-listen-${person.id}`}
+      size={9}
+      disabled={person.sampleMeeting === "" || person.sampleEndMs <= person.sampleStartMs}
+      onClick={() =>
+        void act(() =>
+          toggleSample(`person-${person.id}`, person.sampleMeeting, person.sampleStartMs, person.sampleEndMs),
+        )
+      }
+    >
       {person.samples} 段
-    </span>
+    </SampleButton>
   );
 }
 
