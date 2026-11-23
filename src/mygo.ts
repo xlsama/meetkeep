@@ -115,8 +115,6 @@ export interface Meeting {
    * imported video, or is "".
    */
   video: string;
-  /** Starred marks a meeting the user wants at hand. */
-  starred: boolean;
   /**
    * Named tells that the user chose Title; until then the notes may give
    * the meeting another.
@@ -541,8 +539,6 @@ export const Library = {
    * newest first.
    */
   search: bind<[string], SearchHit[]>("Library.Search", (query: string) => [query]),
-  /** Star marks a meeting as one the user wants at hand, or clears the mark. */
-  star: bind<[string, boolean], void>("Library.Star", (id: string, starred: boolean) => [id, starred]),
 } as const;
 
 /** People keeps the voices that are remembered. */

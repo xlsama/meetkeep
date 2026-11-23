@@ -26,8 +26,6 @@ const homeRoute = createRoute({
 const recordsRoute = createRoute({
   getParentRoute: () => mainRoute,
   path: "/meetings",
-  validateSearch: (search: Record<string, unknown>): { show?: "starred" } =>
-    search.show === "starred" ? { show: "starred" } : {},
   component: RecordsPage,
 });
 

@@ -16,7 +16,6 @@ import {
   Play,
   RotateCcw,
   Sparkles,
-  Star,
   Trash2,
   Upload,
   UserSearch,
@@ -26,6 +25,7 @@ import { isMyGo } from "mygo-runtime";
 import { useEffect, useState, useRef } from "react";
 import { Avatar } from "@/components/avatar";
 import { LevelMeter } from "@/components/level-meter";
+import { DeleteDialog, run } from "@/components/meeting-menu";
 import { MeetingAside, type AsideTab } from "@/components/meeting-aside";
 import { HeaderActions, HeaderTitle } from "@/components/header-slot";
 import { FaultNotice, Notice } from "@/components/notice";
@@ -36,15 +36,6 @@ import { TitleInput } from "@/components/title-input";
 import { Transcript } from "@/components/transcript";
 import { TranscriptHeader, transcriptIconButton, useTranscriptSearch } from "@/components/transcript-header";
 import { Workspace } from "@/components/workspace";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -60,7 +51,7 @@ import { useControls } from "@/lib/controls";
 import { clock, meetingDate, minutes, systemLabel } from "@/lib/format";
 import { clearProgress, useProgress } from "@/lib/progress";
 import { seqOf, useNotes, type Jump } from "@/lib/notes";
-import { errorMessage, meetingQuery } from "@/lib/queries";
+import { meetingQuery } from "@/lib/queries";
 import { useElapsed, useRecorder } from "@/lib/recorder";
 import { speakerVoice } from "@/lib/speakers";
 import { joined, lineAt, useTranscript, type Group } from "@/lib/transcript";
@@ -221,15 +212,6 @@ function RecordingBar({ meeting }: { meeting: Meeting }) {
       </div>
     </div>
   );
-}
-
-async function run(onError: (error: string | null) => void, action: () => Promise<unknown>) {
-  onError(null);
-  try {
-    await action();
-  } catch (err) {
-    onError(errorMessage(err));
-  }
 }
 
 function reprocess(id: string, onError: (error: string | null) => void) {
@@ -596,23 +578,6 @@ function ProgressBand({ meeting, progress }: { meeting: Meeting; progress: Progr
 function MoreMenu({ meeting, onError }: { meeting: Meeting; onError: (error: string | null) => void }) {
   const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const remove = async () => {
-    setDeleting(true);
-    setError(null);
-    try {
-      await Library.delete(meeting.id);
-      setConfirming(false);
-      void navigate({ to: "/meetings", replace: true });
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setDeleting(false);
-    }
-  };
-
   const processing = meeting.status === "processing";
   const notesState = useNotes(meeting.id);
 
@@ -630,13 +595,6 @@ function MoreMenu({ meeting, onError }: { meeting: Meeting; onError: (error: str
           <TooltipContent>更多</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem
-            data-testid="more-star"
-            onSelect={() => void run(onError, () => Library.star(meeting.id, !meeting.starred))}
-          >
-            <Star className={cn(meeting.starred && "fill-current")} />
-            {meeting.starred ? "取消收藏" : "收藏"}
-          </DropdownMenuItem>
           <DropdownMenuItem
             data-testid="more-save-recording"
             disabled={meeting.audio === "" || processing}
@@ -678,45 +636,19 @@ function MoreMenu({ meeting, onError }: { meeting: Meeting; onError: (error: str
           <DropdownMenuItem
             variant="destructive"
             data-testid="meeting-delete"
-            onSelect={() => {
-              setError(null);
-              setConfirming(true);
-            }}
+            onSelect={() => setConfirming(true)}
           >
             <Trash2 />
             删除
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <AlertDialog open={confirming} onOpenChange={(open) => !deleting && setConfirming(open)}>
-        <AlertDialogContent data-testid="delete-dialog">
-          <AlertDialogTitle>删除「{meeting.title}」？</AlertDialogTitle>
-          <AlertDialogDescription>录音会移到废纸篓。</AlertDialogDescription>
-          {error && <p className="m-0 mt-1 text-label text-destructive">{error}</p>}
-          <AlertDialogFooter>
-            <AlertDialogCancel asChild>
-              <Button variant="outline" size="md" data-testid="meeting-delete-cancel" disabled={deleting}>
-                取消
-              </Button>
-            </AlertDialogCancel>
-            <AlertDialogAction asChild>
-              <Button
-                variant="destructive"
-                size="md"
-                data-testid="meeting-delete-confirm"
-                disabled={deleting}
-                onClick={(event) => {
-                  event.preventDefault();
-                  void remove();
-                }}
-              >
-                {deleting && <LoaderCircle className="size-[13px] animate-spin" />}
-                删除
-              </Button>
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteDialog
+        meeting={meeting}
+        open={confirming}
+        onOpenChange={setConfirming}
+        onDeleted={() => void navigate({ to: "/meetings", replace: true })}
+      />
     </>
   );
 }

@@ -716,14 +716,6 @@ func (l *Library) Polish(ctx context.Context, id string) error {
 	return libraryChanged.Broadcast(id)
 }
 
-// Star marks a meeting as one the user wants at hand, or clears the mark.
-func (l *Library) Star(ctx context.Context, id string, starred bool) error {
-	if err := l.app.store.Star(ctx, id, starred); err != nil {
-		return err
-	}
-	return libraryChanged.Broadcast(id)
-}
-
 // Rename gives a meeting another title.
 func (l *Library) Rename(ctx context.Context, id, title string) error {
 	title = strings.TrimSpace(title)

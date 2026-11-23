@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ChevronRight, LoaderCircle, Upload } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { PageTitle } from "@/components/header-slot";
 import { cardGrid, MeetingCard, useNow } from "@/components/meeting-card";
+import { Notice } from "@/components/notice";
 import { SourceSummary } from "@/components/source-summary";
 import { useImport, useImporter } from "@/lib/importer";
 import { cardsQuery, settingsQuery } from "@/lib/queries";
@@ -23,6 +24,7 @@ export function Home() {
   const sources = settings.data?.sources;
   const importing = useImporter((s) => s.importing);
   const { pick } = useImport();
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (search.new !== 1) return;
@@ -41,6 +43,7 @@ export function Home() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
       <PageTitle title="首页" />
+      <Notice testId="home-error" message={error} onDismiss={() => setError(null)} />
       <div className="flex min-h-[250px] flex-1 items-center justify-center px-6 py-8">
         <div className="grid w-full max-w-[620px] grid-cols-2 gap-2">
           <div className="card flex h-[200px] min-w-0 flex-col items-center justify-center gap-4 px-5">
@@ -93,7 +96,7 @@ export function Home() {
           <h2 className="m-0 px-1.5 text-label font-medium text-muted-foreground">最近</h2>
           <div className={cn(cardGrid, "auto-rows-[0px] grid-rows-[auto] gap-y-0 overflow-hidden")} data-testid="home-recent">
             {recent.map((card) => (
-              <MeetingCard key={card.meeting.id} card={card} now={now} />
+              <MeetingCard key={card.meeting.id} card={card} now={now} onError={setError} />
             ))}
           </div>
         </section>
