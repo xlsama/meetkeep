@@ -35,6 +35,7 @@ const schema = z.object({
     detectMeetings: z.boolean(),
     showPanel: z.boolean(),
     echoCancellation: z.enum(["auto", "on", "off"]),
+    sounds: z.boolean(),
   }),
 });
 
@@ -86,6 +87,7 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
     sync("recording", "detectMeetings");
     sync("recording", "showPanel");
     sync("recording", "echoCancellation");
+    sync("recording", "sounds");
   }, [settings, form]);
 
   const save = async () => {
@@ -328,6 +330,21 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
                   关
                 </SegmentedItem>
               </Segmented>
+            </Row>
+          )}
+        </form.Field>
+        <form.Field name="recording.sounds">
+          {(field) => (
+            <Row label="提示音">
+              <Switch
+                aria-label="提示音"
+                data-testid="settings-sounds"
+                checked={field.state.value}
+                onCheckedChange={(checked) => {
+                  field.handleChange(checked);
+                  void save();
+                }}
+              />
             </Row>
           )}
         </form.Field>

@@ -32,6 +32,7 @@ var (
 func (a *app) Status(s recorder.Status) {
 	_ = statusChanged.Broadcast(s)
 	a.windows.follow(s)
+	a.sounds.follow(s)
 	a.notes.follow(s)
 	if s.Phase == recorder.Idle || s.Phase == recorder.Recording && s.ElapsedMs < 1000 {
 		_ = libraryChanged.Broadcast("")
@@ -40,4 +41,7 @@ func (a *app) Status(s recorder.Status) {
 
 func (a *app) Utterance(u recorder.LiveUtterance) { _ = utteranceChanged.Broadcast(u) }
 func (a *app) Levels(l recorder.Levels)           { _ = levelsChanged.Broadcast(l) }
-func (a *app) Fault(f recorder.Fault)             { _ = faulted.Broadcast(f) }
+func (a *app) Fault(f recorder.Fault) {
+	_ = faulted.Broadcast(f)
+	a.sounds.fault()
+}

@@ -217,6 +217,8 @@ export interface RecordingSettings {
   detectMeetings: boolean;
   showPanel: boolean;
   echoCancellation: EchoCancellation;
+  /** Sounds has the app sound what the recorder does and what it tells of. */
+  sounds: boolean;
   /** IgnoredApps are the apps whose calls are not announced. */
   ignoredApps: AppRef[];
 }

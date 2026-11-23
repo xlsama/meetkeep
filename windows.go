@@ -352,6 +352,9 @@ func (w *windows) notesReady(meeting store.Meeting, written notes.Notes) {
 		return
 	}
 	w.card(&w.toast, "/toast?meeting="+url.QueryEscape(meeting.ID), toastHeight, toastStays)
+	if w.app.recorder.Status().Phase == recorder.Idle {
+		w.app.sounds.play(cueReady)
+	}
 }
 
 func (w *windows) closeToast() { w.closeCard(&w.toast) }
@@ -360,6 +363,7 @@ func (w *windows) closeToast() { w.closeCard(&w.toast) }
 func (w *windows) announce(app config.AppRef) {
 	route := "/detect?app=" + url.QueryEscape(app.ID) + "&name=" + url.QueryEscape(app.Name)
 	w.card(&w.notice, route, noticeHeight, noticeStays)
+	w.app.sounds.play(cueNotice)
 }
 
 func (w *windows) closeNotice() { w.closeCard(&w.notice) }
