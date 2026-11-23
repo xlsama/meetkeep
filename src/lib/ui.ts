@@ -16,6 +16,9 @@ export function useWindowTitle(title: string) {
 
 export const mac = navigator.userAgent.includes("Mac");
 
+/** Where the app serves what a meeting is played from: WebView2 has a scheme under a host of its own. */
+export const recordings = mac ? "recording://localhost" : "http://recording.localhost";
+
 /** The shortcuts as the platform writes them. */
 export const shortcuts = mac
   ? { panel: "⌥⌘M", search: "⌘K", settings: "⌘,", quit: "⌘Q" }

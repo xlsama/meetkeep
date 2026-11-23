@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { recordings } from "@/lib/ui";
 
 export const useSample = create<{ playing: string | null }>()(() => ({ playing: null }));
 
@@ -47,7 +48,7 @@ export async function toggleSample(key: string, meetingId: string, startMs: numb
   pauseMain?.();
   audio ??= new Audio();
   const el = audio;
-  const src = `recording://localhost/${meetingId}/audio`;
+  const src = `${recordings}/${meetingId}/audio`;
   if (el.src !== src) {
     el.src = src;
     el.preload = "metadata";

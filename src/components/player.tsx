@@ -24,6 +24,7 @@ import { bindMain, stopSample } from "@/lib/sample";
 import { segmentsOf } from "@/lib/segments";
 import type { Chapter } from "@/mygo";
 import type { Group } from "@/lib/transcript";
+import { recordings } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 
 const rates = [5, 3, 2, 1.5, 1.25, 1];
@@ -188,7 +189,7 @@ export function VideoStage({ meetingId, durationMs, groups, chapters, spaceDisab
         }
       >
         <Video
-          src={`recording://localhost/${meetingId}/video`}
+          src={`${recordings}/${meetingId}/video`}
           preload="metadata"
           playsInline
           fallback={null}
@@ -204,7 +205,7 @@ export function AudioBar({ meetingId, durationMs, groups, chapters, spaceDisable
   return (
     <footer className="shrink-0 border-t border-divider px-1.5 py-1">
       <AudioSkin style={audioTokens} markers={<Markers groups={groups} chapters={chapters} durationMs={durationMs} />}>
-        <Audio src={`recording://localhost/${meetingId}/audio`} preload="metadata" fallback={null} />
+        <Audio src={`${recordings}/${meetingId}/audio`} preload="metadata" fallback={null} />
         <Hotkey keys="Space" action="togglePaused" target="document" disabled={spaceDisabled} />
       </AudioSkin>
     </footer>

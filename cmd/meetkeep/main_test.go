@@ -213,6 +213,10 @@ func TestJSON(t *testing.T) {
 
 func TestErrors(t *testing.T) {
 	fill(t)
+	missing, err := filepath.Abs(filepath.FromSlash("/nowhere/a.wav"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, c := range []struct {
 		args []string
 		code int
@@ -233,7 +237,7 @@ func TestErrors(t *testing.T) {
 		{[]string{"skill"}, 2, "skill needs show"},
 		{[]string{"status", "latest", "more"}, 2, `status takes no "more"`},
 		{[]string{"import"}, 2, "import needs <file>"},
-		{[]string{"import", "/nowhere/a.wav"}, 1, "no file /nowhere/a.wav"},
+		{[]string{"import", "/nowhere/a.wav"}, 1, "no file " + missing},
 		{[]string{"wait", "20261120", "--timeout", "30ms"}, 1, "not done after 30ms (recording): run meetkeep wait 20261120-090000-bbbb again"},
 	} {
 		stdout, stderr, code := meetkeep(t, c.args...)

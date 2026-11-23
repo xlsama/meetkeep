@@ -321,6 +321,12 @@ func main() {
 		time.Sleep(time.Second)
 		if value, _ := d.eval(main, `!!document.querySelector('[data-testid="new-sheet"]')`); value == "true" {
 			d.capture(main, "new-sheet")
+			if d.click(main, "sheet-scope-apps") {
+				time.Sleep(2 * time.Second)
+				d.tell(main, "apps", `[...document.querySelectorAll('[data-testid^="sheet-app-"]')].map((row) => ({name: row.innerText.trim(), icon: !!row.querySelector("img")}))`)
+				d.capture(main, "new-sheet-apps")
+				d.click(main, "sheet-scope-all")
+			}
 			d.click(main, "sheet-submit")
 		}
 		if panel, ok := d.find("/panel", 20*time.Second); ok {
@@ -376,7 +382,10 @@ func main() {
 		run("meetkeep transcript "+meeting.ID, "transcript", meeting.ID)
 		d.visit(main, "/meetings/"+meeting.ID)
 		time.Sleep(2 * time.Second)
-		d.tell(main, "playback of "+meeting.ID, fmt.Sprintf(`new Promise((done) => { const a = new Audio("recording://localhost/%s/audio"); a.preload = "metadata"; a.onloadedmetadata = () => done("loaded, " + a.duration + " s"); a.onerror = () => done("error " + (a.error && a.error.code)); setTimeout(() => done("nothing after 10 s"), 10000); })`, meeting.ID))
+		d.tell(main, "playback of "+meeting.ID, fmt.Sprintf(`new Promise((done) => { const a = new Audio((navigator.userAgent.includes("Mac") ? "recording://localhost" : "http://recording.localhost") + "/%s/audio"); a.preload = "metadata"; a.onloadedmetadata = () => done("loaded, " + a.duration + " s"); a.onerror = () => done("error " + (a.error && a.error.code)); setTimeout(() => done("nothing after 10 s"), 10000); })`, meeting.ID))
+		if value, _ := d.eval(main, `document.body.innerText.includes("MEDIA_ELEMENT_ERROR")`); value != "false" {
+			d.fail("player of "+meeting.ID, fmt.Errorf("the page says the recording cannot be played"))
+		}
 		d.capture(main, "meeting")
 	}
 	d.desktop("meeting")
