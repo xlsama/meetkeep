@@ -16,20 +16,24 @@ final class NativeRecorder: Recorder {
         Self.running { $0.recording }
     }
 
+    // The caller's thread has no autorelease pool: without one here, every
+    // call leaks the list of running applications.
     private static func running(having wanted: (AudioProcess) -> Bool) -> [App] {
-        let processes = AudioProcess.all()
-        let own = Bundle.main.bundleIdentifier
-        var found: [App] = []
-        for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular {
-            guard let id = app.bundleIdentifier, id != own else { continue }
-            let owned = processes.filter { $0.belongs(to: id) }
-            guard owned.contains(where: wanted) else { continue }
-            found.append(
-                App(
-                    id: id, name: app.localizedName ?? id, icon: Self.png(app.icon),
-                    playing: owned.contains { $0.playing }))
+        autoreleasepool {
+            let processes = AudioProcess.all()
+            let own = Bundle.main.bundleIdentifier
+            var found: [App] = []
+            for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular {
+                guard let id = app.bundleIdentifier, id != own else { continue }
+                let owned = processes.filter { $0.belongs(to: id) }
+                guard owned.contains(where: wanted) else { continue }
+                found.append(
+                    App(
+                        id: id, name: app.localizedName ?? id, icon: Self.png(app.icon),
+                        playing: owned.contains { $0.playing }))
+            }
+            return found
         }
-        return found
     }
 
     func microphone() throws -> String {

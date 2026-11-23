@@ -32,6 +32,7 @@ const (
 	toastWidth    = 380
 	toastHeight   = 96
 	toastStays    = 10 * time.Second
+	mainLingers   = 10 * time.Second
 	noticeHeight  = 132
 	noticeStays   = 30 * time.Second
 )
@@ -60,6 +61,7 @@ type windows struct {
 	mode   panelMode
 	width  int
 	active bool
+	closes int
 }
 
 func (w *windows) start() error {
@@ -88,12 +90,13 @@ func (w *windows) start() error {
 func (w *windows) showMain(route string) {
 	w.mu.Lock()
 	win := w.main
+	w.closes++
 	w.mu.Unlock()
+	mygo.App.Dock.Show()
 	if win != nil {
 		if route != "" {
 			_ = navigate.Emit(win, route)
 		}
-		mygo.App.Dock.Show()
 		win.Show()
 		win.Focus()
 		mygo.App.Focus()
@@ -102,7 +105,6 @@ func (w *windows) showMain(route string) {
 	if route == "" {
 		route = "/"
 	}
-	mygo.App.Dock.Show()
 	w.openMain(route)
 	mygo.App.Focus()
 }
@@ -121,15 +123,34 @@ func (w *windows) openMain(route string) {
 		TrafficLightPosition: &mygo.Point{X: 18, Y: 20},
 	})
 	win.OnClose(func(e *mygo.CloseEvent) {
-		if !w.quitting {
-			e.PreventDefault()
-			win.Hide()
-			mygo.App.Dock.Hide()
+		if w.quitting {
+			return
 		}
+		e.PreventDefault()
+		win.Hide()
+		mygo.App.Dock.Hide()
+		w.mu.Lock()
+		w.closes++
+		closed := w.closes
+		w.mu.Unlock()
+		time.AfterFunc(mainLingers, func() { w.retireMain(win, closed) })
 	})
 	w.mu.Lock()
 	w.main = win
 	w.mu.Unlock()
+}
+
+// retireMain frees a main window that stayed closed since the close numbered
+// closed: its page holds most of the memory of the app.
+func (w *windows) retireMain(win *mygo.Window, closed int) {
+	w.mu.Lock()
+	if w.main != win || w.closes != closed {
+		w.mu.Unlock()
+		return
+	}
+	w.main = nil
+	w.mu.Unlock()
+	win.Destroy()
 }
 
 func (w *windows) toggleMenu() {
@@ -184,7 +205,8 @@ func (w *windows) miniBounds() mygo.Rectangle {
 	}
 }
 
-// setMode shows the side panel, its collapsed strip, or neither.
+// setMode shows the side panel, its collapsed strip, or neither. After a
+// recording it frees them.
 func (w *windows) setMode(mode panelMode) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -213,8 +235,11 @@ func (w *windows) setMode(mode panelMode) {
 		}
 		w.panel.SetBounds(w.panelBounds())
 		w.panel.ShowInactive()
-	} else if w.panel != nil {
+	} else if w.panel != nil && w.active {
 		w.panel.Hide()
+	} else if w.panel != nil {
+		w.panel.Destroy()
+		w.panel = nil
 	}
 	if mode == panelMini {
 		if w.mini == nil {
@@ -238,8 +263,11 @@ func (w *windows) setMode(mode panelMode) {
 		}
 		w.mini.SetBounds(w.miniBounds())
 		w.mini.ShowInactive()
-	} else if w.mini != nil {
+	} else if w.mini != nil && w.active {
 		w.mini.Hide()
+	} else if w.mini != nil {
+		w.mini.Destroy()
+		w.mini = nil
 	}
 }
 
