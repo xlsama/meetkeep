@@ -25,7 +25,7 @@ import { useImport, useImporter } from "@/lib/importer";
 import { settingsQuery } from "@/lib/queries";
 import { isActive, useRecorder } from "@/lib/recorder";
 import { sections } from "@/lib/settings-sections";
-import { useSheet } from "@/lib/ui";
+import { useSheet, withCommand } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace";
 import { NewSheet } from "@/routes/new-sheet";
@@ -39,6 +39,16 @@ export function MainLayout() {
     return events.navigate.on((route) => {
       router.history.push(route || "/");
     });
+  }, [router]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "," || !withCommand(event)) return;
+      event.preventDefault();
+      router.history.push("/settings");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [router]);
 
   const setTitle = useHeader((s) => s.setTitle);

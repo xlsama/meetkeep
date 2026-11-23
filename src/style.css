@@ -178,25 +178,23 @@
 @layer components {
   .notes-time {
     display: inline-block;
-    padding: 0 5px;
-    border: 1px solid var(--color-border);
-    border-radius: 5px;
-    background: var(--color-background);
-    font-size: var(--text-micro);
-    line-height: 16px;
-    color: var(--color-muted-foreground);
+    padding: 0 4px;
+    border-radius: 4px;
+    background: var(--color-secondary);
+    font-size: 10px;
+    line-height: 15px;
+    vertical-align: 0.1em;
+    color: var(--color-placeholder);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
     cursor: pointer;
     user-select: none;
     transition:
       color 150ms,
-      background-color 150ms,
-      border-color 150ms;
+      background-color 150ms;
   }
   .notes-time:hover {
-    border-color: var(--color-border-strong);
-    background: var(--color-hover);
+    background: var(--color-selected);
     color: var(--color-foreground);
   }
   .notes-chip {

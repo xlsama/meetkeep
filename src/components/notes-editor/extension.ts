@@ -24,6 +24,7 @@ import { defineText } from "prosekit/extensions/text";
 import { defineVirtualSelection } from "prosekit/extensions/virtual-selection";
 import type { ProseMirrorNode } from "prosekit/pm/model";
 import { defineAssigneeView } from "@/components/notes-editor/assignee";
+import { defineSelectionHighlight } from "@/components/notes-editor/selection";
 import { defineTodos } from "@/components/notes-editor/todos";
 import { clock } from "@/lib/format";
 
@@ -151,6 +152,7 @@ export function defineNotesExtension() {
     defineBaseCommands(),
     defineHistory(),
     defineVirtualSelection(),
+    defineSelectionHighlight(),
     defineModClickPrevention(),
   );
 }

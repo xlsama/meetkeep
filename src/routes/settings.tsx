@@ -1,7 +1,7 @@
 import { useForm, useStore } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
-import { Check, ChevronDown, LoaderCircle, X } from "lucide-react";
+import { Check, ChevronDown, Copy, LoaderCircle, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
 import { PageTitle } from "@/components/header-slot";
@@ -57,7 +57,7 @@ export function SettingsPage() {
     <ScrollArea className="min-h-0 flex-1">
       <div className="mx-auto flex w-full max-w-[640px] flex-col gap-5 px-6 pt-9 pb-12" data-testid={`settings-${section.id}`}>
         <PageTitle title="设置" />
-        <h1 className="m-0 text-display font-semibold">{section.label}</h1>
+        <h1 className="m-0 text-[18px] font-semibold">{section.label}</h1>
         {settings.data && <SettingsForm settings={settings.data} section={section.id} />}
         {settings.error && <p className="m-0 text-label text-destructive">{errorMessage(settings.error)}</p>}
       </div>
@@ -468,8 +468,10 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
             {skillCommand}
           </span>
           <Button
-            variant="outline"
-            size="md"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="复制"
+            title="复制"
             data-testid="settings-skill-copy"
             onClick={async () => {
               try {
@@ -482,7 +484,7 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
               }
             }}
           >
-            {copied ? "已复制" : "复制"}
+            {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
           </Button>
         </Row>
       </Group>

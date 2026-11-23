@@ -7,6 +7,7 @@ import { create } from "zustand";
 import { Highlight } from "@/components/highlight";
 import { clock, meetingDate, minutes } from "@/lib/format";
 import { cardsQuery, searchQuery } from "@/lib/queries";
+import { withCommand } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 
 export const useSearchDialog = create<{ open: boolean; setOpen: (open: boolean) => void }>()((set) => ({
@@ -36,7 +37,7 @@ export function SearchDialog() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() !== "k" || !event.metaKey || event.shiftKey || event.altKey) return;
+      if (event.key.toLowerCase() !== "k" || !withCommand(event)) return;
       event.preventDefault();
       setOpen(!useSearchDialog.getState().open);
     };

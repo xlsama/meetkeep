@@ -13,3 +13,10 @@ export function useWindowTitle(title: string) {
     if (isMyGo()) void currentWindow.setTitle(title);
   }, [title]);
 }
+
+const mac = navigator.userAgent.includes("Mac");
+
+/** Whether a key is pressed with the key of the platform's shortcuts, alone: ⌘ on macOS, Ctrl elsewhere. */
+export function withCommand(event: KeyboardEvent) {
+  return (mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey) && !event.shiftKey && !event.altKey;
+}

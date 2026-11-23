@@ -128,7 +128,7 @@ func (a *app) start() error {
 		return err
 	}
 	if _, err := control.Listen(a.control); err != nil {
-		return err
+		log.Print(err)
 	}
 
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {

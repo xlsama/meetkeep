@@ -209,6 +209,21 @@
   box-shadow: none;
 }
 
+@supports selector(::highlight(notes-selection)) {
+  .notes-doc::selection,
+  .notes-doc ::selection {
+    background-color: transparent;
+  }
+
+  .notes-doc ::highlight(notes-selection) {
+    background-color: Highlight;
+  }
+
+  .notes-doc :is(.notes-time, .notes-chip, .notes-doubt)::highlight(notes-selection) {
+    background-color: transparent;
+  }
+}
+
 .notes-doc > h1 + p {
   margin-top: 6px;
   color: var(--color-secondary-foreground);
