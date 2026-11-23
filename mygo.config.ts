@@ -12,6 +12,7 @@ export default defineConfig({
   frontendDist: "dist",
   bindings: "src/mygo.ts",
   out: "build",
+  macos: { infoPlist: { LSEnvironment: { MallocLargeCache: "0" } } },
   // Phones: `mygo dev -platform ios` and `-platform android` run the app on a
   // simulator, an emulator or a device (`mygo devices` lists them, and
   // `mygo doctor` tells what is missing). What devices and stores need:

@@ -93,6 +93,7 @@ func (w *windows) showMain(route string) {
 		if route != "" {
 			_ = navigate.Emit(win, route)
 		}
+		mygo.App.Dock.Show()
 		win.Show()
 		win.Focus()
 		mygo.App.Focus()
@@ -101,6 +102,7 @@ func (w *windows) showMain(route string) {
 	if route == "" {
 		route = "/"
 	}
+	mygo.App.Dock.Show()
 	w.openMain(route)
 	mygo.App.Focus()
 }
@@ -122,6 +124,7 @@ func (w *windows) openMain(route string) {
 		if !w.quitting {
 			e.PreventDefault()
 			win.Hide()
+			mygo.App.Dock.Hide()
 		}
 	})
 	w.mu.Lock()
