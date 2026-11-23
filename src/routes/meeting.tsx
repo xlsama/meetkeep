@@ -237,6 +237,7 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
   const detail = useQuery(meetingQuery(meeting.id));
   const speakers = detail.data?.speakers ?? [];
   const { groups, lines, polished } = useTranscript(meeting.id, false);
+  const chapters = useNotes(meeting.id)?.notes?.chapters ?? [];
   const tracked = useProgress((s) => s.items[meeting.id]);
   const progress = tracked ?? detail.data?.progress ?? null;
   const processing = meeting.status === "processing";
@@ -322,6 +323,7 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
               meetingId={meeting.id}
               durationMs={meeting.durationMs}
               groups={groups}
+              chapters={chapters}
               spaceDisabled={tab === "board"}
             />
           )}
@@ -349,6 +351,7 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
               meetingId={meeting.id}
               durationMs={meeting.durationMs}
               groups={groups}
+              chapters={chapters}
               spaceDisabled={tab === "board"}
             />
           )}
@@ -362,7 +365,10 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
           onTabChange={onTabChange}
           onJump={(target) => {
             const line = lines.find((item) => item.seq === target.seq);
-            quoted.current = line ? { from: line.startMs, to: Math.max(line.endMs, line.startMs + 1200) + 150, entered: false } : null;
+            quoted.current =
+              line && !target.through
+                ? { from: line.startMs, to: Math.max(line.endMs, line.startMs + 1200) + 150, entered: false }
+                : null;
             seek(target.atMs, playable);
             void navigate({
               to: "/meetings/$id",

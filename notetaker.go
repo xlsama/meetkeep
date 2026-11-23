@@ -127,6 +127,33 @@ func (n *noteTaker) save(ctx context.Context, id string, written notes.Notes, er
 	}
 }
 
+// rename has a meeting's notes call a speaker by another name.
+func (n *noteTaker) rename(ctx context.Context, id, old, name string) {
+	kept, err := n.app.store.Notes(ctx, id)
+	if err != nil || kept.Data == "" || old == name {
+		return
+	}
+	var written notes.Notes
+	if json.Unmarshal([]byte(kept.Data), &written) != nil {
+		return
+	}
+	written = written.Renamed(old, name)
+	data, err := json.Marshal(written)
+	if err != nil {
+		return
+	}
+	doc, text := notes.RenamedDoc(kept.Doc, old, name), written.Text()
+	if kept.Doc != "" {
+		text = notes.RenamedText(kept.Text, old, name)
+	}
+	if string(data) == kept.Data && doc == kept.Doc {
+		return
+	}
+	if n.app.store.RewriteNotes(ctx, id, string(data), doc, text) == nil {
+		n.announce(id)
+	}
+}
+
 // follow keeps an outline of the meeting being recorded.
 func (n *noteTaker) follow(s recorder.Status) {
 	n.mu.Lock()

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { BoardPane } from "@/components/board";
 import { NotesDoc } from "@/components/notes-doc";
 import { SpeakersPane } from "@/components/speakers-pane";
+import { TimelinePane } from "@/components/timeline-pane";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Meeting } from "@/mygo";
 import { copyText } from "@/lib/clipboard";
@@ -13,9 +14,9 @@ import { useNotes, type Jump } from "@/lib/notes";
 import { meetingQuery } from "@/lib/queries";
 import { byTalk } from "@/lib/speakers";
 
-export type AsideTab = "summary" | "board" | "speakers";
+export type AsideTab = "summary" | "timeline" | "board" | "speakers";
 
-const asideTabs: AsideTab[] = ["summary", "board", "speakers"];
+const asideTabs: AsideTab[] = ["summary", "timeline", "board", "speakers"];
 
 export function MeetingAside({
   meeting,
@@ -39,7 +40,9 @@ export function MeetingAside({
   const notes = state?.notes ?? null;
   const speakers = useQuery(meetingQuery(meeting.id)).data?.speakers ?? [];
   const withSpeakers = !live && speakers.length > 0;
-  const shown = tab === "speakers" && !withSpeakers ? "summary" : tab;
+  const chapters = (!live && notes?.final && notes.chapters) || [];
+  const withTimeline = chapters.length > 0;
+  const shown = (tab === "speakers" && !withSpeakers) || (tab === "timeline" && !withTimeline) ? "summary" : tab;
   const copy = async () => {
     if (!state || !notes) return;
     let doc: DocNode = notesToDoc(notes);
@@ -63,7 +66,7 @@ export function MeetingAside({
   const label = !notes ? null : notes.final ? (shown === "summary" ? "定稿" : null) : `整理到 ${clock(notes.coveredMs)}`;
 
   return (
-    <aside aria-label="纪要、白板与发言人" className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <aside aria-label="纪要、时间轴、白板与发言人" className="flex min-h-0 min-w-0 flex-1 flex-col">
       <Tabs
         value={shown}
         onValueChange={(value) => onTabChange(asideTabs.find((item) => item === value) ?? "summary")}
@@ -73,6 +76,11 @@ export function MeetingAside({
           <TabsTrigger value="summary" data-testid="tab-summary" className="text-row">
             纪要
           </TabsTrigger>
+          {withTimeline && (
+            <TabsTrigger value="timeline" data-testid="tab-timeline" className="text-row">
+              时间轴
+            </TabsTrigger>
+          )}
           <TabsTrigger value="board" data-testid="tab-board" className="text-row">
             白板
           </TabsTrigger>
@@ -114,6 +122,11 @@ export function MeetingAside({
             onRetry={onRetry}
           />
         </TabsContent>
+        {withTimeline && (
+          <TabsContent value="timeline" className="flex flex-col">
+            {shown === "timeline" && <TimelinePane chapters={chapters} onJump={onJump} />}
+          </TabsContent>
+        )}
         <TabsContent value="board" className="flex flex-col">
           {shown === "board" && (
             <BoardPane meetingId={meeting.id} title={meeting.title} topics={notes?.topics ?? []} onJump={onJump} />

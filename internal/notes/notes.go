@@ -29,6 +29,18 @@ type Notes struct {
 	Todos     []Todo  `json:"todos"`
 	// Open are the matters left undecided, in final notes.
 	Open []Point `json:"open"`
+	// Chapters tell how the meeting went, from its start to its end, in
+	// final notes.
+	Chapters []Chapter `json:"chapters"`
+}
+
+// Chapter is a stretch of a meeting: what went on in it, and the
+// utterance it starts with.
+type Chapter struct {
+	Title string `json:"title"`
+	Text  string `json:"text"`
+	Seq   int    `json:"seq"`
+	AtMs  int64  `json:"atMs"`
 }
 
 type Topic struct {
@@ -80,7 +92,7 @@ const open = 1
 
 // Empty returns notes with nothing in them.
 func Empty() Notes {
-	return Notes{Conclusions: []Point{}, Topics: []Topic{}, Todos: []Todo{}, Open: []Point{}}
+	return Notes{Conclusions: []Point{}, Topics: []Topic{}, Todos: []Todo{}, Open: []Point{}, Chapters: []Chapter{}}
 }
 
 // Text returns the words of the notes, for searching.
@@ -110,6 +122,9 @@ func (n Notes) Text() string {
 	for _, p := range n.Open {
 		add(p.Text)
 	}
+	for _, c := range n.Chapters {
+		add(c.Title, c.Text)
+	}
 	return b.String()
 }
 
@@ -130,7 +145,12 @@ type answer struct {
 		Due   string `json:"due"`
 		Seq   int    `json:"seq"`
 	} `json:"todos"`
-	Open []answerPoint `json:"open"`
+	Open     []answerPoint `json:"open"`
+	Chapters []struct {
+		Title string `json:"title"`
+		Text  string `json:"text"`
+		Seq   int    `json:"seq"`
+	} `json:"chapters"`
 }
 
 type answerPoint struct {
@@ -223,7 +243,7 @@ const finalRules = `你在为一场已经结束的会议写定稿纪要。
 - glossary：专有名词的正确写法
 
 输出一个 JSON 对象，不要输出别的内容：
-{"title":"这场会的名字","headline":"一句话说清这场会定了什么","gist":"一句话交代这场会在谈什么","conclusions":[{"text":"定下来的一件事","seq":12}],"todos":[{"text":"要做的事","owner":"谁来做","due":"什么时候","seq":12}],"open":[{"text":"还没定的事，说清卡在哪","seq":12}],"topics":[{"title":"话题名","points":[{"text":"要点","seq":12}],"nodes":[{"text":"短语","seq":12,"uncertain":false}]}]}
+{"title":"这场会的名字","headline":"一句话说清这场会定了什么","gist":"一句话交代这场会在谈什么","conclusions":[{"text":"定下来的一件事","seq":12}],"todos":[{"text":"要做的事","owner":"谁来做","due":"什么时候","seq":12}],"open":[{"text":"还没定的事，说清卡在哪","seq":12}],"topics":[{"title":"话题名","points":[{"text":"要点","seq":12}],"nodes":[{"text":"短语","seq":12,"uncertain":false}]}],"chapters":[{"title":"这一段的标题","text":"这一段的经过","seq":12}]}
 
 规则：
 - title 不超过 14 个字，像日历上的会议名，说它是什么会、围绕什么事，比如"交付周会""定价方案评审"；不写结论，不带日期。输入的 title 已经是这样的名字时照用。
@@ -233,8 +253,11 @@ const finalRules = `你在为一场已经结束的会议写定稿纪要。
 - topics 按会议里出现的顺序排。话题名不超过 10 个字。要点写结论、决定、数字和分工，不写讨论过程；每条不超过 30 个字，每个话题最多 5 条。
 - nodes 是这个话题画在白板上的分支：把要点拆成更短的短语，一个节点只说一件事，每个不超过 12 个字，每个话题最多 5 个；没说定的在末尾加「？」并标 "uncertain": true。
 - 每条结论、要点、节点、待办和未定事项都要带 seq，指向它依据的那句发言。没有依据的内容不要写。
-- todos 只写明确有人认领或被指派的事；随口一提、没人应下的不算。owner 写发言里的说话人称呼，不要猜人名；没提到期限时 due 留空字符串。
+- todos 只写明确有人认领或被指派的事；随口一提、没人应下的不算。owner 写要做这件事的人：自己认领的写这位说话人的称呼，被点名指派的写发言里点到的名字；听不出是谁就留空字符串，不要拿下指令的人或别的说话人来填。没提到期限时 due 留空字符串。
 - 提出来但没有说定的事写进 open，不写进 todos。有人只是表示"可以接""到时候看"而没有明确应下的，也算没说定。
+- chapters 是这场会的时间轴：按时间从头到尾把会议分成首尾相接的几段，说的事换了就另起一段，前面谈过的事后面又谈起也另起一段，不要并回去。大约每 3 到 5 分钟一段，全场最多 14 段，短会两三段就够。seq 指向这一段开头的那句发言，各段的 seq 从小到大。
+- 每段的 title 是这一段内容的标题，不超过 16 个字，不带句号，概括这一段谈的是什么事，像文章的小标题（"标书提前准备""认证与薪酬挂钩"）。这一段是某个人的事时可以带上人名（"张云推进江苏商机"），但主持会议、从头讲到尾的那个人不要每段都写进标题。text 用一两句话、不超过 70 个字写经过，写清是谁：谁提了什么、要求了什么、别人怎么回应。和 topics 不同，这里要写过程。
+- chapters 里的人：有名字的说话人和发言里点到的人名照写，「我」照写；「说话人 1」「对方」这类没有名字的称呼不要写出来，只写事情。
 - 用发言所用的语言写。glossary 里的词按它的写法写。
 - 发言太少、没有可记的内容时，各项给空数组，title、headline 和 gist 给空字符串。`
 
@@ -374,6 +397,17 @@ func Finalize(ctx context.Context, model Completer, title string, lines []Line, 
 	}
 	notes.Todos = a.todos(bySeq, []Todo{})
 	notes.Open = cited(a.Open, bySeq)
+	for _, c := range a.Chapters {
+		line, ok := bySeq[c.Seq]
+		title := strings.TrimSpace(c.Title)
+		if !ok || title == "" {
+			continue
+		}
+		if n := len(notes.Chapters); n > 0 && notes.Chapters[n-1].AtMs >= line.StartMs {
+			continue
+		}
+		notes.Chapters = append(notes.Chapters, Chapter{Title: title, Text: strings.TrimSpace(c.Text), Seq: c.Seq, AtMs: line.StartMs})
+	}
 	if len(lines) > 0 {
 		notes.CoveredMs = lines[len(lines)-1].EndMs
 	}

@@ -22,6 +22,7 @@ import { ButtonTooltip } from "@/components/videojs/ui/button-tooltip";
 import { VideoSkin } from "@/components/videojs/video/skin";
 import { bindMain, stopSample } from "@/lib/sample";
 import { segmentsOf } from "@/lib/segments";
+import type { Chapter } from "@/mygo";
 import type { Group } from "@/lib/transcript";
 import { cn } from "@/lib/utils";
 
@@ -129,9 +130,40 @@ function SpeakerMarkers({ groups, durationMs }: { groups: Group[]; durationMs: n
   );
 }
 
-type StageProps = { meetingId: string; durationMs: number; groups: Group[]; spaceDisabled: boolean };
+function ChapterMarkers({ chapters, durationMs }: { chapters: Chapter[]; durationMs: number }) {
+  const duration = usePlayer(selectTime)?.duration ?? 0;
+  const total = duration > 0 ? duration * 1000 : durationMs;
 
-export function VideoStage({ meetingId, durationMs, groups, spaceDisabled }: StageProps) {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2">
+      {chapters.map(
+        (chapter, index) =>
+          index > 0 &&
+          chapter.atMs < total && (
+            <div
+              key={chapter.seq}
+              data-testid="player-chapter"
+              className="absolute -inset-y-[3px] w-0.5 -translate-x-1/2 rounded-full bg-background"
+              style={{ left: `${(chapter.atMs / total) * 100}%` }}
+            />
+          ),
+      )}
+    </div>
+  );
+}
+
+function Markers({ groups, chapters, durationMs }: { groups: Group[]; chapters: Chapter[]; durationMs: number }) {
+  return (
+    <>
+      <SpeakerMarkers groups={groups} durationMs={durationMs} />
+      <ChapterMarkers chapters={chapters} durationMs={durationMs} />
+    </>
+  );
+}
+
+type StageProps = { meetingId: string; durationMs: number; groups: Group[]; chapters: Chapter[]; spaceDisabled: boolean };
+
+export function VideoStage({ meetingId, durationMs, groups, chapters, spaceDisabled }: StageProps) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(collapsedKey) === "1");
   const toggle = () => {
     const next = !collapsed;
@@ -146,7 +178,7 @@ export function VideoStage({ meetingId, durationMs, groups, spaceDisabled }: Sta
         style={videoTokens}
         collapsed={collapsed}
         className={collapsed ? "h-14!" : "mx-auto aspect-video h-auto! w-[min(100%,calc(45cqh*16/9))]!"}
-        markers={<SpeakerMarkers groups={groups} durationMs={durationMs} />}
+        markers={<Markers groups={groups} chapters={chapters} durationMs={durationMs} />}
         actions={
           <ButtonTooltip side="top" label={label}>
             <MediaButton type="button" aria-label={label} data-testid="player-collapse" onClick={toggle}>
@@ -168,10 +200,10 @@ export function VideoStage({ meetingId, durationMs, groups, spaceDisabled }: Sta
   );
 }
 
-export function AudioBar({ meetingId, durationMs, groups, spaceDisabled }: StageProps) {
+export function AudioBar({ meetingId, durationMs, groups, chapters, spaceDisabled }: StageProps) {
   return (
     <footer className="shrink-0 border-t border-divider px-1.5 py-1">
-      <AudioSkin style={audioTokens} markers={<SpeakerMarkers groups={groups} durationMs={durationMs} />}>
+      <AudioSkin style={audioTokens} markers={<Markers groups={groups} chapters={chapters} durationMs={durationMs} />}>
         <Audio src={`recording://localhost/${meetingId}/audio`} preload="metadata" fallback={null} />
         <Hotkey keys="Space" action="togglePaused" target="document" disabled={spaceDisabled} />
       </AudioSkin>

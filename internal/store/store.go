@@ -409,6 +409,13 @@ func (s *Store) ReplaceNotes(ctx context.Context, meetingID, data, text string) 
 		previous_text = text, data = ?, doc = '', text = ?, error = '' WHERE meeting_id = ?`, data, text, meetingID))
 }
 
+// RewriteNotes stores a meeting's notes, the document made of them and
+// their words as they read once a name in them changed.
+func (s *Store) RewriteNotes(ctx context.Context, meetingID, data, doc, text string) error {
+	return s.changed(s.db.Execute(ctx, "UPDATE notes SET data = ?, doc = ?, text = ? WHERE meeting_id = ?",
+		data, doc, text, meetingID))
+}
+
 // RestoreNotes brings back the notes that ReplaceNotes replaced, and
 // keeps those it replaces in their place.
 func (s *Store) RestoreNotes(ctx context.Context, meetingID string) error {
@@ -626,6 +633,25 @@ func (s *Store) Voices(ctx context.Context) (map[int][][]float32, map[int]string
 		voices[id] = append(voices[id], decode(row[2].([]byte)))
 	}
 	return voices, names, nil
+}
+
+// Appearances returns a person's name and the meetings they talk in.
+func (s *Store) Appearances(ctx context.Context, id int) (name string, meetings []string, err error) {
+	rows, err := s.db.Query(ctx, "SELECT name FROM people WHERE id = ?", id)
+	if err != nil {
+		return "", nil, err
+	}
+	if len(rows.Values) == 0 {
+		return "", nil, ErrNotFound
+	}
+	name = rows.Values[0][0].(string)
+	if rows, err = s.db.Query(ctx, "SELECT DISTINCT meeting_id FROM speakers WHERE person_id = ?", id); err != nil {
+		return "", nil, err
+	}
+	for _, row := range rows.Values {
+		meetings = append(meetings, row[0].(string))
+	}
+	return name, meetings, nil
 }
 
 // RenamePerson gives a person another name, in every meeting they talk in.

@@ -32,11 +32,11 @@ const recordsRoute = createRoute({
 const meetingRoute = createRoute({
   getParentRoute: () => mainRoute,
   path: "/meetings/$id",
-  validateSearch: (search: Record<string, unknown>): { t?: number; tab?: "board" | "speakers" } => {
+  validateSearch: (search: Record<string, unknown>): { t?: number; tab?: "timeline" | "board" | "speakers" } => {
     const t = Number(search.t);
     return {
       ...(search.t !== undefined && Number.isFinite(t) && t >= 0 && { t }),
-      ...((search.tab === "board" || search.tab === "speakers") && { tab: search.tab }),
+      ...((search.tab === "timeline" || search.tab === "board" || search.tab === "speakers") && { tab: search.tab }),
     };
   },
   component: lazyRouteComponent(() => import("@/routes/meeting"), "MeetingPage"),

@@ -240,3 +240,26 @@
   background: var(--color-hover);
   color: var(--color-foreground);
 }
+
+.notes-doc .notes-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  vertical-align: top;
+}
+
+.notes-doc button.notes-owner {
+  cursor: pointer;
+  outline: none;
+}
+
+.notes-doc .notes-chip:has(button.notes-owner:is(:hover, :focus-visible, [data-state="open"])) {
+  background: var(--color-selected);
+}

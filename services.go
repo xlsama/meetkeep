@@ -294,9 +294,12 @@ func (l *Library) RenameSpeaker(ctx context.Context, id string, speaker int, nam
 	if err != nil {
 		return err
 	}
-	remembered := false
+	remembered, old := false, ""
 	for _, s := range speakers {
 		remembered = remembered || s.ID == speaker && s.Remembered
+		if s.ID == speaker {
+			old = s.Name
+		}
 	}
 	if remembered {
 		if err := l.app.store.Forget(ctx, id, speaker); err != nil {
@@ -311,6 +314,7 @@ func (l *Library) RenameSpeaker(ctx context.Context, id string, speaker int, nam
 			return err
 		}
 	}
+	l.app.notes.rename(ctx, id, old, name)
 	return libraryChanged.Broadcast(id)
 }
 
@@ -335,8 +339,19 @@ func (l *Library) MergeSpeakers(ctx context.Context, id string, from, into int) 
 	if from == into {
 		return nil
 	}
+	speakers, err := l.app.store.Speakers(ctx, id)
+	if err != nil {
+		return err
+	}
+	names := map[int]string{}
+	for _, s := range speakers {
+		names[s.ID] = s.Name
+	}
 	if err := l.app.store.MergeSpeakers(ctx, id, from, into); err != nil {
 		return err
+	}
+	if names[from] != "" && names[into] != "" {
+		l.app.notes.rename(ctx, id, names[from], names[into])
 	}
 	return libraryChanged.Broadcast(id)
 }
@@ -477,6 +492,10 @@ func matchingNotes(kept store.StoredNotes, query string) []SearchNote {
 	}
 	for _, todo := range saved.Todos {
 		add(todo.Text, todo.AtMs)
+	}
+	for _, chapter := range saved.Chapters {
+		add(chapter.Title, chapter.AtMs)
+		add(chapter.Text, chapter.AtMs)
 	}
 	for _, p := range saved.Open {
 		add(p.Text, p.AtMs)
@@ -787,8 +806,15 @@ func (p *People) Rename(ctx context.Context, id int, name string) error {
 	if name == "" {
 		return errors.New("名字不能为空")
 	}
+	old, meetings, err := p.app.store.Appearances(ctx, id)
+	if err != nil {
+		return err
+	}
 	if err := p.app.store.RenamePerson(ctx, id, name); err != nil {
 		return err
+	}
+	for _, meeting := range meetings {
+		p.app.notes.rename(ctx, meeting, old, name)
 	}
 	return libraryChanged.Broadcast("")
 }

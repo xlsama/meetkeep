@@ -105,7 +105,8 @@ func TestUpdateAppendsAndRewritesOnlyTheLastTopic(t *testing.T) {
 
 func TestFinalize(t *testing.T) {
 	model := &scripted{answers: []string{`{"title":" 上线对齐会 ","headline":"3 月 14 号上线","gist":"我和对方对齐上线前剩下的事","conclusions":[{"text":"3 月 14 号上线","seq":2},{"text":"没有出处的结论","seq":50}],"topics":[{"title":"上线日期","points":[{"text":"定在 3 月 14 号","seq":2}]}],
-		"todos":[{"text":"排支付回归","owner":"我","due":"周五","seq":4}],"open":[{"text":"首页文案谁来写","seq":3},{"text":"编的","seq":40}]}`}}
+		"todos":[{"text":"排支付回归","owner":"我","due":"周五","seq":4}],"open":[{"text":"首页文案谁来写","seq":3},{"text":"编的","seq":40}],
+		"chapters":[{"title":"对齐上线日期","text":"定在 3 月 14 号。","seq":2},{"title":"没有出处的一段","text":"","seq":70},{"title":"往回走的一段","text":"","seq":1},{"title":"分掉剩下的事","text":"支付回归有人排了。","seq":4}]}`}}
 	notes, err := Finalize(context.Background(), model, "上线前对齐会", lines(4), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -121,6 +122,9 @@ func TestFinalize(t *testing.T) {
 	}
 	if text := notes.Text(); !strings.Contains(text, "首页文案谁来写") || !strings.Contains(text, "排支付回归") || !strings.Contains(text, "对齐上线前") {
 		t.Errorf("the searchable text is %q", text)
+	}
+	if c := notes.Chapters; len(c) != 2 || c[0].AtMs != 10000 || c[1].Title != "分掉剩下的事" || c[1].AtMs != 30000 {
+		t.Errorf("the chapters are %+v", c)
 	}
 	if !strings.Contains(model.asked[0], "上线前对齐会") {
 		t.Error("the title was not sent")

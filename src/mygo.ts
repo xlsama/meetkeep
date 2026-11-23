@@ -35,6 +35,17 @@ export interface Card {
   speakers: Speaker[];
 }
 
+/**
+ * Chapter is a stretch of a meeting: what went on in it, and the
+ * utterance it starts with.
+ */
+export interface Chapter {
+  title: string;
+  text: string;
+  seq: number;
+  atMs: number;
+}
+
 export type EchoCancellation = "auto" | "on" | "off";
 
 /** Fault is something that went wrong while recording goes on. */
@@ -158,6 +169,11 @@ export interface Notes {
   todos: Todo[];
   /** Open are the matters left undecided, in final notes. */
   open: Point[];
+  /**
+   * Chapters tell how the meeting went, from its start to its end, in
+   * final notes.
+   */
+  chapters: Chapter[];
 }
 
 /** NotesState is what is known of a meeting's notes. */

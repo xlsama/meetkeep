@@ -5,6 +5,7 @@ import { definePlaceholder } from "prosekit/extensions/placeholder";
 import { defineReadonly } from "prosekit/extensions/readonly";
 import { ProseKit, useDocChange, useExtension } from "prosekit/react";
 import { useCallback, useEffect, useState } from "react";
+import { NotesMeeting } from "@/components/notes-editor/assignee";
 import { defineNotesExtension, docText, type NotesExtension } from "@/components/notes-editor/extension";
 import { InlineMenu } from "@/components/notes-editor/inline-menu";
 import { SlashMenu } from "@/components/notes-editor/slash-menu";
@@ -110,26 +111,28 @@ export default function NotesEditor({
   useEffect(() => () => session.flush(), [session]);
 
   return (
-    <ProseKit editor={editor}>
-      <div className="relative">
-        <div
-          ref={mount}
-          data-testid="notes-editor"
-          data-selectable
-          className="notes-doc"
-          onClick={(event) => {
-            const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-timestamp]") : null;
-            if (!target) return;
-            onJump({ seq: Number(target.dataset.seq ?? -1), atMs: Number(target.dataset.ms ?? 0) });
-          }}
-        />
-        {editable && (
-          <>
-            <InlineMenu />
-            <SlashMenu />
-          </>
-        )}
-      </div>
-    </ProseKit>
+    <NotesMeeting value={meetingId}>
+      <ProseKit editor={editor}>
+        <div className="relative">
+          <div
+            ref={mount}
+            data-testid="notes-editor"
+            data-selectable
+            className="notes-doc"
+            onClick={(event) => {
+              const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-timestamp]") : null;
+              if (!target) return;
+              onJump({ seq: Number(target.dataset.seq ?? -1), atMs: Number(target.dataset.ms ?? 0) });
+            }}
+          />
+          {editable && (
+            <>
+              <InlineMenu />
+              <SlashMenu />
+            </>
+          )}
+        </div>
+      </ProseKit>
+    </NotesMeeting>
   );
 }

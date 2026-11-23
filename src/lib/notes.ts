@@ -3,7 +3,7 @@ import type { Notes } from "@/mygo";
 import { notesQuery } from "@/lib/queries";
 import { lineAt, type Line } from "@/lib/transcript";
 
-export type Jump = { seq: number; atMs: number };
+export type Jump = { seq: number; atMs: number; through?: boolean };
 
 export function useNotes(meetingId: string) {
   const query = useQuery({ ...notesQuery(meetingId), enabled: meetingId !== "" });
