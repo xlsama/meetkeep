@@ -21,7 +21,7 @@ export function MeetingCard({ card, now, onError }: { card: Card; now: Date; onE
         to="/meetings/$id"
         params={{ id: meeting.id }}
         data-testid={`meeting-card-${meeting.id}`}
-        className="card flex h-[164px] flex-col gap-2 p-4 text-foreground shadow-[0_0_0_0.5px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.04)] transition-shadow outline-none hover:shadow-[0_0_0_0.5px_rgba(0,0,0,0.12),0_2px_4px_rgba(0,0,0,0.05),0_10px_24px_rgba(0,0,0,0.1)] focus-visible:shadow-[0_0_0_3px_rgba(0,0,0,0.12)]"
+        className="card flex h-[164px] flex-col gap-2 p-4 text-foreground shadow-[0_0_0_0.5px_rgba(0,0,0,0.12),0_1px_2px_rgba(0,0,0,0.04)] transition-[box-shadow,scale] duration-100 ease-out outline-none hover:shadow-[0_0_0_0.5px_rgba(0,0,0,0.3),0_1px_2px_rgba(0,0,0,0.06),0_3px_8px_-2px_rgba(0,0,0,0.08)] active:scale-[0.99] focus-visible:shadow-[0_0_0_3px_rgba(0,0,0,0.12)]"
       >
         <span className="truncate pr-[30px] text-body leading-[1.4] font-semibold">{meeting.title}</span>
         {card.headline ? (
