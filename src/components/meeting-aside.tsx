@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Meeting } from "@/mygo";
 import { copyText } from "@/lib/clipboard";
 import { clock } from "@/lib/format";
-import { notesToDoc, summaryMarkdown, type DocNode } from "@/lib/notes-doc";
+import { stateDoc, summaryMarkdown } from "@/lib/notes-doc";
 import { useQuery } from "@tanstack/react-query";
 import { useNotes, type Jump } from "@/lib/notes";
 import { meetingQuery } from "@/lib/queries";
@@ -45,14 +45,7 @@ export function MeetingAside({
   const shown = (tab === "speakers" && !withSpeakers) || (tab === "timeline" && !withTimeline) ? "summary" : tab;
   const copy = async () => {
     if (!state || !notes) return;
-    let doc: DocNode = notesToDoc(notes);
-    if (state.doc !== "") {
-      try {
-        doc = JSON.parse(state.doc) as DocNode;
-      } catch {
-        doc = notesToDoc(notes);
-      }
-    }
+    const doc = stateDoc(state);
     try {
       const names = byTalk(speakers).map((speaker) => speaker.name);
       const head = [meeting.title, ...(names.length > 0 ? [`发言人：${names.join("、")}`] : [])];

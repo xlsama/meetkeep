@@ -1,4 +1,4 @@
-import type { Notes, Point, Todo, Topic } from "@/mygo";
+import type { Notes, NotesState, Point, Todo, Topic } from "@/mygo";
 
 export type DocNode = {
   type: string;
@@ -69,6 +69,46 @@ export function notesToDoc(notes: Notes | null): DocNode {
         ...notes.topics.flatMap((topic) => topicBlocks(topic, false)),
       ];
   return { type: "doc", content: content.length > 0 ? content : [paragraph([])] };
+}
+
+export function stateDoc(state: NotesState): DocNode {
+  if (state.doc !== "") {
+    try {
+      return JSON.parse(state.doc) as DocNode;
+    } catch {
+      return notesToDoc(state.notes);
+    }
+  }
+  return notesToDoc(state.notes);
+}
+
+export type DocTodo = { text: string; owner: string; due: string; checked: boolean };
+
+export function todosIn(doc: DocNode) {
+  const todos: DocTodo[] = [];
+  const attr = (node: DocNode | undefined, name: string) => {
+    const value = node?.attrs?.[name];
+    return typeof value === "string" ? value.trim() : "";
+  };
+  const walk = (node: DocNode) => {
+    if (node.type === "list" && node.attrs?.kind === "task") {
+      const line = node.content?.[0]?.content ?? [];
+      const assignee = line.find((child) => child.type === "assignee");
+      todos.push({
+        text: line
+          .map((child) => (child.type === "text" ? (child.text ?? "") : ""))
+          .join("")
+          .replaceAll(/[ \u2060]+/g, " ")
+          .trim(),
+        owner: attr(assignee, "owner"),
+        due: attr(assignee, "due"),
+        checked: node.attrs.checked === true,
+      });
+    }
+    node.content?.forEach(walk);
+  };
+  walk(doc);
+  return todos;
 }
 
 function inline(nodes: DocNode[] | undefined): string {

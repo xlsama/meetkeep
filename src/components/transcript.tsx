@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { motion } from "motion/react";
-import { Pencil } from "lucide-react";
+import {} from "lucide-react";
 import { Popover } from "radix-ui";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Avatar } from "@/components/avatar";
@@ -216,12 +216,11 @@ function GroupView({
                   type="button"
                   data-testid={`speaker-name-${group.key}`}
                   className={cn(
-                    "group/name -mx-1.5 inline-flex h-6 cursor-pointer items-center gap-1 rounded-md px-1.5 text-subtle outline-none transition-colors hover:bg-hover hover:text-foreground focus-visible:bg-hover data-[state=open]:bg-hover data-[state=open]:text-foreground",
+                    "-mx-1.5 inline-flex h-6 cursor-pointer items-center rounded-md px-1.5 text-subtle outline-none transition-colors hover:bg-hover hover:text-foreground focus-visible:bg-hover data-[state=open]:bg-hover data-[state=open]:text-foreground",
                     style.name,
                   )}
                 >
                   {voice.name}
-                  <Pencil className="hidden size-3 group-hover/name:block group-data-[state=open]/name:block" />
                 </button>
               </Popover.Trigger>
             )}

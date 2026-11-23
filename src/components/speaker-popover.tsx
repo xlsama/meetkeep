@@ -5,20 +5,27 @@ import { useState, type RefObject } from "react";
 import { Avatar } from "@/components/avatar";
 import { Button } from "@/components/ui/button";
 import { Library } from "@/mygo";
+import { span } from "@/lib/format";
+import { useNotes } from "@/lib/notes";
+import { stateDoc, todosIn } from "@/lib/notes-doc";
 import { errorMessage, meetingQuery, peopleQuery } from "@/lib/queries";
-import { speakerVoice, tones } from "@/lib/speakers";
+import { speakerNamed, speakerVoice, tones } from "@/lib/speakers";
+import { cn } from "@/lib/utils";
 
 export function SpeakerPopover({
   meetingId,
   speakerId,
   avatar,
+  rename = false,
   onDone,
 }: {
   meetingId: string;
   speakerId: number;
   avatar: RefObject<HTMLButtonElement | null>;
+  rename?: boolean;
   onDone: () => void;
 }) {
+  const [renaming, setRenaming] = useState(rename);
   return (
     <Popover.Portal>
       <Popover.Content
@@ -26,14 +33,69 @@ export function SpeakerPopover({
         sideOffset={6}
         collisionPadding={12}
         data-testid="speaker-popover"
+        onOpenAutoFocus={(event) => {
+          if (!renaming) event.preventDefault();
+        }}
         onInteractOutside={(event) => {
           if (event.target instanceof Node && avatar.current?.contains(event.target)) event.preventDefault();
         }}
         className="z-50 flex w-[280px] flex-col overflow-hidden rounded-xl bg-popover text-popover-foreground shadow-[0_12px_36px_rgba(0,0,0,0.14),0_0_0_0.5px_rgba(0,0,0,0.12)] outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
       >
-        <Body meetingId={meetingId} speakerId={speakerId} onDone={onDone} />
+        {renaming ? (
+          <Body meetingId={meetingId} speakerId={speakerId} onDone={onDone} />
+        ) : (
+          <Card meetingId={meetingId} speakerId={speakerId} onRename={() => setRenaming(true)} />
+        )}
       </Popover.Content>
     </Popover.Portal>
+  );
+}
+
+function Card({ meetingId, speakerId, onRename }: { meetingId: string; speakerId: number; onRename: () => void }) {
+  const speakers = useQuery(meetingQuery(meetingId)).data?.speakers ?? [];
+  const people = useQuery(peopleQuery).data?.people ?? [];
+  const notes = useNotes(meetingId);
+  const speaker = speakers.find((s) => s.id === speakerId);
+  if (!speaker) return null;
+
+  const total = speakers.reduce((sum, s) => sum + s.durationMs, 0);
+  const meetings = people.find((p) => p.id === speaker.personId)?.meetings ?? 0;
+  const facts = [
+    ...(total > 0 ? [`发言 ${span(speaker.durationMs)}`, `${Math.round((speaker.durationMs / total) * 100)}%`] : []),
+    ...(meetings > 1 ? [`${meetings} 场会议`] : []),
+  ];
+  const todos = notes ? todosIn(stateDoc(notes)).filter((todo) => speakerNamed(todo.owner, speakers)?.id === speaker.id) : [];
+
+  return (
+    <div data-testid="speaker-card" className="flex flex-col">
+      <div className="flex items-center gap-3 px-3.5 py-3.5">
+        <Avatar name={speaker.name} tone={speakerVoice(speaker, speakers).avatar} className="size-10 text-body" />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="truncate text-body font-semibold text-foreground">{speaker.name}</span>
+          {facts.length > 0 && (
+            <span className="truncate text-label text-muted-foreground tabular-nums">{facts.join(" · ")}</span>
+          )}
+        </div>
+        <Button variant="outline" size="md" data-testid="speaker-card-rename" onClick={onRename}>
+          改名
+        </Button>
+      </div>
+      {todos.length > 0 && (
+        <div className="flex max-h-[220px] flex-col gap-2 overflow-y-auto overscroll-contain border-t border-divider px-3.5 py-3">
+          <span className="text-meta text-muted-foreground">待办 {todos.length}</span>
+          {todos.map((todo, index) => (
+            <div key={index} className="flex items-start gap-2 text-ui leading-snug">
+              <span
+                className={cn("min-w-0 flex-1 text-foreground", todo.checked && "text-placeholder line-through")}
+              >
+                {todo.text}
+              </span>
+              {todo.due !== "" && <span className="notes-chip shrink-0">{todo.due}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

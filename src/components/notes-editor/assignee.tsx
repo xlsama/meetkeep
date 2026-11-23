@@ -5,24 +5,18 @@ import { createContext, useContext, useRef, useState } from "react";
 import { Avatar } from "@/components/avatar";
 import { SpeakerPopover } from "@/components/speaker-popover";
 import { meetingQuery } from "@/lib/queries";
-import { speakerVoice } from "@/lib/speakers";
-import type { Speaker } from "@/mygo";
+import { speakerNamed, speakerVoice } from "@/lib/speakers";
 
 export const NotesMeeting = createContext("");
 
 const glue = "\u2060";
-
-function partOf(owner: string, speakers: Speaker[]) {
-  const found = Array.from(owner).length < 2 ? [] : speakers.filter((s) => s.name.includes(owner));
-  return found.length === 1 ? found[0] : undefined;
-}
 
 function AssigneeView({ node }: ReactNodeViewProps) {
   const meetingId = useContext(NotesMeeting);
   const speakers = useQuery({ ...meetingQuery(meetingId), enabled: meetingId !== "" }).data?.speakers ?? [];
   const owner = String(node.attrs.owner ?? "").trim();
   const due = String(node.attrs.due ?? "").trim();
-  const speaker = owner === "" ? undefined : (speakers.find((s) => s.name === owner) ?? partOf(owner, speakers));
+  const speaker = speakerNamed(owner, speakers);
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLButtonElement>(null);
 
@@ -31,7 +25,7 @@ function AssigneeView({ node }: ReactNodeViewProps) {
       <Avatar
         name={speaker?.name ?? owner}
         tone={speaker ? speakerVoice(speaker, speakers).avatar : "bg-placeholder"}
-        className="size-4 text-[9px]"
+        className="size-4 self-center text-[9px]"
       />
       {owner}
     </>

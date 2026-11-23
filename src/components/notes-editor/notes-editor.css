@@ -256,22 +256,15 @@
   color: var(--color-foreground);
 }
 
-.notes-doc .notes-assignee {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  vertical-align: middle;
-}
-
 .notes-doc .notes-owner {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 4px;
-  height: 20px;
-  margin: 0;
-  padding: 0 4px 0 2px;
+  margin: 0 2px 0 0;
+  padding: 0 5px 0 2px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 9px;
+  line-height: 18px;
   background: none;
   font: inherit;
   font-size: var(--text-label);

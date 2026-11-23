@@ -42,6 +42,15 @@ export function speakerVoice(speaker: Speaker, speakers: Speaker[]): Voice {
   return { key: `speaker-${speaker.id}`, speakerId: speaker.id, name: speaker.name, self: false, tone, avatar: tone };
 }
 
+export function speakerNamed(name: string, speakers: Speaker[]) {
+  const owner = name.trim();
+  if (owner === "") return undefined;
+  const exact = speakers.find((s) => s.name === owner);
+  if (exact) return exact;
+  const found = Array.from(owner).length < 2 ? [] : speakers.filter((s) => s.name.includes(owner));
+  return found.length === 1 ? found[0] : undefined;
+}
+
 export function ordered(speakers: Speaker[]) {
   return [...speakers.filter((s) => !s.self), ...speakers.filter((s) => s.self)];
 }

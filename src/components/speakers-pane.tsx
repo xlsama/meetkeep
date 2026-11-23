@@ -121,7 +121,7 @@ function SpeakerRow({
         </div>
       </div>
       {editing && !speaker.self && (
-        <SpeakerPopover meetingId={meetingId} speakerId={speaker.id} avatar={avatar} onDone={() => setEditing(false)} />
+        <SpeakerPopover meetingId={meetingId} speakerId={speaker.id} avatar={avatar} rename onDone={() => setEditing(false)} />
       )}
     </Popover.Root>
   );
