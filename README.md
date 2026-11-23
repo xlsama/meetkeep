@@ -57,7 +57,7 @@ sqlite3 ~/.config/meetkeep/meetkeep.db "SELECT name, duration_ms, memory_peak / 
 停止录制后在本地运行，回答「这场会里谁说了哪句」。实现在 `modules/speech`（Rust），macOS 和 Windows 共用同一份代码。整条流程移植自 [senko](https://github.com/narcotic-sh/senko)，它是一套算法，本身不是模型；流程里用到两个模型。
 
 | 步骤 | 做什么 | 用什么 | 状态 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 1. 找出语音段 | 在整段录音里标出有人说话的时间段，去掉静音和噪声 | 模型：pyannote segmentation-3.0（ONNX，6 MB） | 已实现 |
 | 2. 切小窗 | 把语音段切成 1.5 秒的小窗，每 0.6 秒滑一次 | 代码 | 已实现 |
 | 3. 提取特征 | 每个小窗算出 80 维的 fbank 声学特征 | 代码（rustfft） | 已实现 |
