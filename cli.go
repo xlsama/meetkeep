@@ -21,7 +21,7 @@ func launcher() (path, script string, err error) {
 		return "", "", err
 	}
 	if runtime.GOOS == "windows" {
-		return windowsLauncher(filepath.Join(resources, "bin", "meetkeep.exe"))
+		return windowsLauncher(filepath.Join(resources, "meetkeep-cli.exe"))
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {

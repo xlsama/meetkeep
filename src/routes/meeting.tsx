@@ -55,7 +55,7 @@ import { meetingQuery } from "@/lib/queries";
 import { useElapsed, useRecorder } from "@/lib/recorder";
 import { speakerVoice } from "@/lib/speakers";
 import { joined, lineAt, useTranscript, type Group } from "@/lib/transcript";
-import { useWindowTitle } from "@/lib/ui";
+import { mac, useWindowTitle } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace";
 import { SpeakersSheet } from "@/routes/speakers-sheet";
@@ -636,7 +636,7 @@ function MoreMenu({ meeting, onError }: { meeting: Meeting; onError: (error: str
           )}
           <DropdownMenuItem data-testid="meeting-reveal" onSelect={() => void run(onError, () => Library.reveal(meeting.id))}>
             <FolderOpen />
-            在访达中显示
+            {mac ? "在访达中显示" : "在资源管理器中显示"}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem

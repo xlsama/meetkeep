@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -201,7 +202,23 @@ func main() {
 	_ = os.MkdirAll(out, 0o755)
 	home := filepath.Join(out, "home")
 	_ = os.MkdirAll(home, 0o700)
+	// A transcription service of our own, which hears the same words in
+	// whatever it is sent.
+	heard := 0
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		fmt.Println("FAIL  start:", err)
+		os.Exit(1)
+	}
+	go func() {
+		_ = http.Serve(listener, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			heard++
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"combinedPhrases":[{"text":"这是一段测试。"}],"phrases":[{"offsetMilliseconds":200,"durationMilliseconds":1200,"text":"这是一段测试。","words":[{"text":"这","offsetMilliseconds":200,"durationMilliseconds":200},{"text":"是","offsetMilliseconds":400,"durationMilliseconds":200},{"text":"一","offsetMilliseconds":600,"durationMilliseconds":200},{"text":"段","offsetMilliseconds":800,"durationMilliseconds":200},{"text":"测","offsetMilliseconds":1000,"durationMilliseconds":200},{"text":"试","offsetMilliseconds":1200,"durationMilliseconds":200}]}]}`))
+		}))
+	}()
 	settings := map[string]any{
+		"asr":       map[string]any{"endpoint": "http://" + listener.Addr().String(), "key": "smoke", "hotwords": []string{}, "polish": false},
 		"general":   map[string]any{"openAtLogin": false, "menuBar": true},
 		"recording": map[string]any{"directory": filepath.Join(out, "recordings"), "showPanel": true, "detectMeetings": false},
 	}
@@ -334,32 +351,36 @@ func main() {
 		d.capture(main, "after-recording")
 		d.desktop("after-recording")
 	}
-	recorded := run("meetkeep list", "list", "--json")
-
-	// A file handed over by the command line, and played back.
+	// A file handed over by the command line.
 	if len(os.Args) > 3 {
 		file, _ := filepath.Abs(os.Args[3])
-		run("meetkeep import", "import", file)
-		time.Sleep(6 * time.Second)
+		run("meetkeep import", "import", file, "--wait", "--timeout", "4m")
 	}
-	listed := run("meetkeep list", "list", "--json")
 	var listing struct {
 		Meetings []struct {
-			ID string `json:"id"`
+			ID     string `json:"id"`
+			Status string `json:"status"`
 		} `json:"meetings"`
 	}
-	for _, text := range []string{listed, recorded} {
-		if start := strings.Index(text, "{"); start >= 0 && len(listing.Meetings) == 0 {
-			_ = json.Unmarshal([]byte(text[start:]), &listing)
-		}
+	listed := run("meetkeep list", "list", "--json")
+	if start := strings.Index(listed, "{"); start >= 0 {
+		_ = json.Unmarshal([]byte(listed[start:]), &listing)
 	}
+	if len(listing.Meetings) == 0 {
+		d.fail("meetings", fmt.Errorf("none are listed"))
+	}
+	// Every meeting, once it is processed: its page, and its recording played.
 	for _, meeting := range listing.Meetings {
+		run("meetkeep wait "+meeting.ID, "wait", meeting.ID, "--timeout", "4m")
+		run("meetkeep steps "+meeting.ID, "steps", meeting.ID)
+		run("meetkeep transcript "+meeting.ID, "transcript", meeting.ID)
 		d.visit(main, "/meetings/"+meeting.ID)
 		time.Sleep(2 * time.Second)
 		d.tell(main, "playback of "+meeting.ID, fmt.Sprintf(`new Promise((done) => { const a = new Audio("recording://localhost/%s/audio"); a.preload = "metadata"; a.onloadedmetadata = () => done("loaded, " + a.duration + " s"); a.onerror = () => done("error " + (a.error && a.error.code)); setTimeout(() => done("nothing after 10 s"), 10000); })`, meeting.ID))
 		d.capture(main, "meeting")
 	}
 	d.desktop("meeting")
+	d.pass("transcription service", fmt.Sprintf("asked %d times", heard))
 
 	fmt.Printf("%d failed\n", d.failed)
 	if d.failed > 0 {

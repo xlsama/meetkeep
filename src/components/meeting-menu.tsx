@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Library, type Meeting } from "@/mygo";
 import { errorMessage } from "@/lib/queries";
+import { mac } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 
 export type OnError = (error: string | null) => void;
@@ -70,7 +71,7 @@ export function MeetingMenu({
           </DropdownMenuItem>
           <DropdownMenuItem data-testid="menu-reveal" onSelect={() => void run(onError, () => Library.reveal(meeting.id))}>
             <FolderOpen />
-            在访达中显示
+            {mac ? "在访达中显示" : "在资源管理器中显示"}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" data-testid="menu-delete" onSelect={() => setConfirming(true)}>

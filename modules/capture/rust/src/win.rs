@@ -325,11 +325,19 @@ mod tests {
     #[test]
     fn the_tone_player_is_listed_and_found() {
         let Some(process) = tone() else { return };
-        let listed = apps().expect("apps");
-        println!("apps: {:?}", listed.iter().map(|a| (&a.id, &a.name, a.icon.len(), a.playing)).collect::<Vec<_>>());
         let system = processes().expect("processes");
         let player = name(&system, process).expect("the player's name");
-        assert!(listed.iter().any(|a| a.id == player && a.playing), "{player} is not listed as playing");
+        // The player starts the tone over and over, and is silent in between.
+        let began = Instant::now();
+        loop {
+            let listed = apps().expect("apps");
+            println!("apps: {:?}", listed.iter().map(|a| (&a.id, &a.name, a.icon.len(), a.playing)).collect::<Vec<_>>());
+            if listed.iter().any(|a| a.id == player && a.playing) {
+                break;
+            }
+            assert!(began.elapsed() < Duration::from_secs(5), "{player} is not listed as playing");
+            std::thread::sleep(Duration::from_millis(100));
+        }
         let found = targets(&[player]);
         assert!(!found.is_empty());
         let (_, peak) = loudest(found[0], Duration::from_secs(3));

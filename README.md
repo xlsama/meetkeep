@@ -12,7 +12,17 @@ bun run check && bun run test
 
 `bun run build` 默认做 ad-hoc 签名，每次构建后 macOS 都会重新要麦克风和录音权限。在 `.env` 里写 `MEETKEEP_SIGNING_IDENTITY="Developer ID Application: 名字 (TEAMID)"`（`security find-identity -v -p codesigning` 列出可用的身份）就用这个身份签名，权限跟着身份走，重装和更新后不用重新授权。
 
-需要 macOS 14.2+、Go 1.27+、Bun、Xcode、Rust。现在只在 macOS 上开发和验证；Windows 的现状和待办记在 `docs/plan.md`。
+macOS 上需要 macOS 14.2+、Go 1.27+、Bun、Xcode、Rust；Windows（amd64）上需要 Go、Bun、Rust（MSVC）。Windows 没有真机，靠 CI 验证：`.github/workflows/windows.yml`（手动触发）跑测试，并在虚拟声卡上把应用实际跑一遍、留下每一步的截图。现状和没验证的部分记在 `docs/plan.md`。
+
+## 发版
+
+```sh
+bun run release
+```
+
+`bumpp` 改 `package.json` 里的版本号（`mygo.config.ts` 读它），提交、打 `v<版本>` 的 tag 并推送。tag 触发 `.github/workflows/release.yml`：macOS（arm64）和 Windows（amd64）各自构建，`.dmg` 和安装程序 `-setup-*.exe` 传到这个 tag 的 GitHub Release 并发布。在 Actions 里手动触发同一个 workflow 只构建、不发版，产物留在这次运行里。
+
+仓库里配了 `MACOS_CERTIFICATE`、`MACOS_CERTIFICATE_PASSWORD`、`MACOS_SIGNING_IDENTITY` 这几个 secret 时，macOS 的包用 Developer ID 签名；再配 `APPLE_ID`、`APPLE_TEAM_ID`、`APPLE_APP_PASSWORD` 就同时公证。没配时是 ad-hoc 签名，别的 Mac 上会被 Gatekeeper 拦。Windows 的包没有签名，SmartScreen 会提示。
 
 转写用 Azure 的 MAI-Transcribe-2，纪要和白板的模型在 Claude、DeepSeek、OpenRouter 和自定义的 OpenAI 兼容服务之间切换，各存各的密钥和模型名，都在应用的设置页里填。设置存在 `~/.config/meetkeep/settings.json`，会议存在同目录的 `meetkeep.db`，录音默认存在 `~/Documents/MeetKeep`。
 
@@ -20,7 +30,7 @@ bun run check && bun run test
 
 ## 命令行和 skill
 
-`meetkeep` 是给 Agent 和脚本用的命令行（`cmd/meetkeep`），随应用一起打包，在「设置 → Agent」里安装到 `~/.local/bin`。它只读数据库；`import` 经应用监听的 socket（`~/.config/meetkeep/meetkeep.sock`）把文件交给运行中的应用，走和界面里导入相同的流程。输出默认是文本，`--json` 是 JSON，都是英文。
+`meetkeep` 是给 Agent 和脚本用的命令行（`cmd/meetkeep`），随应用一起打包，在「设置 → Agent」里安装到 `~/.local/bin`（Windows 上是 `%LOCALAPPDATA%\Microsoft\WindowsApps\meetkeep.cmd`，这个目录默认在 PATH 里）。它只读数据库；`import` 经应用监听的 socket（`~/.config/meetkeep/meetkeep.sock`）把文件交给运行中的应用，走和界面里导入相同的流程。输出默认是文本，`--json` 是 JSON，都是英文。
 
 ```sh
 meetkeep list --from -7d                    # 最近 7 天的会议
