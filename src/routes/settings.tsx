@@ -17,6 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Segmented, SegmentedItem } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import { Config, type Settings } from "@/mygo";
+import { copyText } from "@/lib/clipboard";
 import { cliQuery, errorMessage, queryClient, settingsPathQuery, settingsQuery } from "@/lib/queries";
 import { sections, type SectionId } from "@/lib/settings-sections";
 import { useWindowTitle } from "@/lib/ui";
@@ -41,6 +42,8 @@ const schema = z.object({
 
 type Values = z.input<typeof schema>;
 
+const skillCommand = "npx skills add xlsama/meetkeep --skill meetkeep -g";
+
 const pick = (s: Settings): Values => ({ asr: s.asr, llm: s.llm, recording: s.recording });
 
 export function SettingsPage() {
@@ -64,6 +67,7 @@ export function SettingsPage() {
 function SettingsForm({ settings, section }: { settings: Settings; section: SectionId }) {
   const path = useQuery(settingsPathQuery);
   const cli = useQuery(cliQuery);
+  const [copied, setCopied] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const editing = useRef<string | null>(null);
   const form = useForm({ defaultValues: pick(settings) });
@@ -394,6 +398,11 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
             打开
           </Button>
         </Row>
+      </Group>
+      )}
+
+      {section === "agent" && (
+      <Group>
         <Row label="命令行工具">
           {cli.data ? (
             <span data-selectable data-testid="settings-cli-path" className="min-w-0 truncate font-mono text-label text-secondary-foreground">
@@ -416,6 +425,28 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
               安装
             </Button>
           )}
+        </Row>
+        <Row label="Skill">
+          <span data-selectable data-testid="settings-skill-command" className="min-w-0 truncate font-mono text-label text-secondary-foreground">
+            {skillCommand}
+          </span>
+          <Button
+            variant="outline"
+            size="md"
+            data-testid="settings-skill-copy"
+            onClick={async () => {
+              try {
+                await copyText(skillCommand);
+                setSaveError(null);
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1600);
+              } catch (err) {
+                setSaveError(errorMessage(err));
+              }
+            }}
+          >
+            {copied ? "已复制" : "复制"}
+          </Button>
         </Row>
       </Group>
       )}

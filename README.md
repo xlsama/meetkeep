@@ -18,7 +18,7 @@ bun run check && bun run test
 
 ## 命令行和 skill
 
-`meetkeep` 是给 Agent 和脚本用的命令行（`cmd/meetkeep`），随应用一起打包，在「设置 → 存储 → 命令行工具」里安装到 `~/.local/bin`。它只读数据库；`import` 经应用监听的 socket（`~/.config/meetkeep/meetkeep.sock`）把文件交给运行中的应用，走和界面里导入相同的流程。输出默认是文本，`--json` 是 JSON，都是英文。
+`meetkeep` 是给 Agent 和脚本用的命令行（`cmd/meetkeep`），随应用一起打包，在「设置 → Agent」里安装到 `~/.local/bin`。它只读数据库；`import` 经应用监听的 socket（`~/.config/meetkeep/meetkeep.sock`）把文件交给运行中的应用，走和界面里导入相同的流程。输出默认是文本，`--json` 是 JSON，都是英文。
 
 ```sh
 meetkeep list --from -7d                    # 最近 7 天的会议
@@ -30,7 +30,7 @@ meetkeep import ~/Downloads/访谈.wav --wait # 交给应用整理，等它完�
 meetkeep status <会议 ID>                   # 整理到哪一步了
 ```
 
-`skills/meetkeep` 是教 Agent 用它的 skill，`meetkeep skill show` 打印同一份内容。开发时用 `go run ./cmd/meetkeep`，`bun run build:cli` 只构建命令行。
+`skills/meetkeep` 是教 Agent 用它的 skill，用 `npx skills add xlsama/meetkeep --skill meetkeep -g` 安装（设置页里可以复制这条命令），`meetkeep skill show` 打印同一份内容。开发时用 `go run ./cmd/meetkeep`，`bun run build:cli` 只构建命令行。
 
 ## 结构
 
