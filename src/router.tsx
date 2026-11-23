@@ -47,7 +47,7 @@ const searchRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => mainRoute,
   path: "/settings",
-  component: () => <Navigate to="/settings/$section" params={{ section: "transcription" }} replace />,
+  component: () => <Navigate to="/settings/$section" params={{ section: "general" }} replace />,
 });
 const settingsSectionRoute = createRoute({
   getParentRoute: () => mainRoute,

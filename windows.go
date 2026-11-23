@@ -64,7 +64,39 @@ type windows struct {
 	closes int
 }
 
+// start opens the main window, unless the app was started as the user
+// logged in: then it waits in the background.
 func (w *windows) start() error {
+	w.width = panelWidth
+	if err := mygo.GlobalShortcut.Register(panelShortcut, w.togglePanel); err != nil {
+		return err
+	}
+	go w.clock()
+	go w.app.watch()
+	if mygo.App.WasOpenedAtLogin() {
+		mygo.App.Dock.Hide()
+	} else {
+		w.openMain("/")
+	}
+	return nil
+}
+
+// showTray puts the app's item in the menu bar, or takes it out.
+func (w *windows) showTray(show bool) error {
+	w.mu.Lock()
+	tray, recording := w.tray, w.active
+	w.mu.Unlock()
+	switch {
+	case show == (tray != nil):
+		return nil
+	case !show:
+		w.mu.Lock()
+		w.tray = nil
+		w.mu.Unlock()
+		w.closeMenu()
+		tray.Destroy()
+		return nil
+	}
 	tray, err := mygo.NewTray(mygo.TrayOptions{
 		ID:              "meetkeep",
 		Icon:            trayIcon,
@@ -75,16 +107,21 @@ func (w *windows) start() error {
 	if err != nil {
 		return err
 	}
-	w.tray = tray
-	w.width = panelWidth
-	tray.OnClick(w.toggleMenu)
-	if err := mygo.GlobalShortcut.Register(panelShortcut, w.togglePanel); err != nil {
-		return err
+	if recording {
+		_ = tray.SetIcon(trayRecordingIcon, false)
 	}
-	go w.clock()
-	go w.app.watch()
-	w.openMain("/")
+	tray.OnClick(w.toggleMenu)
+	w.mu.Lock()
+	w.tray = tray
+	w.mu.Unlock()
 	return nil
+}
+
+// item returns the app's item in the menu bar, or nil when it has none.
+func (w *windows) item() *mygo.Tray {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.tray
 }
 
 func (w *windows) showMain(route string) {
@@ -155,14 +192,17 @@ func (w *windows) retireMain(win *mygo.Window, closed int) {
 
 func (w *windows) toggleMenu() {
 	w.mu.Lock()
-	menu := w.menu
+	menu, tray := w.menu, w.tray
 	w.mu.Unlock()
 	if menu != nil {
 		menu.Close()
 		return
 	}
+	if tray == nil {
+		return
+	}
 	menu = mygo.NewFlyout(mygo.FlyoutOptions{
-		Tray:         w.tray,
+		Tray:         tray,
 		URL:          "/menu",
 		Placement:    mygo.PlacementBottom,
 		Gap:          6,
@@ -296,18 +336,22 @@ func (w *windows) follow(s recorder.Status) {
 	w.mu.Lock()
 	was := w.active
 	w.active = s.Phase != recorder.Idle
-	active := w.active
+	active, tray := w.active, w.tray
 	w.mu.Unlock()
 	switch {
 	case active && !was:
 		w.closeNotice()
-		_ = w.tray.SetIcon(trayRecordingIcon, false)
+		if tray != nil {
+			_ = tray.SetIcon(trayRecordingIcon, false)
+		}
 		if w.app.current().Recording.ShowPanel {
 			w.setMode(panelOpen)
 		}
 	case !active && was:
-		_ = w.tray.SetIcon(trayIcon, true)
-		w.tray.SetTitle("")
+		if tray != nil {
+			_ = tray.SetIcon(trayIcon, true)
+			tray.SetTitle("")
+		}
 		w.setMode(panelHidden)
 	}
 }
@@ -400,7 +444,7 @@ func (w *windows) announce(app config.AppRef) {
 func (w *windows) closeNotice() { w.closeCard(&w.notice) }
 
 func (w *windows) clock() {
-	shown := ""
+	shown, on := "", (*mygo.Tray)(nil)
 	for range time.Tick(250 * time.Millisecond) {
 		title := ""
 		if s := w.app.recorder.Status(); s.Phase != recorder.Idle {
@@ -410,9 +454,9 @@ func (w *windows) clock() {
 				title = fmt.Sprintf("%d:%02d:%02d", seconds/3600, seconds/60%60, seconds%60)
 			}
 		}
-		if title != shown {
-			shown = title
-			w.tray.SetTitle(title)
+		if tray := w.item(); tray != nil && (title != shown || tray != on) {
+			shown, on = title, tray
+			tray.SetTitle(title)
 		}
 	}
 }

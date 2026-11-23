@@ -29,6 +29,7 @@ const address = z
   .refine((value) => value === "" || /^https?:\/\/\S+$/.test(value), "地址要以 http:// 或 https:// 开头");
 
 const schema = z.object({
+  general: z.object({ openAtLogin: z.boolean(), menuBar: z.boolean() }),
   asr: z.object({ endpoint: address, key: z.string().trim(), hotwords: z.array(z.string()), polish: z.boolean() }),
   llm: z.object({ baseUrl: address, key: z.string().trim(), model: z.string().trim() }),
   recording: z.object({
@@ -44,7 +45,7 @@ type Values = z.input<typeof schema>;
 
 const skillCommand = "npx skills add xlsama/meetkeep --skill meetkeep -g";
 
-const pick = (s: Settings): Values => ({ asr: s.asr, llm: s.llm, recording: s.recording });
+const pick = (s: Settings): Values => ({ general: s.general, asr: s.asr, llm: s.llm, recording: s.recording });
 
 export function SettingsPage() {
   useWindowTitle("设置");
@@ -81,6 +82,8 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
       if (editing.current === name || JSON.stringify(current) === JSON.stringify(value)) return;
       form.setFieldValue(name as never, value as never, { dontUpdateMeta: true });
     };
+    sync("general", "openAtLogin");
+    sync("general", "menuBar");
     sync("asr", "endpoint");
     sync("asr", "key");
     sync("asr", "hotwords");
@@ -133,6 +136,40 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
         <p role="alert" data-testid="settings-error" className="m-0 -mt-2 text-label text-destructive">
           {saveError}
         </p>
+      )}
+      {section === "general" && (
+      <Group>
+        <form.Field name="general.openAtLogin">
+          {(field) => (
+            <Row label="开机自启">
+              <Switch
+                aria-label="开机自启"
+                data-testid="settings-open-at-login"
+                checked={field.state.value}
+                onCheckedChange={(checked) => {
+                  field.handleChange(checked);
+                  void save();
+                }}
+              />
+            </Row>
+          )}
+        </form.Field>
+        <form.Field name="general.menuBar">
+          {(field) => (
+            <Row label="在菜单栏显示">
+              <Switch
+                aria-label="在菜单栏显示"
+                data-testid="settings-menu-bar"
+                checked={field.state.value}
+                onCheckedChange={(checked) => {
+                  field.handleChange(checked);
+                  void save();
+                }}
+              />
+            </Row>
+          )}
+        </form.Field>
+      </Group>
       )}
       {section === "transcription" && (
       <Group>

@@ -56,6 +56,13 @@ export interface Fault {
 
 export type Format = "markdown" | "text" | "srt";
 
+export interface GeneralSettings {
+  /** OpenAtLogin has the app start when the user logs in. */
+  openAtLogin: boolean;
+  /** MenuBar keeps an item of the app in the menu bar. */
+  menuBar: boolean;
+}
+
 /** Known are the people whose voices are remembered, and the user. */
 export interface Known {
   /**
@@ -279,6 +286,7 @@ export interface SearchNote {
 }
 
 export interface Settings {
+  general: GeneralSettings;
   asr: ASRSettings;
   llm: LLMSettings;
   recording: RecordingSettings;

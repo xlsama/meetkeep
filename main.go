@@ -142,7 +142,13 @@ func (a *app) start() error {
 			a.windows.showMain("")
 		}
 	})
-	return a.windows.start()
+	if err := a.windows.start(); err != nil {
+		return err
+	}
+	if err := a.conform(settings.General); err != nil {
+		log.Print(err)
+	}
+	return nil
 }
 
 // serveRecording serves what a meeting is played from:
@@ -205,9 +211,10 @@ func (a *app) current() config.Settings {
 
 func (a *app) update(change func(*config.Settings)) error {
 	a.mu.Lock()
-	next := a.settings
+	old := a.settings
+	next := old
 	change(&next)
-	if reflect.DeepEqual(next, a.settings) {
+	if reflect.DeepEqual(next, old) {
 		a.mu.Unlock()
 		return nil
 	}
@@ -218,5 +225,20 @@ func (a *app) update(change func(*config.Settings)) error {
 	a.settings = next
 	a.mu.Unlock()
 	_ = settingsChanged.Broadcast(next)
+	if next.General != old.General {
+		return a.conform(next.General)
+	}
 	return nil
+}
+
+// conform has the app be in the menu bar and open at login as the settings
+// say. A development build leaves the login items alone.
+func (a *app) conform(general config.GeneralSettings) error {
+	if err := a.windows.showTray(general.MenuBar); err != nil {
+		return err
+	}
+	if mygo.IsDev() || mygo.App.OpenAtLogin() == general.OpenAtLogin {
+		return nil
+	}
+	return mygo.App.SetOpenAtLogin(general.OpenAtLogin)
 }

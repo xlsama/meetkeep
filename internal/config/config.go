@@ -11,10 +11,18 @@ import (
 )
 
 type Settings struct {
+	General   GeneralSettings   `json:"general"`
 	ASR       ASRSettings       `json:"asr"`
 	LLM       LLMSettings       `json:"llm"`
 	Recording RecordingSettings `json:"recording"`
 	Sources   SourceSettings    `json:"sources"`
+}
+
+type GeneralSettings struct {
+	// OpenAtLogin has the app start when the user logs in.
+	OpenAtLogin bool `json:"openAtLogin"`
+	// MenuBar keeps an item of the app in the menu bar.
+	MenuBar bool `json:"menuBar"`
 }
 
 type ASRSettings struct {
@@ -65,8 +73,9 @@ type SourceSettings struct {
 
 func defaults() Settings {
 	return Settings{
-		ASR: ASRSettings{Hotwords: []string{}, Polish: true},
-		LLM: LLMSettings{BaseURL: "https://api.deepseek.com", Model: "deepseek-flash"},
+		General: GeneralSettings{OpenAtLogin: true},
+		ASR:     ASRSettings{Hotwords: []string{}, Polish: true},
+		LLM:     LLMSettings{BaseURL: "https://api.deepseek.com", Model: "deepseek-flash"},
 		Recording: RecordingSettings{
 			Directory:        "~/Documents/MeetKeep",
 			DetectMeetings:   true,
