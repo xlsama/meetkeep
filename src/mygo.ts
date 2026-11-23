@@ -4,9 +4,15 @@ import { bind, event, type Channel } from "mygo-runtime";
 
 // ---- Types ----
 
+export type ASRProvider = "mai" | "custom";
+
 export interface ASRSettings {
+  /** Provider names the service that transcribes. */
+  provider: ASRProvider;
+  /** Endpoint and Key are those of MAI-Transcribe-2. */
   endpoint: string;
   key: string;
+  custom: CustomASR;
   hotwords: string[];
   /**
    * Polish has the language model take the filler out of a transcript
@@ -44,6 +50,16 @@ export interface Chapter {
   text: string;
   seq: number;
   atMs: number;
+}
+
+/**
+ * CustomASR is a service that speaks OpenAI's audio transcriptions at
+ * BaseURL. One that asks for no key has none.
+ */
+export interface CustomASR {
+  baseUrl: string;
+  key: string;
+  model: string;
 }
 
 /** CustomLLM is a service that speaks OpenAI's chat completions at BaseURL. */

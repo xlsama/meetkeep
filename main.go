@@ -91,8 +91,16 @@ func (a *app) start() error {
 	if err != nil {
 		return err
 	}
+	resources, err := mygo.App.Path(mygo.PathResources)
+	if err != nil {
+		return err
+	}
+	models := speech.Models{
+		Segmentation: filepath.Join(resources, "models", "segmentation.onnx"),
+		Embedding:    filepath.Join(resources, "models", "embedding.onnx"),
+	}
 	transcriber := func(s config.ASRSettings) (asr.Transcriber, error) {
-		return asr.NewMAI(s.Endpoint, s.Key, s.Hotwords)
+		return asr.From(s, asr.Recordings{Engine: engine, Model: models.Segmentation})
 	}
 	a.recorder = &recorder.Recorder{
 		Capture:     a.capture,
@@ -102,19 +110,12 @@ func (a *app) start() error {
 		Sink:        a,
 		Transcriber: transcriber,
 	}
-	resources, err := mygo.App.Path(mygo.PathResources)
-	if err != nil {
-		return err
-	}
 	a.processor = &processor.Processor{
 		Speech:      engine,
 		Store:       a.store,
 		Settings:    a.current,
 		Transcriber: transcriber,
-		Models: speech.Models{
-			Segmentation: filepath.Join(resources, "models", "segmentation.onnx"),
-			Embedding:    filepath.Join(resources, "models", "embedding.onnx"),
-		},
+		Models:      models,
 		Recognition: filepath.Join(resources, "models", "recognition.onnx"),
 		Polish:      a.polish,
 		Summarize:   a.notes.finalize,

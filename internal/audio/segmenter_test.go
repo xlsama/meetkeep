@@ -89,6 +89,29 @@ func TestSplitsLongSpeechAtTheQuietestMoment(t *testing.T) {
 	}
 }
 
+func TestTurnCutsWhereAnotherSpeakerStarts(t *testing.T) {
+	s := &Segmenter{}
+	feed(s, append(repeat(0.02, 20), repeat(0.9, 5)...)...)
+	if events := s.Turn(); events != nil {
+		t.Fatalf("an utterance of a few windows was cut: %+v", events)
+	}
+	feed(s, repeat(0.9, 35)...)
+	events := s.Turn()
+	if want := []Kind{Ended, Began}; !equal(kinds(events), want) {
+		t.Fatalf("got %v, want %v", kinds(events), want)
+	}
+	if events[0].EndMs != 60*windowMs || events[1].StartMs != 60*windowMs {
+		t.Errorf("cut at %dms, the next starts at %dms, want both at %dms", events[0].EndMs, events[1].StartMs, 60*windowMs)
+	}
+	rest := feed(s, append(repeat(0.9, 30), repeat(0.02, 40)...)...)
+	if len(rest) != 1 || rest[0].Kind != Ended || rest[0].StartMs != 60*windowMs {
+		t.Errorf("the next speaker's utterance is %+v", rest)
+	}
+	if (&Segmenter{}).Turn() != nil {
+		t.Error("silence was cut")
+	}
+}
+
 func TestFinishEndsTheOpenUtterance(t *testing.T) {
 	s := &Segmenter{}
 	feed(s, append(repeat(0.02, 20), repeat(0.9, 40)...)...)

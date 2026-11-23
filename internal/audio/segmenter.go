@@ -92,6 +92,28 @@ func (s *Segmenter) Push(pcm []int16, prob float32) []Event {
 	return nil
 }
 
+// Turn ends the utterance in progress where another speaker starts to talk
+// and goes on with what follows as the next one. An utterance too short to
+// stand alone goes on as it is.
+func (s *Segmenter) Turn() []Event {
+	if !s.active {
+		return nil
+	}
+	speech := 0
+	for _, w := range s.windows {
+		if w.prob >= onset {
+			speech++
+		}
+	}
+	if speech < 2*minSpeech {
+		return nil
+	}
+	ended := s.cut(len(s.windows))
+	s.start += int64(len(s.windows))
+	s.windows, s.silence = s.windows[:0], 0
+	return []Event{ended, {Kind: Began, StartMs: s.start * windowMs}}
+}
+
 // Finish ends the utterance in progress, if any.
 func (s *Segmenter) Finish() []Event {
 	if !s.active {

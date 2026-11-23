@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Segmented, SegmentedItem } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
-import { Config, type LLMProvider, type Settings } from "@/mygo";
+import { Config, type ASRProvider, type LLMProvider, type Settings } from "@/mygo";
 import { copyText } from "@/lib/clipboard";
 import { cliQuery, errorMessage, modelsQuery, queryClient, settingsPathQuery, settingsQuery } from "@/lib/queries";
 import { sections, type SectionId } from "@/lib/settings-sections";
@@ -38,9 +38,21 @@ const providers: { id: LLMProvider; label: string }[] = [
   { id: "custom", label: "自定义" },
 ];
 
+const transcribers: { id: ASRProvider; label: string }[] = [
+  { id: "mai", label: "MAI-Transcribe-2（Azure）" },
+  { id: "custom", label: "自定义" },
+];
+
 const schema = z.object({
   general: z.object({ openAtLogin: z.boolean(), menuBar: z.boolean() }),
-  asr: z.object({ endpoint: address, key: z.string().trim(), hotwords: z.array(z.string()), polish: z.boolean() }),
+  asr: z.object({
+    provider: z.enum(["mai", "custom"]),
+    endpoint: address,
+    key: z.string().trim(),
+    custom: service.extend({ baseUrl: address }),
+    hotwords: z.array(z.string()),
+    polish: z.boolean(),
+  }),
   llm: z.object({
     provider: z.enum(["anthropic", "deepseek", "openrouter", "custom"]),
     anthropic: service,
@@ -101,8 +113,10 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
     };
     sync("general", "openAtLogin");
     sync("general", "menuBar");
+    sync("asr", "provider");
     sync("asr", "endpoint");
     sync("asr", "key");
+    sync("asr", "custom");
     sync("asr", "hotwords");
     sync("asr", "polish");
     sync("llm", "provider");
@@ -152,6 +166,10 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
     ...modelsQuery({ ...settings.llm, provider: llm.provider }),
     enabled: section === "notes",
   });
+  const transcriptionModels = useQuery({
+    ...modelsQuery({ ...settings.llm, provider: "custom", custom: settings.asr.custom }),
+    enabled: section === "transcription" && asr.provider === "custom" && settings.asr.custom.baseUrl !== "",
+  });
 
   return (
     <>
@@ -196,33 +214,55 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
       )}
       {section === "transcription" && (
       <Group>
-        <Row label="服务">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                data-testid="settings-asr-service"
-                className="flex h-8 items-center gap-2 rounded-md border border-input bg-background pr-2.5 pl-3 text-ui text-foreground outline-none transition-colors hover:bg-muted focus-visible:border-border-strong focus-visible:ring-[3px] focus-visible:ring-black/5"
-              >
-                MAI-Transcribe-2（Azure）
-                <ChevronDown className="size-3.5 text-muted-foreground" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem>
-                <span className="flex-1">MAI-Transcribe-2（Azure）</span>
-                <Check />
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </Row>
-        <form.Field name="asr.endpoint" validators={{ onBlur: address }}>
+        <form.Field name="asr.provider">
+          {(field) => (
+            <Row label="服务">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="转写服务"
+                    data-testid="settings-asr-service"
+                    className="flex h-8 items-center gap-2 rounded-md border border-input bg-background pr-2.5 pl-3 text-ui text-foreground outline-none transition-colors hover:bg-muted focus-visible:border-border-strong focus-visible:ring-[3px] focus-visible:ring-black/5"
+                  >
+                    {transcribers.find((p) => p.id === field.state.value)?.label}
+                    <ChevronDown className="size-3.5 text-muted-foreground" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {transcribers.map((p) => (
+                    <DropdownMenuItem
+                      key={p.id}
+                      data-testid={`settings-asr-service-${p.id}`}
+                      onSelect={() => {
+                        field.handleChange(p.id);
+                        void save();
+                      }}
+                    >
+                      <span className="flex-1">{p.label}</span>
+                      {p.id === field.state.value && <Check />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </Row>
+          )}
+        </form.Field>
+        <form.Field
+          key={`${asr.provider}.address`}
+          name={asr.provider === "custom" ? "asr.custom.baseUrl" : "asr.endpoint"}
+          validators={{ onBlur: address }}
+        >
           {(field) => (
             <Row label="服务地址" error={field.state.meta.errors[0]?.message}>
               <Input
                 aria-label="转写服务地址"
                 data-testid="settings-asr-endpoint"
-                placeholder="https://[你的资源名].cognitiveservices.azure.com"
+                placeholder={
+                  asr.provider === "custom"
+                    ? "https://api.openai.com/v1"
+                    : "https://[你的资源名].cognitiveservices.azure.com"
+                }
                 aria-invalid={field.state.meta.errors.length > 0}
                 className="w-[360px] font-mono text-label"
                 value={field.state.value}
@@ -232,13 +272,13 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
             </Row>
           )}
         </form.Field>
-        <form.Field name="asr.key">
+        <form.Field key={`${asr.provider}.key`} name={asr.provider === "custom" ? "asr.custom.key" : "asr.key"}>
           {(field) => (
             <TestRow
               label="密钥"
               testId="settings-asr-test"
-              signature={JSON.stringify([asr.endpoint, asr.key])}
-              run={() => Config.testTranscription({ ...asr, hotwords: asr.hotwords })}
+              signature={JSON.stringify([asr.provider, asr.endpoint, asr.key, asr.custom])}
+              run={() => Config.testTranscription(asr)}
             >
               <Input
                 type="password"
@@ -252,6 +292,28 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
             </TestRow>
           )}
         </form.Field>
+        {asr.provider === "custom" && (
+          <form.Field name="asr.custom.model">
+            {(field) => (
+              <Row label="模型">
+                <Combobox
+                  aria-label="转写模型"
+                  testId="settings-asr-model"
+                  className="w-[360px]"
+                  value={field.state.value}
+                  options={transcriptionModels.data ?? []}
+                  loading={transcriptionModels.isFetching}
+                  onValueChange={field.handleChange}
+                  onPick={(model) => {
+                    field.handleChange(model);
+                    void save();
+                  }}
+                  {...textProps(field.name, field.handleBlur)}
+                />
+              </Row>
+            )}
+          </form.Field>
+        )}
         <form.Field name="asr.hotwords">
           {(field) => (
             <Row label="热词">

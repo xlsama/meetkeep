@@ -35,8 +35,7 @@ func (c *Config) Get() config.Settings { return c.app.current() }
 
 // Save stores the settings.
 func (c *Config) Save(s config.Settings) error {
-	s.ASR.Endpoint = strings.TrimSpace(s.ASR.Endpoint)
-	s.ASR.Key = strings.TrimSpace(s.ASR.Key)
+	trimASR(&s.ASR)
 	trimLLM(&s.LLM)
 	if s.ASR.Hotwords == nil {
 		s.ASR.Hotwords = []string{}
@@ -52,14 +51,22 @@ func (c *Config) Save(s config.Settings) error {
 
 // TestTranscription transcribes a second of silence with the settings.
 func (c *Config) TestTranscription(ctx context.Context, s config.ASRSettings) error {
-	mai, err := asr.NewMAI(strings.TrimSpace(s.Endpoint), strings.TrimSpace(s.Key), nil)
+	trimASR(&s)
+	s.Hotwords = nil
+	transcriber, err := asr.From(s, nil)
 	if err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	_, err = mai.Transcribe(ctx, make([]int16, audio.SampleRate))
+	_, err = transcriber.Transcribe(ctx, make([]int16, audio.SampleRate))
 	return err
+}
+
+func trimASR(s *config.ASRSettings) {
+	s.Endpoint, s.Key = strings.TrimSpace(s.Endpoint), strings.TrimSpace(s.Key)
+	s.Custom.BaseURL = strings.TrimSpace(s.Custom.BaseURL)
+	s.Custom.Key, s.Custom.Model = strings.TrimSpace(s.Custom.Key), strings.TrimSpace(s.Custom.Model)
 }
 
 func trimLLM(s *config.LLMSettings) {

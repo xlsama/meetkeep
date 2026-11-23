@@ -18,6 +18,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/xlsama/meetkeep/internal/audio"
+	"github.com/xlsama/meetkeep/internal/config"
 )
 
 // Transcriber turns speech into text.
@@ -45,8 +46,17 @@ type Mark struct {
 	Ms int64
 }
 
-// ErrNotConfigured means the service's address or key is missing.
+// ErrNotConfigured means what the service needs to be reached is missing.
 var ErrNotConfigured = errors.New("转写服务还没有配置")
+
+// From returns what transcribes with the settings. files reads the files a
+// service that times nothing is given in pieces.
+func From(s config.ASRSettings, files Files) (Transcriber, error) {
+	if s.Provider == config.ASRCustom {
+		return NewOpenAI(s.Custom.BaseURL, s.Custom.Key, s.Custom.Model, s.Hotwords, files)
+	}
+	return NewMAI(s.Endpoint, s.Key, s.Hotwords)
+}
 
 // MAI is Azure's MAI-Transcribe-2, through the fast transcription API.
 type MAI struct {
@@ -224,6 +234,29 @@ func halved(units []uint16, from, to int) []int {
 	return append(halved(units, from, cut), halved(units, cut, to)...)
 }
 
+// cuts returns where a text is cut into sentences, the last at its end. A
+// sentence shorter than least, or one timed tells nothing of, joins the next.
+func cuts(units []uint16, timed func(from, to int) bool) []int {
+	var parts []int
+	from := 0
+	for _, stop := range stops(units) {
+		parts = append(parts, halved(units, from, stop)...)
+		from = stop
+	}
+	var found []int
+	from = 0
+	for _, part := range parts[:len(parts)-1] {
+		if part-from >= least && timed(from, part) {
+			found = append(found, part)
+			from = part
+		}
+	}
+	if len(found) > 0 && (len(units)-from < least || !timed(from, len(units))) {
+		found = found[:len(found)-1]
+	}
+	return append(found, len(units))
+}
+
 // sentences cuts a phrase into its sentences, each with when it is said:
 // the service gives what is said without a pause as one phrase, however
 // long. ends tell when what stands at each of the phrase's marks ends.
@@ -232,12 +265,6 @@ func sentences(p Phrase, ends []int64) []Phrase {
 		return []Phrase{p}
 	}
 	units := utf16.Encode([]rune(p.Text))
-	var parts []int
-	from := 0
-	for _, stop := range stops(units) {
-		parts = append(parts, halved(units, from, stop)...)
-		from = stop
-	}
 	marked := func(from, to int) (first, last int) {
 		first, last = -1, -1
 		for i, m := range p.Marks {
@@ -250,21 +277,13 @@ func sentences(p Phrase, ends []int64) []Phrase {
 		}
 		return first, last
 	}
-	var cuts []int
-	from = 0
-	for _, part := range parts[:len(parts)-1] {
-		if first, _ := marked(from, part); part-from >= least && first >= 0 {
-			cuts = append(cuts, part)
-			from = part
-		}
-	}
-	if first, _ := marked(from, len(units)); len(cuts) > 0 && (len(units)-from < least || first < 0) {
-		cuts = cuts[:len(cuts)-1]
-	}
-	cuts = append(cuts, len(units))
+	cuts := cuts(units, func(from, to int) bool {
+		first, _ := marked(from, to)
+		return first >= 0
+	})
 
 	cut := make([]Phrase, 0, len(cuts))
-	from = 0
+	from := 0
 	for _, to := range cuts {
 		first, last := marked(from, to)
 		for from < to && units[from] == ' ' {

@@ -49,6 +49,12 @@ type Engine interface {
 	// output as Ogg Opus. It returns how long the audio lasts, in
 	// milliseconds.
 	Import(ctx context.Context, input string, output string) (int, error)
+	// Hear tells where the speech of the Ogg Opus file at path is. model is
+	// pyannote segmentation 3.0, which hears those far from the microphone
+	// too.
+	Hear(ctx context.Context, path string, model string) (Hearing, error)
+	// Listen opens the Ogg Opus file at path to read its sound.
+	Listen(path string) (Audio, error)
 	// Embed returns the voiceprint of each span of the Ogg Opus file at
 	// path. model is ReDimNet2 b6 as ONNX: a 16 kHz waveform in, 192
 	// dimensions out.
@@ -66,6 +72,22 @@ type Recording interface {
 	// Write appends 48 kHz mono 16-bit little-endian PCM. What it is given
 	// is on disk within a second.
 	Write(pcm []byte) error
+}
+
+// Hearing tells where the speech of a recording is, by the 32 ms.
+type Hearing struct {
+	// Speech is how likely someone speaks in each 32 ms of the recording.
+	Speech []float32
+	// Turns are the 32 ms at which another speaker starts to talk.
+	Turns []int
+}
+
+// Audio is the sound of a file, read from its start to its end.
+type Audio interface {
+	io.Closer
+	// Read returns the next seconds of the file as 16 kHz mono 16-bit
+	// little-endian PCM, and nothing once the file has ended.
+	Read() ([]byte, error)
 }
 
 // Detector tells when someone speaks in a stream of audio.

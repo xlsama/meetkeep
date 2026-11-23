@@ -26,13 +26,32 @@ type GeneralSettings struct {
 	MenuBar bool `json:"menuBar"`
 }
 
+type ASRProvider string
+
+const (
+	ASRMAI    ASRProvider = "mai"
+	ASRCustom ASRProvider = "custom"
+)
+
 type ASRSettings struct {
-	Endpoint string   `json:"endpoint"`
-	Key      string   `json:"key"`
-	Hotwords []string `json:"hotwords"`
+	// Provider names the service that transcribes.
+	Provider ASRProvider `json:"provider"`
+	// Endpoint and Key are those of MAI-Transcribe-2.
+	Endpoint string    `json:"endpoint"`
+	Key      string    `json:"key"`
+	Custom   CustomASR `json:"custom"`
+	Hotwords []string  `json:"hotwords"`
 	// Polish has the language model take the filler out of a transcript
 	// and set misheard names right.
 	Polish bool `json:"polish"`
+}
+
+// CustomASR is a service that speaks OpenAI's audio transcriptions at
+// BaseURL. One that asks for no key has none.
+type CustomASR struct {
+	BaseURL string `json:"baseUrl"`
+	Key     string `json:"key"`
+	Model   string `json:"model"`
 }
 
 type LLMProvider string
@@ -100,7 +119,7 @@ type SourceSettings struct {
 func defaults() Settings {
 	return Settings{
 		General: GeneralSettings{OpenAtLogin: true},
-		ASR:     ASRSettings{Hotwords: []string{}, Polish: true},
+		ASR:     ASRSettings{Provider: ASRMAI, Hotwords: []string{}, Polish: true},
 		LLM: LLMSettings{
 			Provider:   LLMDeepSeek,
 			Anthropic:  LLMService{Model: "claude-sonnet-5-5"},

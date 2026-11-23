@@ -19,7 +19,7 @@ func TestLoad(t *testing.T) {
 	if err := os.WriteFile(Path(), []byte(`{"asr": {"polish": false}, "general": {"menuBar": true}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if s, err = Load(); err != nil || !s.General.OpenAtLogin || !s.General.MenuBar || s.ASR.Polish || s.ASR.Hotwords == nil {
+	if s, err = Load(); err != nil || !s.General.OpenAtLogin || !s.General.MenuBar || s.ASR.Polish || s.ASR.Hotwords == nil || s.ASR.Provider != ASRMAI {
 		t.Errorf("got %+v (%v)", s, err)
 	}
 

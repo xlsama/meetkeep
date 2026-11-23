@@ -48,6 +48,16 @@ impl Engine for NativeEngine {
         media::import(ctx, &input, &output)
     }
 
+    fn listen(&self, path: String) -> Result<Arc<dyn Audio>, Error> {
+        Ok(Arc::new(decode::Sound::open(&path)?))
+    }
+
+    fn hear(&self, ctx: &Context, path: String, model: String) -> Result<Hearing, Error> {
+        let samples = read_audio(&path)?;
+        ctx.check()?;
+        regions::hear(&model, &samples)
+    }
+
     fn embed(&self, ctx: &Context, path: String, model: String, spans: Vec<Span>) -> Result<Vec<Voiceprint>, Error> {
         voice::embed(ctx, &path, &model, &spans)
     }
