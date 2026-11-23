@@ -58,7 +58,7 @@ func TestModelsNotConfigured(t *testing.T) {
 	for _, s := range []config.LLMSettings{
 		{Provider: config.LLMAnthropic},
 		{Provider: config.LLMDeepSeek},
-		{Provider: config.LLMCustom, Custom: config.CustomLLM{Key: "k"}},
+		{Provider: config.LLMCustom, Service: "a", Services: []config.Service{{ID: "a", Key: "k"}, {ID: "b", BaseURL: "http://localhost:1/v1"}}},
 	} {
 		if _, err := Models(context.Background(), s); !errors.Is(err, ErrNotConfigured) {
 			t.Errorf("%s: err = %v, want ErrNotConfigured", s.Provider, err)

@@ -1,7 +1,7 @@
 import { useForm, useStore } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
-import { Check, ChevronDown, Copy, LoaderCircle, X } from "lucide-react";
+import { Check, ChevronDown, Copy, LoaderCircle, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
 import { PageTitle } from "@/components/header-slot";
@@ -11,13 +11,14 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Segmented, SegmentedItem } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
-import { Config, type ASRProvider, type LLMProvider, type Settings } from "@/mygo";
+import { Config, type ASRProvider, type LLMProvider, type Service, type Settings } from "@/mygo";
 import { copyText } from "@/lib/clipboard";
 import { cliQuery, errorMessage, modelsQuery, queryClient, settingsPathQuery, settingsQuery } from "@/lib/queries";
 import { sections, type SectionId } from "@/lib/settings-sections";
@@ -35,13 +36,17 @@ const providers: { id: LLMProvider; label: string }[] = [
   { id: "anthropic", label: "Claude" },
   { id: "deepseek", label: "DeepSeek" },
   { id: "openrouter", label: "OpenRouter" },
-  { id: "custom", label: "自定义" },
 ];
 
-const transcribers: { id: ASRProvider; label: string }[] = [
-  { id: "mai", label: "MAI-Transcribe-2（Azure）" },
-  { id: "custom", label: "自定义" },
-];
+const custom = z.object({
+  id: z.string(),
+  name: z.string().trim(),
+  baseUrl: address,
+  key: z.string().trim(),
+  model: z.string().trim(),
+});
+
+const transcribers: { id: ASRProvider; label: string }[] = [{ id: "mai", label: "MAI-Transcribe-2（Azure）" }];
 
 const schema = z.object({
   general: z.object({ openAtLogin: z.boolean(), menuBar: z.boolean() }),
@@ -49,7 +54,8 @@ const schema = z.object({
     provider: z.enum(["mai", "custom"]),
     endpoint: address,
     key: z.string().trim(),
-    custom: service.extend({ baseUrl: address }),
+    service: z.string(),
+    services: z.array(custom),
     hotwords: z.array(z.string()),
     polish: z.boolean(),
   }),
@@ -58,7 +64,8 @@ const schema = z.object({
     anthropic: service,
     deepseek: service,
     openrouter: service,
-    custom: service.extend({ baseUrl: address }),
+    service: z.string(),
+    services: z.array(custom),
   }),
   recording: z.object({
     directory: z.string(),
@@ -116,14 +123,16 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
     sync("asr", "provider");
     sync("asr", "endpoint");
     sync("asr", "key");
-    sync("asr", "custom");
+    sync("asr", "service");
+    sync("asr", "services");
     sync("asr", "hotwords");
     sync("asr", "polish");
     sync("llm", "provider");
     sync("llm", "anthropic");
     sync("llm", "deepseek");
     sync("llm", "openrouter");
-    sync("llm", "custom");
+    sync("llm", "service");
+    sync("llm", "services");
     sync("recording", "directory");
     sync("recording", "detectMeetings");
     sync("recording", "showPanel");
@@ -162,14 +171,42 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
 
   const asr = useStore(form.store, (s) => s.values.asr);
   const llm = useStore(form.store, (s) => s.values.llm);
+  const asrCustom = asr.provider === "custom" ? asr.services.find((s) => s.id === asr.service) : undefined;
+  const llmCustom = llm.provider === "custom" ? llm.services.find((s) => s.id === llm.service) : undefined;
+  const builtin = llm.provider === "custom" ? undefined : llm.provider;
   const models = useQuery({
-    ...modelsQuery({ ...settings.llm, provider: llm.provider }),
-    enabled: section === "notes",
+    ...modelsQuery({ ...settings.llm, provider: llm.provider, service: llm.service }),
+    enabled: section === "notes" && (llm.provider !== "custom" || Boolean(llmCustom?.baseUrl)),
   });
   const transcriptionModels = useQuery({
-    ...modelsQuery({ ...settings.llm, provider: "custom", custom: settings.asr.custom }),
-    enabled: section === "transcription" && asr.provider === "custom" && settings.asr.custom.baseUrl !== "",
+    ...modelsQuery({ ...settings.llm, provider: "custom", service: asr.service, services: settings.asr.services }),
+    enabled: section === "transcription" && Boolean(asrCustom?.baseUrl),
   });
+
+  const choose = (group: "asr" | "llm", provider: ASRProvider | LLMProvider, service: string) => {
+    form.setFieldValue(`${group}.provider`, provider as never);
+    if (service) form.setFieldValue(`${group}.service`, service);
+    void save();
+  };
+  const add = (group: "asr" | "llm") => {
+    const services = form.getFieldValue(`${group}.services`);
+    let name = "自定义服务";
+    for (let n = 2; services.some((s) => s.name === name); n++) name = `自定义服务 ${n}`;
+    const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    form.setFieldValue(`${group}.services`, [...services, { id, name, baseUrl: "", key: "", model: "" }]);
+    choose(group, "custom", id);
+  };
+  const put = (group: "asr" | "llm", next: Service) => {
+    const services = form.getFieldValue(`${group}.services`);
+    form.setFieldValue(`${group}.services`, services.map((s) => (s.id === next.id ? next : s)));
+    void save();
+  };
+  const remove = (group: "asr" | "llm", id: string) => {
+    const services = form.getFieldValue(`${group}.services`);
+    form.setFieldValue(`${group}.services`, services.filter((s) => s.id !== id));
+    form.setFieldValue(`${group}.service`, "");
+    choose(group, group === "asr" ? "mai" : "deepseek", "");
+  };
 
   return (
     <>
@@ -214,105 +251,69 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
       )}
       {section === "transcription" && (
       <Group>
-        <form.Field name="asr.provider">
-          {(field) => (
-            <Row label="服务">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="转写服务"
-                    data-testid="settings-asr-service"
-                    className="flex h-8 items-center gap-2 rounded-md border border-input bg-background pr-2.5 pl-3 text-ui text-foreground outline-none transition-colors hover:bg-muted focus-visible:border-border-strong focus-visible:ring-[3px] focus-visible:ring-black/5"
-                  >
-                    {transcribers.find((p) => p.id === field.state.value)?.label}
-                    <ChevronDown className="size-3.5 text-muted-foreground" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {transcribers.map((p) => (
-                    <DropdownMenuItem
-                      key={p.id}
-                      data-testid={`settings-asr-service-${p.id}`}
-                      onSelect={() => {
-                        field.handleChange(p.id);
-                        void save();
-                      }}
-                    >
-                      <span className="flex-1">{p.label}</span>
-                      {p.id === field.state.value && <Check />}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </Row>
-          )}
-        </form.Field>
-        <form.Field
-          key={`${asr.provider}.address`}
-          name={asr.provider === "custom" ? "asr.custom.baseUrl" : "asr.endpoint"}
-          validators={{ onBlur: address }}
-        >
-          {(field) => (
-            <Row label="服务地址" error={field.state.meta.errors[0]?.message}>
-              <Input
-                aria-label="转写服务地址"
-                data-testid="settings-asr-endpoint"
-                placeholder={
-                  asr.provider === "custom"
-                    ? "https://api.openai.com/v1"
-                    : "https://[你的资源名].cognitiveservices.azure.com"
-                }
-                aria-invalid={field.state.meta.errors.length > 0}
-                className="w-[360px] font-mono text-label"
-                value={field.state.value}
-                onChange={(event) => field.handleChange(event.target.value)}
-                {...textProps(field.name, field.handleBlur)}
-              />
-            </Row>
-          )}
-        </form.Field>
-        <form.Field key={`${asr.provider}.key`} name={asr.provider === "custom" ? "asr.custom.key" : "asr.key"}>
-          {(field) => (
-            <TestRow
-              label="密钥"
-              testId="settings-asr-test"
-              signature={JSON.stringify([asr.provider, asr.endpoint, asr.key, asr.custom])}
-              run={() => Config.testTranscription(asr)}
-            >
-              <Input
-                type="password"
-                aria-label="转写密钥"
-                data-testid="settings-asr-key"
-                className="w-[252px]"
-                value={field.state.value}
-                onChange={(event) => field.handleChange(event.target.value)}
-                {...textProps(field.name, field.handleBlur)}
-              />
-            </TestRow>
-          )}
-        </form.Field>
-        {asr.provider === "custom" && (
-          <form.Field name="asr.custom.model">
-            {(field) => (
-              <Row label="模型">
-                <Combobox
-                  aria-label="转写模型"
-                  testId="settings-asr-model"
-                  className="w-[360px]"
-                  value={field.state.value}
-                  options={transcriptionModels.data ?? []}
-                  loading={transcriptionModels.isFetching}
-                  onValueChange={field.handleChange}
-                  onPick={(model) => {
-                    field.handleChange(model);
-                    void save();
-                  }}
-                  {...textProps(field.name, field.handleBlur)}
-                />
-              </Row>
-            )}
-          </form.Field>
+        <Row label="服务">
+          <ServiceMenu
+            label="转写服务"
+            testId="settings-asr-service"
+            builtin={transcribers}
+            provider={asr.provider}
+            service={asr.service}
+            services={asr.services}
+            onChoose={(provider, service) => choose("asr", provider, service)}
+            onAdd={() => add("asr")}
+          />
+        </Row>
+        {asrCustom ? (
+          <CustomService
+            key={asrCustom.id}
+            label="转写"
+            testId="settings-asr"
+            value={asrCustom}
+            models={transcriptionModels.data ?? []}
+            loading={transcriptionModels.isFetching}
+            onChange={(next) => put("asr", next)}
+            onRemove={() => remove("asr", asrCustom.id)}
+            test={(tried) => Config.testTranscription({ ...asr, service: tried.id, services: [tried] })}
+          />
+        ) : (
+          <>
+            <form.Field name="asr.endpoint" validators={{ onBlur: address }}>
+              {(field) => (
+                <Row label="服务地址" error={field.state.meta.errors[0]?.message}>
+                  <Input
+                    aria-label="转写服务地址"
+                    data-testid="settings-asr-endpoint"
+                    placeholder="https://[你的资源名].cognitiveservices.azure.com"
+                    aria-invalid={field.state.meta.errors.length > 0}
+                    className="w-[360px] font-mono text-label"
+                    value={field.state.value}
+                    onChange={(event) => field.handleChange(event.target.value)}
+                    {...textProps(field.name, field.handleBlur)}
+                  />
+                </Row>
+              )}
+            </form.Field>
+            <form.Field name="asr.key">
+              {(field) => (
+                <TestRow
+                  label="密钥"
+                  testId="settings-asr-test"
+                  signature={JSON.stringify([asr.endpoint, asr.key])}
+                  run={() => Config.testTranscription(asr)}
+                >
+                  <Input
+                    type="password"
+                    aria-label="转写密钥"
+                    data-testid="settings-asr-key"
+                    className="w-[252px]"
+                    value={field.state.value}
+                    onChange={(event) => field.handleChange(event.target.value)}
+                    {...textProps(field.name, field.handleBlur)}
+                  />
+                </TestRow>
+              )}
+            </form.Field>
+          </>
         )}
         <form.Field name="asr.hotwords">
           {(field) => (
@@ -346,98 +347,75 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
       )}
       {section === "notes" && (
       <Group>
-        <form.Field name="llm.provider">
-          {(field) => (
-            <Row label="服务">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="模型服务"
-                    data-testid="settings-llm-provider"
-                    className="flex h-8 items-center gap-2 rounded-md border border-input bg-background pr-2.5 pl-3 text-ui text-foreground outline-none transition-colors hover:bg-muted focus-visible:border-border-strong focus-visible:ring-[3px] focus-visible:ring-black/5"
-                  >
-                    {providers.find((p) => p.id === field.state.value)?.label}
-                    <ChevronDown className="size-3.5 text-muted-foreground" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {providers.map((p) => (
-                    <DropdownMenuItem
-                      key={p.id}
-                      data-testid={`settings-llm-provider-${p.id}`}
-                      onSelect={() => {
-                        field.handleChange(p.id);
-                        void save();
-                      }}
-                    >
-                      <span className="flex-1">{p.label}</span>
-                      {p.id === field.state.value && <Check />}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </Row>
-          )}
-        </form.Field>
-        {llm.provider === "custom" && (
-          <form.Field name="llm.custom.baseUrl" validators={{ onBlur: address }}>
-            {(field) => (
-              <Row label="服务地址" error={field.state.meta.errors[0]?.message}>
-                <Input
-                  aria-label="模型服务地址"
-                  data-testid="settings-llm-base-url"
-                  placeholder="https://api.openai.com/v1"
-                  aria-invalid={field.state.meta.errors.length > 0}
-                  className="w-[360px] font-mono text-label"
-                  value={field.state.value}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  {...textProps(field.name, field.handleBlur)}
-                />
-              </Row>
-            )}
-          </form.Field>
+        <Row label="服务">
+          <ServiceMenu
+            label="模型服务"
+            testId="settings-llm-provider"
+            builtin={providers}
+            provider={llm.provider}
+            service={llm.service}
+            services={llm.services}
+            onChoose={(provider, service) => choose("llm", provider, service)}
+            onAdd={() => add("llm")}
+          />
+        </Row>
+        {llmCustom && (
+          <CustomService
+            key={llmCustom.id}
+            label="模型"
+            testId="settings-llm"
+            value={llmCustom}
+            models={models.data ?? []}
+            loading={models.isFetching}
+            onChange={(next) => put("llm", next)}
+            onRemove={() => remove("llm", llmCustom.id)}
+            test={(tried) => Config.testModel({ ...llm, service: tried.id, services: [tried] })}
+          />
         )}
-        <form.Field key={`${llm.provider}.key`} name={`llm.${llm.provider}.key`}>
-          {(field) => (
-            <TestRow
-              label="密钥"
-              testId="settings-llm-test"
-              signature={JSON.stringify([llm.provider, llm[llm.provider]])}
-              run={() => Config.testModel(llm)}
-            >
-              <Input
-                type="password"
-                aria-label="模型密钥"
-                data-testid="settings-llm-key"
-                className="w-[252px]"
-                value={field.state.value}
-                onChange={(event) => field.handleChange(event.target.value)}
-                {...textProps(field.name, field.handleBlur)}
-              />
-            </TestRow>
-          )}
-        </form.Field>
-        <form.Field key={`${llm.provider}.model`} name={`llm.${llm.provider}.model`}>
-          {(field) => (
-            <Row label="模型">
-              <Combobox
-                aria-label="模型"
-                testId="settings-llm-model"
-                className="w-[360px]"
-                value={field.state.value}
-                options={models.data ?? []}
-                loading={models.isFetching}
-                onValueChange={field.handleChange}
-                onPick={(model) => {
-                  field.handleChange(model);
-                  void save();
-                }}
-                {...textProps(field.name, field.handleBlur)}
-              />
-            </Row>
-          )}
-        </form.Field>
+        {builtin && (
+          <>
+            <form.Field key={`${builtin}.key`} name={`llm.${builtin}.key`}>
+              {(field) => (
+                <TestRow
+                  label="密钥"
+                  testId="settings-llm-test"
+                  signature={JSON.stringify([builtin, llm[builtin]])}
+                  run={() => Config.testModel(llm)}
+                >
+                  <Input
+                    type="password"
+                    aria-label="模型密钥"
+                    data-testid="settings-llm-key"
+                    className="w-[252px]"
+                    value={field.state.value}
+                    onChange={(event) => field.handleChange(event.target.value)}
+                    {...textProps(field.name, field.handleBlur)}
+                  />
+                </TestRow>
+              )}
+            </form.Field>
+            <form.Field key={`${builtin}.model`} name={`llm.${builtin}.model`}>
+              {(field) => (
+                <Row label="模型">
+                  <Combobox
+                    aria-label="模型"
+                    testId="settings-llm-model"
+                    className="w-[360px]"
+                    value={field.state.value}
+                    options={models.data ?? []}
+                    loading={models.isFetching}
+                    onValueChange={field.handleChange}
+                    onPick={(model) => {
+                      field.handleChange(model);
+                      void save();
+                    }}
+                    {...textProps(field.name, field.handleBlur)}
+                  />
+                </Row>
+              )}
+            </form.Field>
+          </>
+        )}
       </Group>
       )}
       {section === "recording" && (
@@ -615,6 +593,152 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
         </Row>
       </Group>
       )}
+    </>
+  );
+}
+
+function ServiceMenu<P extends string>({
+  label,
+  testId,
+  builtin,
+  provider,
+  service,
+  services,
+  onChoose,
+  onAdd,
+}: {
+  label: string;
+  testId: string;
+  builtin: { id: P; label: string }[];
+  provider: P | "custom";
+  service: string;
+  services: Service[];
+  onChoose: (provider: P | "custom", service: string) => void;
+  onAdd: () => void;
+}) {
+  const chosen = provider === "custom" ? services.find((s) => s.id === service) : undefined;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" aria-label={label} data-testid={testId} className="flex h-8 items-center gap-2 rounded-md border border-input bg-background pr-2.5 pl-3 text-ui text-foreground outline-none transition-colors hover:bg-muted focus-visible:border-border-strong focus-visible:ring-[3px] focus-visible:ring-black/5">
+          {chosen ? chosen.name || "未命名" : builtin.find((p) => p.id === provider)?.label}
+          <ChevronDown className="size-3.5 text-muted-foreground" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {builtin.map((p) => (
+          <DropdownMenuItem key={p.id} data-testid={`${testId}-${p.id}`} onSelect={() => onChoose(p.id, "")}>
+            <span className="flex-1">{p.label}</span>
+            {p.id === provider && <Check />}
+          </DropdownMenuItem>
+        ))}
+        {services.map((s, i) => (
+          <DropdownMenuItem key={s.id} data-testid={`${testId}-custom-${i}`} onSelect={() => onChoose("custom", s.id)}>
+            <span className="flex-1">{s.name || "未命名"}</span>
+            {s.id === chosen?.id && <Check />}
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem data-testid={`${testId}-add`} onSelect={onAdd}>
+          <Plus />
+          添加自定义服务
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function CustomService({
+  label,
+  testId,
+  value,
+  models,
+  loading,
+  onChange,
+  onRemove,
+  test,
+}: {
+  label: string;
+  testId: string;
+  value: Service;
+  models: string[];
+  loading: boolean;
+  onChange: (next: Service) => void;
+  onRemove: () => void;
+  test: (tried: Service) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [invalid, setInvalid] = useState<string>();
+  const commit = (next: Service) => {
+    const parsed = address.safeParse(next.baseUrl);
+    setInvalid(parsed.success ? undefined : parsed.error.issues[0]?.message);
+    if (parsed.success && JSON.stringify(next) !== JSON.stringify(value)) onChange(next);
+  };
+  return (
+    <>
+      <Row label="名称">
+        <Input
+          aria-label={`${label}服务名称`}
+          data-testid={`${testId}-name`}
+          className="w-[316px]"
+          value={draft.name}
+          onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+          onBlur={() => commit(draft)}
+        />
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="删除这个服务"
+          data-testid={`${testId}-remove`}
+          onClick={onRemove}
+        >
+          <Trash2 className="size-4" />
+        </Button>
+      </Row>
+      <Row label="服务地址" error={invalid}>
+        <Input
+          aria-label={`${label}服务地址`}
+          data-testid={`${testId}-base-url`}
+          placeholder="https://api.openai.com/v1"
+          aria-invalid={invalid !== undefined}
+          className="w-[360px] font-mono text-label"
+          value={draft.baseUrl}
+          onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })}
+          onBlur={() => commit(draft)}
+        />
+      </Row>
+      <TestRow
+        label="密钥"
+        testId={`${testId}-test`}
+        signature={JSON.stringify([draft.baseUrl, draft.key, draft.model])}
+        run={() => test(draft)}
+      >
+        <Input
+          type="password"
+          aria-label={`${label}密钥`}
+          data-testid={`${testId}-key`}
+          className="w-[252px]"
+          value={draft.key}
+          onChange={(event) => setDraft({ ...draft, key: event.target.value })}
+          onBlur={() => commit(draft)}
+        />
+      </TestRow>
+      <Row label="模型">
+        <Combobox
+          aria-label={`${label}服务的模型`}
+          testId={`${testId}-model`}
+          className="w-[360px]"
+          value={draft.model}
+          options={models}
+          loading={loading}
+          onValueChange={(model) => setDraft({ ...draft, model })}
+          onPick={(model) => {
+            setDraft({ ...draft, model });
+            commit({ ...draft, model });
+          }}
+          onBlur={() => commit(draft)}
+        />
+      </Row>
     </>
   );
 }

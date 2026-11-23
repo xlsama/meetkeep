@@ -37,21 +37,37 @@ type ASRSettings struct {
 	// Provider names the service that transcribes.
 	Provider ASRProvider `json:"provider"`
 	// Endpoint and Key are those of MAI-Transcribe-2.
-	Endpoint string    `json:"endpoint"`
-	Key      string    `json:"key"`
-	Custom   CustomASR `json:"custom"`
+	Endpoint string `json:"endpoint"`
+	Key      string `json:"key"`
+	// Service is the ID of the one of Services that transcribes when
+	// Provider is ASRCustom.
+	Service  string    `json:"service"`
+	Services []Service `json:"services"`
 	Hotwords []string  `json:"hotwords"`
 	// Polish has the language model take the filler out of a transcript
 	// and set misheard names right.
 	Polish bool `json:"polish"`
 }
 
-// CustomASR is a service that speaks OpenAI's audio transcriptions at
-// BaseURL. One that asks for no key has none.
-type CustomASR struct {
+// Service is a service of the user's own that speaks OpenAI's API at
+// BaseURL, under the name they gave it. One that asks for no key has none.
+type Service struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
 	BaseURL string `json:"baseUrl"`
 	Key     string `json:"key"`
 	Model   string `json:"model"`
+}
+
+// Chosen returns the one of services whose ID is id, or one that has
+// nothing set.
+func Chosen(services []Service, id string) Service {
+	for _, s := range services {
+		if s.ID == id {
+			return s
+		}
+	}
+	return Service{}
 }
 
 type LLMProvider string
@@ -70,19 +86,15 @@ type LLMSettings struct {
 	Anthropic  LLMService  `json:"anthropic"`
 	DeepSeek   LLMService  `json:"deepseek"`
 	OpenRouter LLMService  `json:"openrouter"`
-	Custom     CustomLLM   `json:"custom"`
+	// Service is the ID of the one of Services that writes the notes when
+	// Provider is LLMCustom.
+	Service  string    `json:"service"`
+	Services []Service `json:"services"`
 }
 
 type LLMService struct {
 	Key   string `json:"key"`
 	Model string `json:"model"`
-}
-
-// CustomLLM is a service that speaks OpenAI's chat completions at BaseURL.
-type CustomLLM struct {
-	BaseURL string `json:"baseUrl"`
-	Key     string `json:"key"`
-	Model   string `json:"model"`
 }
 
 type EchoCancellation string
@@ -119,12 +131,13 @@ type SourceSettings struct {
 func defaults() Settings {
 	return Settings{
 		General: GeneralSettings{OpenAtLogin: true},
-		ASR:     ASRSettings{Provider: ASRMAI, Hotwords: []string{}, Polish: true},
+		ASR:     ASRSettings{Provider: ASRMAI, Services: []Service{}, Hotwords: []string{}, Polish: true},
 		LLM: LLMSettings{
 			Provider:   LLMDeepSeek,
 			Anthropic:  LLMService{Model: "claude-sonnet-5-5"},
 			DeepSeek:   LLMService{Model: "deepseek-flash"},
 			OpenRouter: LLMService{Model: "deepseek/deepseek-v4.1-flash"},
+			Services:   []Service{},
 		},
 		Recording: RecordingSettings{
 			Directory:        Contract(filepath.Join(home(), "Documents", "MeetKeep")),
@@ -163,6 +176,12 @@ func Load() (Settings, error) {
 	}
 	if s.ASR.Hotwords == nil {
 		s.ASR.Hotwords = []string{}
+	}
+	if s.ASR.Services == nil {
+		s.ASR.Services = []Service{}
+	}
+	if s.LLM.Services == nil {
+		s.LLM.Services = []Service{}
 	}
 	if s.Sources.Apps == nil {
 		s.Sources.Apps = []AppRef{}

@@ -12,7 +12,12 @@ export interface ASRSettings {
   /** Endpoint and Key are those of MAI-Transcribe-2. */
   endpoint: string;
   key: string;
-  custom: CustomASR;
+  /**
+   * Service is the ID of the one of Services that transcribes when
+   * Provider is ASRCustom.
+   */
+  service: string;
+  services: Service[];
   hotwords: string[];
   /**
    * Polish has the language model take the filler out of a transcript
@@ -50,23 +55,6 @@ export interface Chapter {
   text: string;
   seq: number;
   atMs: number;
-}
-
-/**
- * CustomASR is a service that speaks OpenAI's audio transcriptions at
- * BaseURL. One that asks for no key has none.
- */
-export interface CustomASR {
-  baseUrl: string;
-  key: string;
-  model: string;
-}
-
-/** CustomLLM is a service that speaks OpenAI's chat completions at BaseURL. */
-export interface CustomLLM {
-  baseUrl: string;
-  key: string;
-  model: string;
 }
 
 export type EchoCancellation = "auto" | "on" | "off";
@@ -114,7 +102,12 @@ export interface LLMSettings {
   anthropic: LLMService;
   deepseek: LLMService;
   openrouter: LLMService;
-  custom: CustomLLM;
+  /**
+   * Service is the ID of the one of Services that writes the notes when
+   * Provider is LLMCustom.
+   */
+  service: string;
+  services: Service[];
 }
 
 /** Levels are how loud the tracks are, from 0 to 1. */
@@ -319,6 +312,18 @@ export interface SearchLine {
 export interface SearchNote {
   text: string;
   atMs: number;
+}
+
+/**
+ * Service is a service of the user's own that speaks OpenAI's API at
+ * BaseURL, under the name they gave it. One that asks for no key has none.
+ */
+export interface Service {
+  id: string;
+  name: string;
+  baseUrl: string;
+  key: string;
+  model: string;
 }
 
 export interface Settings {

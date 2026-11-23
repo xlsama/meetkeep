@@ -34,7 +34,8 @@ func Models(ctx context.Context, s config.LLMSettings) ([]string, error) {
 	case config.LLMOpenRouter:
 		return listModels(ctx, http.DefaultClient, openRouterURL, s.OpenRouter.Key)
 	}
-	return listModels(ctx, http.DefaultClient, s.Custom.BaseURL, s.Custom.Key)
+	chosen := config.Chosen(s.Services, s.Service)
+	return listModels(ctx, http.DefaultClient, chosen.BaseURL, chosen.Key)
 }
 
 func claudeModels(ctx context.Context, key string) ([]string, error) {

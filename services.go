@@ -65,16 +65,26 @@ func (c *Config) TestTranscription(ctx context.Context, s config.ASRSettings) er
 
 func trimASR(s *config.ASRSettings) {
 	s.Endpoint, s.Key = strings.TrimSpace(s.Endpoint), strings.TrimSpace(s.Key)
-	s.Custom.BaseURL = strings.TrimSpace(s.Custom.BaseURL)
-	s.Custom.Key, s.Custom.Model = strings.TrimSpace(s.Custom.Key), strings.TrimSpace(s.Custom.Model)
+	s.Services = trimmed(s.Services)
+}
+
+// trimmed returns the services without the spaces around what was typed.
+func trimmed(services []config.Service) []config.Service {
+	out := make([]config.Service, len(services))
+	for i, s := range services {
+		out[i] = config.Service{
+			ID: s.ID, Name: strings.TrimSpace(s.Name), BaseURL: strings.TrimSpace(s.BaseURL),
+			Key: strings.TrimSpace(s.Key), Model: strings.TrimSpace(s.Model),
+		}
+	}
+	return out
 }
 
 func trimLLM(s *config.LLMSettings) {
 	for _, service := range []*config.LLMService{&s.Anthropic, &s.DeepSeek, &s.OpenRouter} {
 		service.Key, service.Model = strings.TrimSpace(service.Key), strings.TrimSpace(service.Model)
 	}
-	s.Custom.BaseURL = strings.TrimSpace(s.Custom.BaseURL)
-	s.Custom.Key, s.Custom.Model = strings.TrimSpace(s.Custom.Key), strings.TrimSpace(s.Custom.Model)
+	s.Services = trimmed(s.Services)
 }
 
 // TestModel asks the model for a word with the settings.

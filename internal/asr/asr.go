@@ -53,7 +53,8 @@ var ErrNotConfigured = errors.New("转写服务还没有配置")
 // service that times nothing is given in pieces.
 func From(s config.ASRSettings, files Files) (Transcriber, error) {
 	if s.Provider == config.ASRCustom {
-		return NewOpenAI(s.Custom.BaseURL, s.Custom.Key, s.Custom.Model, s.Hotwords, files)
+		chosen := config.Chosen(s.Services, s.Service)
+		return NewOpenAI(chosen.BaseURL, chosen.Key, chosen.Model, s.Hotwords, files)
 	}
 	return NewMAI(s.Endpoint, s.Key, s.Hotwords)
 }

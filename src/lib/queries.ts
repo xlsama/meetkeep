@@ -23,12 +23,14 @@ export const cliQuery = queryOptions({
   queryFn: () => Config.cli(),
 });
 
-export const modelsQuery = (llm: LLMSettings) =>
-  queryOptions({
-    queryKey: ["models", llm.provider, llm[llm.provider].key, llm.provider === "custom" ? llm.custom.baseUrl : ""],
+export const modelsQuery = (llm: LLMSettings) => {
+  const custom = llm.services.find((s) => s.id === llm.service);
+  return queryOptions({
+    queryKey: ["models", ...(llm.provider === "custom" ? [custom?.baseUrl, custom?.key] : [llm.provider, llm[llm.provider].key])],
     queryFn: () => Config.models(llm),
     staleTime: 5 * 60_000,
   });
+};
 
 export const meetingsQuery = queryOptions({
   queryKey: ["meetings"],

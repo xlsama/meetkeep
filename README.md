@@ -24,7 +24,7 @@ bun run release
 
 仓库里配了 `MACOS_CERTIFICATE`、`MACOS_CERTIFICATE_PASSWORD`、`MACOS_SIGNING_IDENTITY` 这几个 secret 时，macOS 的包用 Developer ID 签名；再配 `APPLE_ID`、`APPLE_TEAM_ID`、`APPLE_APP_PASSWORD` 就同时公证。没配时是 ad-hoc 签名，别的 Mac 上会被 Gatekeeper 拦。Windows 的包没有签名，SmartScreen 会提示。
 
-转写用 Azure 的 MAI-Transcribe-2，或自定义的 OpenAI 兼容服务（`/audio/transcriptions`，自建的也行）；纪要和白板的模型在 Claude、DeepSeek、OpenRouter 和自定义的 OpenAI 兼容服务之间切换，各存各的密钥和模型名，都在应用的设置页里填。设置存在 `~/.config/meetkeep/settings.json`，会议存在同目录的 `meetkeep.db`，录音默认存在 `~/Documents/MeetKeep`。
+转写用 Azure 的 MAI-Transcribe-2，或自定义的 OpenAI 兼容服务（`/audio/transcriptions`，自建的也行）；纪要和白板的模型在 Claude、DeepSeek、OpenRouter 和自定义的 OpenAI 兼容服务之间切换，各存各的密钥和模型名，都在应用的设置页里填。自定义服务可以加多个，各起一个名字，在「服务」下拉里和内置的排在一起。设置存在 `~/.config/meetkeep/settings.json`，会议存在同目录的 `meetkeep.db`，录音默认存在 `~/Documents/MeetKeep`。
 
 每次处理的每一步都记在 `meetkeep.db` 的 `steps` 表里：排队、导入、转写、混音、分人、声纹、纪要各用了多久、内存峰值多少、失败原因和这一步的数据量。`meetkeep steps <会议 ID>` 按处理的次数列出来。
 

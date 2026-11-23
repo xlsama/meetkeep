@@ -57,7 +57,8 @@ func From(s config.LLMSettings) (*Client, error) {
 	case config.LLMOpenRouter:
 		return New(openRouterURL, s.OpenRouter.Key, s.OpenRouter.Model)
 	}
-	return New(s.Custom.BaseURL, s.Custom.Key, s.Custom.Model)
+	chosen := config.Chosen(s.Services, s.Service)
+	return New(chosen.BaseURL, chosen.Key, chosen.Model)
 }
 
 // New returns a client of a service that speaks OpenAI's chat completions.

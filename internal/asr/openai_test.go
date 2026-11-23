@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/xlsama/meetkeep/internal/audio"
+	"github.com/xlsama/meetkeep/internal/config"
 	"github.com/xlsama/meetkeep/modules/speech"
 )
 
@@ -115,6 +116,22 @@ func TestOpenAICutsAFileWhereItIsQuietAndWhereTheSpeakerChanges(t *testing.T) {
 	o, _ = NewOpenAI(failing.URL+"/v1", "", "whisper", nil, files)
 	if _, err := o.TranscribeFile(context.Background(), "meeting.opus"); err == nil || !strings.Contains(err.Error(), "502") {
 		t.Errorf("a service that is down reads %v", err)
+	}
+}
+
+func TestFromTakesTheServiceTheSettingsChoose(t *testing.T) {
+	settings := config.ASRSettings{
+		Provider: config.ASRCustom,
+		Service:  "b",
+		Services: []config.Service{{ID: "a", BaseURL: "http://a/v1", Model: "one"}, {ID: "b", BaseURL: "http://b/v1/", Model: "two"}},
+	}
+	got, err := From(settings, nil)
+	if o, ok := got.(*OpenAI); err != nil || !ok || o.BaseURL != "http://b/v1" || o.Model != "two" {
+		t.Errorf("got %+v (%v)", got, err)
+	}
+	settings.Service = "gone"
+	if _, err := From(settings, nil); err != ErrNotConfigured {
+		t.Errorf("a service that was removed transcribes: %v", err)
 	}
 }
 
