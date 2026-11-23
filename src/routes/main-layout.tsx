@@ -20,6 +20,7 @@ import { Notice } from "@/components/notice";
 import { RecDot } from "@/components/rec-dot";
 import { SearchDialog, SearchTrigger } from "@/components/search-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { UpdateButton } from "@/components/update-button";
 import { events } from "@/mygo";
 import { useImport, useImporter } from "@/lib/importer";
 import { settingsQuery } from "@/lib/queries";
@@ -73,7 +74,10 @@ export function MainLayout() {
         <HeaderButton label={sidebar ? "收起侧边栏" : "展开侧边栏"} testId="sidebar-toggle" onClick={toggleSidebar}>
           {sidebar ? <PanelLeftClose className="size-4" /> : <PanelLeft className="size-4" />}
         </HeaderButton>
-        <div ref={setTitle} className="flex min-w-0 flex-1 basis-0 flex-col items-start justify-center" />
+        <div className="flex min-w-0 flex-1 basis-0 items-center gap-3">
+          <div ref={setTitle} className="flex min-w-0 flex-col items-start justify-center" />
+          <UpdateButton />
+        </div>
         <SearchTrigger />
         <div className="flex min-w-0 flex-1 basis-0 items-center justify-end gap-1">
           <div ref={setActions} className="flex min-w-0 items-center gap-2 pr-1.5" />

@@ -89,8 +89,14 @@ jobs:
           path: ~\AppData\Local\mygo\nsis-*
           key: nsis-${{ hashFiles('bun.lock') }}
 
+      # With a tag, the installers go to its release with the updates of the
+      # apps that are installed: the archive, signed, and its manifest.
       - name: Build
-        run: bun run build -- -platform "${{ matrix.platform }}"
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+        run: bun run build -- -platform "${{ matrix.platform }}" ${{ github.ref_type == 'tag' && '-upload' || '' }}
 
       - uses: actions/upload-artifact@v5
         with:
@@ -99,15 +105,6 @@ jobs:
           path: |
             build/*/*.dmg
             build/*/*-setup-*.exe
-      - name: Upload to the release
-        if: github.ref_type == 'tag'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          shopt -s nullglob
-          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber \
-            build/*/*.dmg build/*/*-setup-*.exe
 
   publish:
     needs: build

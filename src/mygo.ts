@@ -666,6 +666,20 @@ export const Windows = {
   showPanel: bind<[], void>("Windows.ShowPanel", () => []),
 } as const;
 
+/** Updates tells of a newer version of the app, and starts it. */
+export const Updates = {
+  /**
+   * Ready returns the newer version that is in place and runs once the app
+   * starts again, or "".
+   */
+  ready: bind<[], string>("Updates.Ready", () => []),
+  /**
+   * Restart starts the app again, as the version that is ready. A recording
+   * is not cut short for it.
+   */
+  restart: bind<[], void>("Updates.Restart", () => []),
+} as const;
+
 // ---- Events ----
 
 /** Events sent by the Go side. Subscribe with `events.name.on(listener)`. */
@@ -686,6 +700,11 @@ export const events = {
   library: event<string>("library"),
   /** settingsChanged carries the settings after they were saved. */
   settings: event<Settings>("settings"),
+  /**
+   * updateReady names a newer version of the app that is in place, and
+   * runs once the app starts again.
+   */
+  update: event<string>("update"),
   /** navigate asks the main window to show a route. */
   navigate: event<string>("navigate"),
 } as const;

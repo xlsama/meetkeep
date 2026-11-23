@@ -28,6 +28,13 @@ export default defineConfig({
     infoPlist: { LSEnvironment: { MallocLargeCache: "0" } },
   },
   windows: { installerInclude: "scripts/installer.nsh" },
+  // Apps update themselves from the releases of the repository, signed
+  // with the key whose public half this is; the release workflow has the
+  // secret half.
+  updates: {
+    publicKey: "W/AFTn23GjxPbPc8h6bbzzQu/x3wBvbgRHbS65HNTz4=",
+    github: "xlsama/meetkeep",
+  },
   // Phones: `mygo dev -platform ios` and `-platform android` run the app on a
   // simulator, an emulator or a device (`mygo devices` lists them, and
   // `mygo doctor` tells what is missing). What devices and stores need:

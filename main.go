@@ -35,6 +35,7 @@ type app struct {
 	processor *processor.Processor
 	notes     noteTaker
 	windows   windows
+	updates   updater
 	sounds    sounds
 }
 
@@ -43,7 +44,7 @@ func main() {
 	a.windows.app = a
 	a.notes.app = a
 	a.sounds.app = a
-	mygo.Bind(&Config{a}, &Sources{a}, &Recorder{a}, &Library{a}, &People{a}, &Windows{a})
+	mygo.Bind(&Config{a}, &Sources{a}, &Recorder{a}, &Library{a}, &People{a}, &Windows{a}, &Updates{a})
 	mygo.App.SetPath(mygo.PathUserData, filepath.Join(config.Dir(), "app"))
 	mygo.App.OnWindowAllClosed(func() {})
 	mygo.App.WhenReady(func() {
@@ -146,6 +147,7 @@ func (a *app) start() error {
 	if err := a.windows.start(); err != nil {
 		return err
 	}
+	go a.updates.watch()
 	if err := a.conform(settings.General); err != nil {
 		log.Print(err)
 	}

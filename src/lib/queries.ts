@@ -1,5 +1,5 @@
 import { QueryClient, queryOptions } from "@tanstack/react-query";
-import { Config, events, Library, People, Sources, type LLMSettings } from "@/mygo";
+import { Config, events, Library, People, Sources, Updates, type LLMSettings } from "@/mygo";
 import { applyProgress } from "@/lib/progress";
 
 export const queryClient = new QueryClient({
@@ -16,6 +16,11 @@ export const settingsQuery = queryOptions({
 export const settingsPathQuery = queryOptions({
   queryKey: ["settings-path"],
   queryFn: () => Config.path(),
+});
+
+export const updateQuery = queryOptions({
+  queryKey: ["update"],
+  queryFn: () => Updates.ready(),
 });
 
 export const cliQuery = queryOptions({
@@ -95,6 +100,9 @@ export function syncQueries() {
   });
   events.settings.on((settings) => {
     queryClient.setQueryData(settingsQuery.queryKey, settings);
+  });
+  events.update.on((version) => {
+    queryClient.setQueryData(updateQuery.queryKey, version);
   });
 }
 

@@ -25,6 +25,9 @@ var (
 	libraryChanged = mygo.NewEvent[string]("library")
 	// settingsChanged carries the settings after they were saved.
 	settingsChanged = mygo.NewEvent[config.Settings]("settings")
+	// updateReady names a newer version of the app that is in place, and
+	// runs once the app starts again.
+	updateReady = mygo.NewEvent[string]("update")
 	// navigate asks the main window to show a route.
 	navigate = mygo.NewEvent[string]("navigate")
 )
