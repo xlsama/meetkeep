@@ -58,14 +58,14 @@ export function RecordsPage() {
         </HeaderActions>
       )}
       <Capture />
-      <div className="flex flex-col gap-5 pb-2">
-        <Notice testId="records-error" message={error} onDismiss={() => setError(null)} />
-        {cards.length === 0 ? null : view === "list" ? (
-          <Rows cards={cards} now={now} onError={setError} />
-        ) : (
+      <Notice testId="records-error" message={error} onDismiss={() => setError(null)} className="mx-4 mt-4" />
+      {cards.length === 0 ? null : view === "list" ? (
+        <Rows cards={cards} now={now} onError={setError} />
+      ) : (
+        <div className="flex flex-col gap-5 px-4 pt-4 pb-5">
           <Grid cards={cards} now={now} onError={setError} />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -81,8 +81,8 @@ function Capture() {
   const live = isActive(status) && status.meeting ? status.meeting : null;
 
   return (
-    <div className="sticky top-0 z-20 bg-canvas pb-5">
-      <div className="card flex h-[60px] items-center gap-2 px-2.5" data-testid="capture">
+    <div className="sticky top-0 z-20 border-b border-divider bg-background">
+      <div className="flex h-[64px] items-center gap-2 pr-2.5 pl-4" data-testid="capture">
         <button
           type="button"
           data-testid="start-recording"
@@ -131,7 +131,7 @@ function Grid({ cards, now, onError }: { cards: Card[]; now: Date; onError: OnEr
     .filter((section) => section.items.length > 0);
   return sections.map((section) => (
     <section key={section.label} className="flex flex-col gap-2">
-      <h2 className="m-0 px-1.5 text-label font-medium text-muted-foreground">{section.label}</h2>
+      <h2 className="m-0 px-0.5 text-label font-medium text-muted-foreground">{section.label}</h2>
       <div className={cardGrid}>
         {section.items.map((card) => (
           <MeetingCard key={card.meeting.id} card={card} now={now} onError={onError} />
@@ -145,7 +145,7 @@ const columns = "grid grid-cols-[minmax(0,1fr)_120px_150px_36px] items-center ga
 
 function Rows({ cards, now, onError }: { cards: Card[]; now: Date; onError: OnError }) {
   return (
-    <div className="card overflow-hidden" data-testid="records-list">
+    <div data-testid="records-list">
       <div className={cn(columns, "h-10 border-b border-divider text-label text-muted-foreground")}>
         <span>标题</span>
         <span>说话人</span>

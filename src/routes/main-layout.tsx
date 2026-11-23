@@ -54,7 +54,7 @@ export function MainLayout() {
   const setTitle = useHeader((s) => s.setTitle);
   const setActions = useHeader((s) => s.setActions);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const bare = pathname === "/" || pathname.startsWith("/meetings");
+  const bare = pathname.startsWith("/meetings");
   const sheetOpen = useSheet((s) => s.open);
   const setSheetOpen = useSheet((s) => s.setOpen);
   const importer = useImporter();

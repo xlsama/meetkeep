@@ -10,7 +10,7 @@ import { useElapsed, useRecorder } from "@/lib/recorder";
 import { speakerVoice } from "@/lib/speakers";
 import { cn } from "@/lib/utils";
 
-export const cardGrid = "grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-2";
+export const cardGrid = "grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3";
 
 export function MeetingCard({ card, now, onError }: { card: Card; now: Date; onError: OnError }) {
   const { meeting, speakers } = card;
@@ -21,7 +21,7 @@ export function MeetingCard({ card, now, onError }: { card: Card; now: Date; onE
         to="/meetings/$id"
         params={{ id: meeting.id }}
         data-testid={`meeting-card-${meeting.id}`}
-        className="card flex h-[164px] flex-col gap-2 p-4 text-foreground transition-shadow outline-none hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] focus-visible:shadow-[0_0_0_3px_rgba(0,0,0,0.12)]"
+        className="card flex h-[164px] flex-col gap-2 p-4 text-foreground shadow-[0_0_0_0.5px_rgba(0,0,0,0.1),0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.04)] transition-shadow outline-none hover:shadow-[0_0_0_0.5px_rgba(0,0,0,0.12),0_2px_4px_rgba(0,0,0,0.05),0_10px_24px_rgba(0,0,0,0.1)] focus-visible:shadow-[0_0_0_3px_rgba(0,0,0,0.12)]"
       >
         <span className="truncate pr-[30px] text-body leading-[1.4] font-semibold">{meeting.title}</span>
         {card.headline ? (
