@@ -113,11 +113,27 @@ jobs:
           GOFLAGS: -tags=e2e
         run: |
           bun install --frozen-lockfile
-          bun run build -- -debug -skip-installer
-          Get-ChildItem -Recurse build/windows-amd64 | Select-Object FullName, Length
+          bun run build -- -debug
+
+      - name: Install it
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem build/windows-amd64/*-setup-*.exe | Select-Object -First 1
+          Start-Process $setup.FullName -ArgumentList '/S' -Wait
+          Get-ChildItem -Recurse "$env:LOCALAPPDATA\Programs\MeetKeep" | Select-Object FullName, Length
 
       - name: Run it
-        run: go run -tags e2e ./cmd/smoke build/windows-amd64/MeetKeep.exe smoke modules/capture/testdata/tone.wav
+        run: go run -tags e2e ./cmd/smoke "$env:LOCALAPPDATA\Programs\MeetKeep\MeetKeep.exe" smoke modules/capture/testdata/tone.wav
+
+      - name: Uninstall it
+        shell: pwsh
+        run: |
+          $folder = "$env:LOCALAPPDATA\Programs\MeetKeep"
+          $uninstaller = Get-ChildItem $folder -Filter '*ninstall*.exe' | Select-Object -First 1
+          Start-Process $uninstaller.FullName -ArgumentList '/S', "_?=$folder" -Wait
+          Get-ChildItem $folder -ErrorAction SilentlyContinue | Select-Object Name
+          if (Test-Path "$env:LOCALAPPDATA\Microsoft\WindowsApps\meetkeep.cmd") { throw 'the command line is still on the path' }
+          if (Test-Path "$folder\MeetKeep.exe") { throw 'the app is still installed' }
 
       - uses: actions/upload-artifact@v5
         if: always()
