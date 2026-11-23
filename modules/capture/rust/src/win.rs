@@ -229,6 +229,10 @@ fn sessions(direction: Direction) -> Result<Vec<App>, Failure> {
         for i in 0..sessions.get_count()? {
             let session = sessions.get_session(i)?;
             let process = session.get_process_id()?;
+            // Process 0 holds the sounds of the system itself.
+            if process == 0 {
+                continue;
+            }
             let Some(id) = name(&system, process) else { continue };
             if Some(&id) == own.as_ref() {
                 continue;
