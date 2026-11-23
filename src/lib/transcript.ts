@@ -24,7 +24,19 @@ export type Group = {
   uncertain: boolean;
   startMs: number;
   lines: Line[];
+  continued: boolean;
 };
+
+const full = { letters: 180, ms: 60_000 };
+const pause = { ms: 2000, letters: 60 };
+
+export function spaced(before: string) {
+  return /[\w.,!?;:)"']$/.test(before);
+}
+
+export function joined(lines: Line[]) {
+  return lines.reduce((text, line) => text + (spaced(text) ? " " : "") + line.text, "");
+}
 
 const none: Record<number, LiveUtterance> = {};
 const nobody: Speaker[] = [];
@@ -51,11 +63,23 @@ export function useTranscript(meetingId: string, live: boolean) {
   const lines = [...merged.values()].toSorted((a, b) => a.startMs - b.startMs || a.seq - b.seq);
 
   const groups: Group[] = [];
+  let letters = 0;
   for (const line of lines) {
     const voice = voiceOf(line, speakers);
     const last = groups.at(-1);
-    if (last && last.voice.key === voice.key && last.uncertain === line.uncertain) last.lines.push(line);
-    else groups.push({ key: line.seq, voice, uncertain: line.uncertain, startMs: line.startMs, lines: [line] });
+    const before = last?.lines.at(-1);
+    const continued = last !== undefined && last.voice.key === voice.key && last.uncertain === line.uncertain;
+    const ended =
+      letters >= full.letters ||
+      line.startMs - (last?.startMs ?? 0) >= full.ms ||
+      (letters >= pause.letters && line.startMs - (before?.endMs ?? 0) >= pause.ms);
+    if (last && continued && !ended) {
+      last.lines.push(line);
+      letters += line.text.length;
+    } else {
+      groups.push({ key: line.seq, voice, uncertain: line.uncertain, startMs: line.startMs, lines: [line], continued });
+      letters = line.text.length;
+    }
   }
 
   const spoken = lines.findLast((line) => line.state === "done" && line.text.trim() !== "");

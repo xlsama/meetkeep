@@ -63,7 +63,7 @@ import { seqOf, useNotes, type Jump } from "@/lib/notes";
 import { errorMessage, meetingQuery } from "@/lib/queries";
 import { useElapsed, useRecorder } from "@/lib/recorder";
 import { speakerVoice } from "@/lib/speakers";
-import { lineAt, useTranscript, type Group } from "@/lib/transcript";
+import { joined, lineAt, useTranscript, type Group } from "@/lib/transcript";
 import { useWindowTitle } from "@/lib/ui";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace";
@@ -431,7 +431,7 @@ function TranscriptMenu({
     run(onError, async () => {
       await copyText(
         groups
-          .map((group) => `${group.voice.name}  ${clock(group.startMs)}\n${group.lines.map((line) => line.text).join("\n")}`)
+          .map((group) => `${group.voice.name}  ${clock(group.startMs)}\n${joined(group.lines)}`)
           .join("\n\n"),
       );
       setCopied(true);

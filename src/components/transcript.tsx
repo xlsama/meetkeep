@@ -7,7 +7,7 @@ import { Avatar } from "@/components/avatar";
 import { Highlight } from "@/components/highlight";
 import { SpeakerPopover } from "@/components/speaker-popover";
 import { clock } from "@/lib/format";
-import { useTranscript, type Group, type Line } from "@/lib/transcript";
+import { spaced, useTranscript, type Group, type Line } from "@/lib/transcript";
 import { cn } from "@/lib/utils";
 import { wordAt, wordNear, wordsOf } from "@/lib/words";
 
@@ -82,7 +82,7 @@ export function Transcript({
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 84,
     getItemKey: (index) => groups[index]?.key ?? index,
-    gap: style.gap,
+    gap: style.gap / 2,
     paddingStart: style.paddingStart,
     paddingEnd,
     overscan: 6,
@@ -138,7 +138,10 @@ export function Transcript({
               ref={virtualizer.measureElement}
               data-index={item.index}
               className={cn("absolute top-0 left-0 w-full", style.inset)}
-              style={{ transform: `translateY(${item.start}px)` }}
+              style={{
+                transform: `translateY(${item.start}px)`,
+                paddingTop: item.index > 0 && !group.continued ? style.gap / 2 : 0,
+              }}
             >
               <GroupView
                 group={group}
@@ -186,7 +189,9 @@ function GroupView({
   return (
     <Popover.Root open={editing} onOpenChange={setEditing}>
       <div className={cn("flex", style.row)}>
-        {speakerId === null ? (
+        {group.continued ? (
+          <span aria-hidden className={cn("shrink-0", style.avatar)} />
+        ) : speakerId === null ? (
           <Avatar name={voice.name} tone={voice.avatar} className={style.avatar} />
         ) : (
           <button
@@ -203,7 +208,7 @@ function GroupView({
         )}
         <div className="flex min-w-0 flex-1 flex-col">
           <div className={cn("flex items-center", style.head)}>
-            {speakerId === null ? (
+            {group.continued ? null : speakerId === null ? (
               <span className={cn("text-subtle", style.name)}>{voice.name}</span>
             ) : (
               <Popover.Trigger asChild>
@@ -224,10 +229,11 @@ function GroupView({
             {group.uncertain && <Badge>存疑</Badge>}
           </div>
           <div data-selectable className={cn("m-0", group.uncertain ? "text-subtle" : "text-prose", style.text)}>
-            {group.lines.map((line) => (
+            {group.lines.map((line, index) => (
               <LineView
                 key={line.seq}
                 line={line}
+                spaced={spaced(group.lines[index - 1]?.text ?? "")}
                 caret={style.caret}
                 active={line.seq === activeSeq}
                 query={query}
@@ -256,6 +262,7 @@ function Badge({ children }: { children: string }) {
 
 function LineView({
   line,
+  spaced,
   caret,
   active,
   query,
@@ -264,6 +271,7 @@ function LineView({
   onSeek,
 }: {
   line: Line;
+  spaced: boolean;
   caret: string;
   active: boolean;
   query: string;
@@ -273,25 +281,28 @@ function LineView({
 }) {
   if (line.state === "done") {
     return (
-      <span
-        data-testid={`line-${line.seq}`}
-        aria-current={active || undefined}
-        onClick={
-          onSeek &&
-          ((event) => {
-            if (window.getSelection()?.isCollapsed === false) return;
-            onSeek(wordNear(wordsOf(line), offsetAt(event))?.ms ?? line.startMs);
-          })
-        }
-        className={cn(
-          "-mx-1.5 block rounded-[6px] px-1.5 transition-colors",
-          onSeek && "cursor-pointer",
-          active && "bg-hover",
-          found && "bg-mark/45",
-        )}
-      >
-        {playhead ? <Spoken line={line} query={query} playhead={playhead} /> : <Highlight text={line.text} query={query} />}
-      </span>
+      <>
+        {spaced && " "}
+        <span
+          data-testid={`line-${line.seq}`}
+          aria-current={active || undefined}
+          onClick={
+            onSeek &&
+            ((event) => {
+              if (window.getSelection()?.isCollapsed === false) return;
+              onSeek(wordNear(wordsOf(line), offsetAt(event))?.ms ?? line.startMs);
+            })
+          }
+          className={cn(
+            "rounded-[4px] box-decoration-clone transition-colors",
+            onSeek && "cursor-pointer",
+            active && "bg-hover",
+            found && "bg-mark/45",
+          )}
+        >
+          {playhead ? <Spoken line={line} query={query} playhead={playhead} /> : <Highlight text={line.text} query={query} />}
+        </span>
+      </>
     );
   }
   if (line.state === "failed") {

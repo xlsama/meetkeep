@@ -134,12 +134,13 @@ func (m *MAI) TranscribeFile(ctx context.Context, path string) ([]Phrase, error)
 		if text == "" {
 			continue
 		}
-		phrase := Phrase{StartMs: p.Offset, EndMs: p.Offset + p.Duration, Text: text, Marks: marks(text, p.Words)}
+		found, ends := marks(text, p.Words)
+		phrase := Phrase{StartMs: p.Offset, EndMs: p.Offset + p.Duration, Text: text, Marks: found}
 		if n := len(p.Words); n > 0 {
 			phrase.StartMs = p.Words[0].Offset
 			phrase.EndMs = p.Words[n-1].Offset + p.Words[n-1].Duration
 		}
-		phrases = append(phrases, phrase)
+		phrases = append(phrases, sentences(phrase, ends)...)
 	}
 	return phrases, nil
 }
@@ -148,9 +149,10 @@ func (m *MAI) TranscribeFile(ctx context.Context, path string) ([]Phrase, error)
 // stand: a word the text spells otherwise is passed over.
 const reach = 12
 
-// marks returns where in text each of words starts and when it is said.
-func marks(text string, words []word) []Mark {
-	found := make([]Mark, 0, len(words))
+// marks returns where in text each of words starts and when it is said,
+// and when each of them ends.
+func marks(text string, words []word) (found []Mark, ends []int64) {
+	found = make([]Mark, 0, len(words))
 	at, units := 0, 0
 	for _, w := range words {
 		said := strings.Join(strings.Fields(w.Text), " ")
@@ -163,10 +165,123 @@ func marks(text string, words []word) []Mark {
 		}
 		units += len(utf16.Encode([]rune(text[at : at+skip])))
 		found = append(found, Mark{At: units, Ms: w.Offset})
+		ends = append(ends, w.Offset+w.Duration)
 		units += len(utf16.Encode([]rune(said)))
 		at += skip + len(said)
 	}
+	return found, ends
+}
+
+const (
+	// least is how many letters a sentence holds at least: a shorter one
+	// joins the next.
+	least = 16
+	// most is how many letters a sentence holds before it is cut at a comma.
+	most = 120
+)
+
+func among(unit uint16, set string) bool {
+	return strings.ContainsRune(set, rune(unit))
+}
+
+// stops returns where the sentences of a text end, the last at its end.
+func stops(units []uint16) []int {
+	var found []int
+	for i := 0; i < len(units); i++ {
+		full := among(units[i], "。！？!?…；;")
+		if units[i] == '.' && i > 0 && among(units[i-1], "abcdefghijklmnopqrstuvwxyz0123456789)\"") {
+			full = i+1 == len(units) || units[i+1] == ' '
+		}
+		if !full {
+			continue
+		}
+		for i+1 < len(units) && among(units[i+1], "。！？!?…；;”’」』）)\"") {
+			i++
+		}
+		found = append(found, i+1)
+	}
+	if n := len(found); n == 0 || found[n-1] != len(units) {
+		found = append(found, len(units))
+	}
 	return found
+}
+
+// halved returns where a sentence too long is cut, at the commas nearest
+// to the middle of its parts, with its own end.
+func halved(units []uint16, from, to int) []int {
+	if to-from <= most {
+		return []int{to}
+	}
+	middle, cut := (from+to)/2, -1
+	for i := from; i < to-1; i++ {
+		if among(units[i], "，、：,:") && (cut < 0 || max(i+1-middle, middle-i-1) < max(cut-middle, middle-cut)) {
+			cut = i + 1
+		}
+	}
+	if cut < 0 {
+		return []int{to}
+	}
+	return append(halved(units, from, cut), halved(units, cut, to)...)
+}
+
+// sentences cuts a phrase into its sentences, each with when it is said:
+// the service gives what is said without a pause as one phrase, however
+// long. ends tell when what stands at each of the phrase's marks ends.
+func sentences(p Phrase, ends []int64) []Phrase {
+	if len(p.Marks) == 0 {
+		return []Phrase{p}
+	}
+	units := utf16.Encode([]rune(p.Text))
+	var parts []int
+	from := 0
+	for _, stop := range stops(units) {
+		parts = append(parts, halved(units, from, stop)...)
+		from = stop
+	}
+	marked := func(from, to int) (first, last int) {
+		first, last = -1, -1
+		for i, m := range p.Marks {
+			if m.At >= from && m.At < to {
+				if first < 0 {
+					first = i
+				}
+				last = i
+			}
+		}
+		return first, last
+	}
+	var cuts []int
+	from = 0
+	for _, part := range parts[:len(parts)-1] {
+		if first, _ := marked(from, part); part-from >= least && first >= 0 {
+			cuts = append(cuts, part)
+			from = part
+		}
+	}
+	if first, _ := marked(from, len(units)); len(cuts) > 0 && (len(units)-from < least || first < 0) {
+		cuts = cuts[:len(cuts)-1]
+	}
+	cuts = append(cuts, len(units))
+
+	cut := make([]Phrase, 0, len(cuts))
+	from = 0
+	for _, to := range cuts {
+		first, last := marked(from, to)
+		for from < to && units[from] == ' ' {
+			from++
+		}
+		sentence := Phrase{
+			StartMs: p.Marks[first].Ms, EndMs: max(ends[last], p.Marks[first].Ms),
+			Text: strings.TrimSpace(string(utf16.Decode(units[from:to]))),
+		}
+		for _, m := range p.Marks[first : last+1] {
+			sentence.Marks = append(sentence.Marks, Mark{At: max(m.At-from, 0), Ms: m.Ms})
+		}
+		cut = append(cut, sentence)
+		from = to
+	}
+	cut[0].StartMs, cut[len(cut)-1].EndMs = p.StartMs, p.EndMs
+	return cut
 }
 
 func (m *MAI) send(ctx context.Context, name string, data []byte, timestamps bool) (result, error) {
