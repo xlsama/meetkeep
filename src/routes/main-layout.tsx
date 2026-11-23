@@ -3,7 +3,6 @@ import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router"
 import {
   ArrowLeft,
   AudioLines,
-  House,
   LoaderCircle,
   PanelLeft,
   PanelLeftClose,
@@ -63,12 +62,16 @@ export function MainLayout() {
         <SearchTrigger />
         <div className="flex min-w-0 flex-1 basis-0 items-center justify-end gap-1">
           <div ref={setActions} className="flex min-w-0 items-center gap-2 pr-1.5" />
-          <HeaderButton label="导入录音或视频" testId="import" busy={importer.importing} onClick={() => void pick()}>
-            {importer.importing ? <LoaderCircle className="size-4 animate-spin" /> : <Upload className="size-4" />}
-          </HeaderButton>
-          <HeaderButton label="新录制" testId="new-recording" pressed={sheetOpen} onClick={() => setSheetOpen(true)}>
-            <Plus className="size-[18px]" />
-          </HeaderButton>
+          {pathname !== "/" && (
+            <>
+              <HeaderButton label="导入录音或视频" testId="import" busy={importer.importing} onClick={() => void pick()}>
+                {importer.importing ? <LoaderCircle className="size-4 animate-spin" /> : <Upload className="size-4" />}
+              </HeaderButton>
+              <HeaderButton label="新录制" testId="new-recording" pressed={sheetOpen} onClick={() => setSheetOpen(true)}>
+                <Plus className="size-[18px]" />
+              </HeaderButton>
+            </>
+          )}
         </div>
       </header>
       <Notice
@@ -129,9 +132,8 @@ function HeaderButton({
 }
 
 const pages = [
-  { to: "/", label: "首页", icon: House, testId: "nav-home", exact: true },
-  { to: "/meetings", label: "记录", icon: AudioLines, testId: "nav-records", exact: false },
-  { to: "/people", label: "人物", icon: Users, testId: "nav-people", exact: false },
+  { to: "/", label: "记录", icon: AudioLines, testId: "nav-records", matches: (path: string) => path === "/" || path.startsWith("/meetings/") },
+  { to: "/people", label: "人物", icon: Users, testId: "nav-people", matches: (path: string) => path.startsWith("/people") },
 ] as const;
 
 const item =
@@ -142,6 +144,7 @@ function Sidebar({ open }: { open: boolean }) {
   const router = useRouter();
   const status = useRecorder((s) => s.status);
   const href = useRouterState({ select: (s) => s.location.href });
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const settings = href.startsWith("/settings");
   const back = useRef("/");
   useEffect(() => {
@@ -196,9 +199,7 @@ function Sidebar({ open }: { open: boolean }) {
               data-testid={page.testId}
               aria-label={page.label}
               title={open ? undefined : page.label}
-              activeOptions={{ exact: page.exact }}
-              className={item}
-              activeProps={current}
+              className={cn(item, page.matches(pathname) && current.className)}
             >
               <page.icon className="size-4 shrink-0" />
               <span className={text}>{page.label}</span>

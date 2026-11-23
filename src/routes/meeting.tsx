@@ -73,7 +73,7 @@ export function MeetingPage() {
   useWindowTitle(meeting?.title ?? "MeetKeep");
 
   useEffect(() => {
-    if (detail.isError && !live) void navigate({ to: "/meetings", replace: true });
+    if (detail.isError && !live) void navigate({ to: "/", replace: true });
   }, [detail.isError, live, navigate]);
 
   const setTab = (next: AsideTab) =>
@@ -653,7 +653,7 @@ function MoreMenu({ meeting, onError }: { meeting: Meeting; onError: (error: str
         meeting={meeting}
         open={confirming}
         onOpenChange={setConfirming}
-        onDeleted={() => void navigate({ to: "/meetings", replace: true })}
+        onDeleted={() => void navigate({ to: "/", replace: true })}
       />
     </>
   );

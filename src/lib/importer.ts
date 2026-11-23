@@ -28,7 +28,7 @@ export function useImport() {
     try {
       const [first, ...rest] = await work();
       if (first && rest.length === 0) void navigate({ to: "/meetings/$id", params: { id: first.id } });
-      else if (first) void navigate({ to: "/meetings" });
+      else if (first) void navigate({ to: "/" });
     } catch (err) {
       useImporter.setState({ error: errorMessage(err) });
     } finally {

@@ -1,5 +1,4 @@
 import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Navigate, Outlet } from "@tanstack/react-router";
-import { Home } from "@/routes/home";
 import { MainLayout } from "@/routes/main-layout";
 import { MenuPage } from "@/routes/menu";
 import { MiniPage } from "@/routes/mini";
@@ -15,17 +14,11 @@ const rootRoute = createRootRoute({ component: Outlet });
 
 const mainRoute = createRoute({ getParentRoute: () => rootRoute, id: "main", component: MainLayout });
 
-const homeRoute = createRoute({
+const recordsRoute = createRoute({
   getParentRoute: () => mainRoute,
   path: "/",
   validateSearch: (search: Record<string, unknown>): { new?: 1 } =>
     search.new === 1 || search.new === "1" ? { new: 1 } : {},
-  component: Home,
-});
-
-const recordsRoute = createRoute({
-  getParentRoute: () => mainRoute,
-  path: "/meetings",
   component: RecordsPage,
 });
 
@@ -85,7 +78,7 @@ const detectRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-  mainRoute.addChildren([homeRoute, recordsRoute, meetingRoute, searchRoute, settingsRoute, settingsSectionRoute, peopleRoute]),
+  mainRoute.addChildren([recordsRoute, meetingRoute, searchRoute, settingsRoute, settingsSectionRoute, peopleRoute]),
   panelRoute,
   miniRoute,
   menuRoute,
