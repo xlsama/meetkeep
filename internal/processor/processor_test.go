@@ -169,7 +169,7 @@ func newHarness(t *testing.T, transcriber fakeTranscriber) *harness {
 		Settings:    func() config.Settings { return config.Settings{} },
 		Transcriber: func(config.ASRSettings) (asr.Transcriber, error) { return transcriber, nil },
 		Progress:    func(Progress) {},
-		Polish: func(_ context.Context, said []store.Utterance) ([]store.Utterance, trace.Detail, error) {
+		Polish: func(_ context.Context, _ string, said []store.Utterance) ([]store.Utterance, trace.Detail, error) {
 			edits := []store.Utterance{{Seq: said[0].Seq, Polished: "整理过的一句"}}
 			return edits, trace.Detail{"changed": 1}, nil
 		},

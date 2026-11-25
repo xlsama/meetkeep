@@ -36,8 +36,11 @@ type Client struct {
 
 // Usage is what a client asked of the model so far.
 type Usage struct {
-	Requests         int
-	PromptTokens     int
+	Requests     int
+	PromptTokens int
+	// CachedTokens is how many of PromptTokens the service had kept from
+	// an earlier request, and read for less.
+	CachedTokens     int
 	CompletionTokens int
 }
 
@@ -159,6 +162,11 @@ func (c *Client) send(ctx context.Context, r request) (string, error) {
 		Usage struct {
 			PromptTokens     int `json:"prompt_tokens"`
 			CompletionTokens int `json:"completion_tokens"`
+			// Services tell what they had kept in one of two ways.
+			Hit     int `json:"prompt_cache_hit_tokens"`
+			Details struct {
+				Cached int `json:"cached_tokens"`
+			} `json:"prompt_tokens_details"`
 		} `json:"usage"`
 	}
 	if err := json.Unmarshal(data, &result); err != nil {
@@ -167,6 +175,7 @@ func (c *Client) send(ctx context.Context, r request) (string, error) {
 	c.mu.Lock()
 	c.used.Requests++
 	c.used.PromptTokens += result.Usage.PromptTokens
+	c.used.CachedTokens += max(result.Usage.Hit, result.Usage.Details.Cached)
 	c.used.CompletionTokens += result.Usage.CompletionTokens
 	c.mu.Unlock()
 	if len(result.Choices) == 0 {

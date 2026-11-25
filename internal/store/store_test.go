@@ -436,3 +436,57 @@ func TestOpenReadOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestTermsAreLearnedFromMeetingsAndTheUser(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	for _, id := range []string{"a", "b"} {
+		if err := s.CreateMeeting(ctx, Meeting{ID: id, Title: id, StartedAt: 1000, Status: Done, Directory: "/tmp/" + id, Apps: []config.AppRef{}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.Learn(ctx, "a", []Term{{Heard: "韩必达", Meant: "函必达"}, {Heard: "按键", Meant: "案件"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Learn(ctx, "b", []Term{{Heard: "韩必达", Meant: "函必达"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetTerm(ctx, "飞速", "非诉", TermConfirmed); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetTerm(ctx, "按键", "案件", TermDropped); err != nil {
+		t.Fatal(err)
+	}
+	read := func() string {
+		t.Helper()
+		terms, err := s.Terms(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var b strings.Builder
+		for _, term := range terms {
+			fmt.Fprintf(&b, "%s>%s %s %d; ", term.Heard, term.Meant, term.State, term.Meetings)
+		}
+		return b.String()
+	}
+	if got := read(); got != "韩必达>函必达  2; 飞速>非诉 confirmed 0; 按键>案件 dropped 1; " {
+		t.Errorf("the terms are %q", got)
+	}
+
+	// A meeting polished again tells its words anew.
+	if err := s.Learn(ctx, "a", []Term{{Heard: "尾案", Meant: "委案"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); got != "尾案>委案  1; 韩必达>函必达  1; 飞速>非诉 confirmed 0; 按键>案件 dropped 0; " {
+		t.Errorf("after polishing a meeting again the terms are %q", got)
+	}
+	if err := s.Delete(ctx, "b"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ForgetTerm(ctx, "飞速", "非诉"); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); got != "尾案>委案  1; 按键>案件 dropped 0; " {
+		t.Errorf("after a meeting was deleted and a term forgotten the terms are %q", got)
+	}
+}

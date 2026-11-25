@@ -139,6 +139,26 @@ type Step struct {
 	Detail string `json:"detail"`
 }
 
+// Term is a word that speech recognition mishears and what it is.
+type Term struct {
+	Heard string `json:"heard"`
+	Meant string `json:"meant"`
+	// State tells what the user said of it, or is "" when only meetings
+	// set it right.
+	State TermState `json:"state"`
+	// Meetings is how many meetings set it right this way.
+	Meetings int `json:"meetings"`
+}
+
+type TermState string
+
+const (
+	// TermConfirmed is a word the user said is misheard, and TermDropped
+	// one the user said is not.
+	TermConfirmed TermState = "confirmed"
+	TermDropped   TermState = "dropped"
+)
+
 var ErrNotFound = errors.New("找不到这场会议")
 
 // NewID returns the ID of a meeting that starts now: the time, so that
@@ -257,6 +277,30 @@ var migrations = [][]string{
 	},
 	{
 		`ALTER TABLE meetings DROP COLUMN starred`,
+	},
+	{
+		`CREATE TABLE terms (
+			heard TEXT NOT NULL,
+			meant TEXT NOT NULL,
+			state TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL,
+			PRIMARY KEY (heard, meant)
+		)`,
+		`CREATE TABLE term_uses (
+			heard TEXT NOT NULL,
+			meant TEXT NOT NULL,
+			meeting_id TEXT NOT NULL REFERENCES meetings (id) ON DELETE CASCADE,
+			PRIMARY KEY (heard, meant, meeting_id)
+		)`,
+		// The words meetings polished before this were set right in are in
+		// the record of their polishing.
+		`INSERT OR IGNORE INTO term_uses (heard, meant, meeting_id)
+			SELECT json_extract(t.value, '$.heard'), json_extract(t.value, '$.meant'), s.meeting_id
+			FROM steps s, json_each(CASE WHEN json_valid(s.detail) THEN s.detail ELSE '{}' END, '$.terms') t
+			WHERE s.name = 'polish' AND s.id IN (SELECT MAX(id) FROM steps WHERE name = 'polish' AND error = '' GROUP BY meeting_id)
+				AND json_extract(t.value, '$.heard') IS NOT NULL AND json_extract(t.value, '$.meant') IS NOT NULL`,
+		`INSERT OR IGNORE INTO terms (heard, meant, created_at)
+			SELECT DISTINCT heard, meant, CAST(strftime('%s', 'now') AS INTEGER) * 1000 FROM term_uses`,
 	},
 }
 
@@ -985,4 +1029,58 @@ func utterance(row []any) Utterance {
 		Polished:  row[7].(string),
 		Filler:    row[8].(int64) != 0,
 	}
+}
+
+// Terms returns the words set right in meetings and by the user: those the
+// user has not spoken of first, then those confirmed, then those dropped,
+// each by how many meetings set them right.
+func (s *Store) Terms(ctx context.Context) ([]Term, error) {
+	rows, err := s.db.Query(ctx, `SELECT t.heard, t.meant, t.state,
+		(SELECT COUNT(*) FROM term_uses u WHERE u.heard = t.heard AND u.meant = t.meant) AS meetings
+		FROM terms t WHERE t.state != '' OR meetings > 0
+		ORDER BY CASE t.state WHEN '' THEN 0 WHEN 'confirmed' THEN 1 ELSE 2 END, meetings DESC, t.heard, t.meant`)
+	if err != nil {
+		return nil, err
+	}
+	terms := make([]Term, 0, len(rows.Values))
+	for _, row := range rows.Values {
+		terms = append(terms, Term{
+			Heard: row[0].(string), Meant: row[1].(string), State: TermState(row[2].(string)), Meetings: int(row[3].(int64)),
+		})
+	}
+	return terms, nil
+}
+
+// Learn keeps the words a meeting set right, in place of those it set
+// right when it was polished before.
+func (s *Store) Learn(ctx context.Context, meetingID string, terms []Term) error {
+	batch := []sqlite.Statement{{SQL: "DELETE FROM term_uses WHERE meeting_id = ?", Args: []any{meetingID}}}
+	now := time.Now().UnixMilli()
+	for _, t := range terms {
+		batch = append(batch,
+			sqlite.Statement{SQL: "INSERT OR IGNORE INTO terms (heard, meant, created_at) VALUES (?, ?, ?)", Args: []any{t.Heard, t.Meant, now}},
+			sqlite.Statement{SQL: "INSERT OR IGNORE INTO term_uses (heard, meant, meeting_id) VALUES (?, ?, ?)", Args: []any{t.Heard, t.Meant, meetingID}},
+		)
+	}
+	batch = append(batch, sqlite.Statement{SQL: `DELETE FROM terms WHERE state = '' AND NOT EXISTS
+		(SELECT 1 FROM term_uses u WHERE u.heard = terms.heard AND u.meant = terms.meant)`})
+	_, err := s.db.Transaction(ctx, batch)
+	return err
+}
+
+// SetTerm keeps what the user said of a word: that it is misheard, or that
+// it is not.
+func (s *Store) SetTerm(ctx context.Context, heard, meant string, state TermState) error {
+	_, err := s.db.Execute(ctx, `INSERT INTO terms (heard, meant, state, created_at) VALUES (?, ?, ?, ?)
+		ON CONFLICT (heard, meant) DO UPDATE SET state = excluded.state`, heard, meant, string(state), time.Now().UnixMilli())
+	return err
+}
+
+// ForgetTerm lets go of a word and of the meetings that set it right.
+func (s *Store) ForgetTerm(ctx context.Context, heard, meant string) error {
+	_, err := s.db.Transaction(ctx, []sqlite.Statement{
+		{SQL: "DELETE FROM term_uses WHERE heard = ? AND meant = ?", Args: []any{heard, meant}},
+		{SQL: "DELETE FROM terms WHERE heard = ? AND meant = ?", Args: []any{heard, meant}},
+	})
+	return err
 }

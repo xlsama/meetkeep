@@ -624,7 +624,7 @@ func (l *Library) Polish(ctx context.Context, id string) error {
 		return err
 	}
 	err = trace.Begin(l.app.store, id, "polish").Step("polish", func() (trace.Detail, error) {
-		edits, detail, err := l.app.polish(ctx, utterances)
+		edits, detail, err := l.app.polish(ctx, id, utterances)
 		if err != nil {
 			return detail, err
 		}
@@ -724,6 +724,47 @@ func (p *People) Rename(ctx context.Context, id int, name string) error {
 // name.
 func (p *People) Delete(ctx context.Context, id int) error {
 	if err := p.app.store.DeletePerson(ctx, id); err != nil {
+		return err
+	}
+	return libraryChanged.Broadcast("")
+}
+
+// Terms keeps the words speech recognition mishears, which polishing sets
+// right in every meeting.
+type Terms struct{ app *app }
+
+// List returns the words meetings set right and those the user spoke of:
+// the ones the user has not spoken of first.
+func (t *Terms) List(ctx context.Context) ([]store.Term, error) {
+	return t.app.store.Terms(ctx)
+}
+
+// Confirm keeps that heard is misheard for meant: every meeting to come
+// that says it is polished so. A word nobody set right before is added.
+func (t *Terms) Confirm(ctx context.Context, heard, meant string) error {
+	return t.set(ctx, heard, meant, store.TermConfirmed)
+}
+
+// Drop keeps that heard is not misheard for meant: no meeting to come sets
+// it right so.
+func (t *Terms) Drop(ctx context.Context, heard, meant string) error {
+	return t.set(ctx, heard, meant, store.TermDropped)
+}
+
+// Forget lets go of what was kept of heard and meant.
+func (t *Terms) Forget(ctx context.Context, heard, meant string) error {
+	if err := t.app.store.ForgetTerm(ctx, heard, meant); err != nil {
+		return err
+	}
+	return libraryChanged.Broadcast("")
+}
+
+func (t *Terms) set(ctx context.Context, heard, meant string, state store.TermState) error {
+	heard, meant = strings.TrimSpace(heard), strings.TrimSpace(meant)
+	if heard == "" || meant == "" || heard == meant {
+		return errors.New("要填听成的写法和正确的写法，两者不能相同")
+	}
+	if err := t.app.store.SetTerm(ctx, heard, meant, state); err != nil {
 		return err
 	}
 	return libraryChanged.Broadcast("")

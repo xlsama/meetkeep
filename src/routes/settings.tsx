@@ -1,8 +1,8 @@
 import { useForm, useStore } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
-import { Check, ChevronDown, Copy, LoaderCircle, Plus, Trash2, X } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ArrowRight, Check, ChevronDown, Copy, LoaderCircle, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { z } from "zod";
 import { PageTitle } from "@/components/header-slot";
 import { Button } from "@/components/ui/button";
@@ -18,9 +18,9 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Segmented, SegmentedItem } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
-import { Config, type ASRProvider, type LLMProvider, type Service, type Settings } from "@/mygo";
+import { Config, Terms, type ASRProvider, type LLMProvider, type Service, type Settings, type Term } from "@/mygo";
 import { copyText } from "@/lib/clipboard";
-import { cliQuery, errorMessage, modelsQuery, queryClient, settingsPathQuery, settingsQuery } from "@/lib/queries";
+import { cliQuery, errorMessage, modelsQuery, queryClient, settingsPathQuery, settingsQuery, termsQuery } from "@/lib/queries";
 import { sections, type SectionId } from "@/lib/settings-sections";
 import { mac, shortcuts, useWindowTitle } from "@/lib/ui";
 import { cn } from "@/lib/utils";
@@ -255,6 +255,7 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
       </Group>
       )}
       {section === "transcription" && (
+      <>
       <Group>
         <Row label="服务">
           <ServiceMenu
@@ -370,6 +371,8 @@ function SettingsForm({ settings, section }: { settings: Settings; section: Sect
           )}
         </form.Field>
       </Group>
+      {asr.polish && <TermList />}
+      </>
       )}
       {section === "notes" && (
       <Group>
@@ -862,6 +865,133 @@ function TestRow({
         测试
       </Button>
     </Row>
+  );
+}
+
+function TermList() {
+  const { data: terms = [] } = useQuery(termsQuery);
+  const [heard, setHeard] = useState("");
+  const [meant, setMeant] = useState("");
+  const [error, setError] = useState<string>();
+
+  const act = async (change: () => Promise<void>) => {
+    try {
+      await change();
+      setError(undefined);
+      await queryClient.invalidateQueries({ queryKey: termsQuery.queryKey });
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+  const add = () =>
+    act(async () => {
+      await Terms.confirm(heard, meant);
+      setHeard("");
+      setMeant("");
+    });
+  const enter = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter" && !event.nativeEvent.isComposing) void add();
+  };
+
+  return (
+    <Group>
+      <Row label="术语" error={error}>
+        <Input
+          aria-label="听成的写法"
+          data-testid="settings-term-heard"
+          placeholder="听成"
+          spellCheck={false}
+          autoComplete="off"
+          className="w-[120px]"
+          value={heard}
+          onChange={(event) => setHeard(event.target.value)}
+          onKeyDown={enter}
+        />
+        <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
+        <Input
+          aria-label="正确的写法"
+          data-testid="settings-term-meant"
+          placeholder="应为"
+          spellCheck={false}
+          autoComplete="off"
+          className="w-[120px]"
+          value={meant}
+          onChange={(event) => setMeant(event.target.value)}
+          onKeyDown={enter}
+        />
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="添加术语"
+          title="添加"
+          data-testid="settings-term-add"
+          disabled={heard.trim() === "" || meant.trim() === ""}
+          onClick={() => void add()}
+        >
+          <Plus className="size-4" />
+        </Button>
+      </Row>
+      {terms.map((term) => (
+        <TermRow key={`${term.heard}\u0000${term.meant}`} term={term} act={act} />
+      ))}
+    </Group>
+  );
+}
+
+function TermRow({ term, act }: { term: Term; act: (change: () => Promise<void>) => Promise<void> }) {
+  const id = `${term.heard}-${term.meant}`;
+  return (
+    <div
+      data-testid={`settings-term-${id}`}
+      data-state={term.state || "learned"}
+      className="flex min-h-[44px] items-center gap-2 border-t border-border-subtle py-1.5 pr-3 pl-4"
+    >
+      <span
+        className={cn(
+          "flex min-w-0 flex-1 items-center gap-2 text-ui",
+          term.state === "dropped" ? "text-muted-foreground line-through" : "text-foreground",
+        )}
+      >
+        <span className="truncate">{term.heard}</span>
+        <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="truncate">{term.meant}</span>
+      </span>
+      {term.meetings > 0 && <span className="shrink-0 text-meta text-muted-foreground tabular-nums">{term.meetings} 场</span>}
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`确认${term.heard}应为${term.meant}`}
+        aria-pressed={term.state === "confirmed"}
+        title="是听错的"
+        data-testid={`settings-term-confirm-${id}`}
+        className={cn(term.state === "confirmed" && "bg-secondary text-foreground")}
+        onClick={() => void act(() => Terms.confirm(term.heard, term.meant))}
+      >
+        <Check className="size-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`${term.heard}不是听错的`}
+        aria-pressed={term.state === "dropped"}
+        title="不是听错的"
+        data-testid={`settings-term-drop-${id}`}
+        className={cn(term.state === "dropped" && "bg-secondary text-foreground")}
+        onClick={() => void act(() => Terms.drop(term.heard, term.meant))}
+      >
+        <X className="size-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`删除${term.heard}`}
+        title="删除"
+        data-testid={`settings-term-forget-${id}`}
+        onClick={() => void act(() => Terms.forget(term.heard, term.meant))}
+      >
+        <Trash2 className="size-4" />
+      </Button>
+    </div>
   );
 }
 

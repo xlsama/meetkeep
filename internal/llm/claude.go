@@ -45,6 +45,7 @@ func (c *Client) sendClaude(ctx context.Context, system, user string, maxTokens 
 	c.mu.Lock()
 	c.used.Requests++
 	c.used.PromptTokens += int(message.Usage.InputTokens + message.Usage.CacheReadInputTokens + message.Usage.CacheCreationInputTokens)
+	c.used.CachedTokens += int(message.Usage.CacheReadInputTokens)
 	c.used.CompletionTokens += int(message.Usage.OutputTokens)
 	c.mu.Unlock()
 

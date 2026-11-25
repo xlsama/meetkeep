@@ -44,7 +44,7 @@ func main() {
 	a.windows.app = a
 	a.notes.app = a
 	a.sounds.app = a
-	mygo.Bind(&Config{a}, &Sources{a}, &Recorder{a}, &Library{a}, &People{a}, &Windows{a}, &Updates{a})
+	mygo.Bind(&Config{a}, &Sources{a}, &Recorder{a}, &Library{a}, &People{a}, &Terms{a}, &Windows{a}, &Updates{a})
 	mygo.App.SetPath(mygo.PathUserData, filepath.Join(config.Dir(), "app"))
 	mygo.App.OnWindowAllClosed(func() {})
 	mygo.App.WhenReady(func() {

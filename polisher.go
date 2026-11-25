@@ -8,10 +8,12 @@ import (
 	"github.com/xlsama/meetkeep/internal/trace"
 )
 
-// polish returns what makes utterances easier to read, to give to
-// SetPolished, and tells what it took. It returns no edits when polishing
-// is off or there is no model to ask.
-func (a *app) polish(ctx context.Context, utterances []store.Utterance) ([]store.Utterance, trace.Detail, error) {
+// polish returns what makes the utterances of a meeting easier to read, to
+// give to SetPolished, and tells what it took. The meeting is read with the
+// words earlier meetings and the user set right, and those it sets right
+// are kept for the next. It returns no edits when polishing is off or there
+// is no model to ask.
+func (a *app) polish(ctx context.Context, id string, utterances []store.Utterance) ([]store.Utterance, trace.Detail, error) {
 	settings := a.current()
 	if !settings.ASR.Polish {
 		return nil, trace.Detail{"skipped": "已关闭"}, nil
@@ -24,7 +26,25 @@ func (a *app) polish(ctx context.Context, utterances []store.Utterance) ([]store
 	for i, u := range utterances {
 		lines[i] = polish.Line{Seq: u.Seq, Text: u.Text}
 	}
-	result, err := polish.Polish(ctx, model, lines, settings.ASR.Hotwords)
+	kept, _ := a.store.Terms(ctx)
+	learned := make([]polish.Learned, len(kept))
+	for i, t := range kept {
+		learned[i] = polish.Learned{
+			Heard: t.Heard, Meant: t.Meant, Meetings: t.Meetings,
+			Confirmed: t.State == store.TermConfirmed, Dropped: t.State == store.TermDropped,
+		}
+	}
+	result, err := polish.Polish(ctx, model, lines, polish.Recall(learned, settings.ASR.Hotwords))
+	if err == nil {
+		// What the lines alone told is left to the next meeting to find.
+		var found []store.Term
+		for _, t := range result.Terms {
+			if !t.Local {
+				found = append(found, store.Term{Heard: t.Heard, Meant: t.Meant})
+			}
+		}
+		_ = a.store.Learn(ctx, id, found)
+	}
 	used := model.Used()
 	fillers := 0
 	edits := make([]store.Utterance, len(result.Edits))
@@ -37,7 +57,8 @@ func (a *app) polish(ctx context.Context, utterances []store.Utterance) ([]store
 	detail := trace.Detail{
 		"model": model.Model, "lines": len(lines), "changed": len(edits) - fillers, "fillers": fillers,
 		"refused": result.Refused, "failed": result.Failed, "failure": result.Failure, "unread": result.Unread, "terms": result.Terms, "readMs": result.Read.Milliseconds(),
-		"requests": used.Requests, "promptTokens": used.PromptTokens, "completionTokens": used.CompletionTokens,
+		"reviewed": result.Reviewed, "revised": result.Revised, "reviewMs": result.Review.Milliseconds(),
+		"requests": used.Requests, "promptTokens": used.PromptTokens, "cachedTokens": used.CachedTokens, "completionTokens": used.CompletionTokens,
 	}
 	if err != nil {
 		return nil, detail, err

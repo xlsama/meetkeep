@@ -75,11 +75,11 @@ type Processor struct {
 	// Summarize writes the notes of a meeting whose record is ready and
 	// tells what it took. What it fails at does not fail the meeting.
 	Summarize func(ctx context.Context, id string) (trace.Detail, error)
-	// Polish returns what makes a transcript easier to read, to give to
-	// the store, and tells what it took. It needs only what was said, so
-	// it runs while the speakers are told apart. What it fails at does not
-	// fail the meeting.
-	Polish func(ctx context.Context, utterances []store.Utterance) ([]store.Utterance, trace.Detail, error)
+	// Polish returns what makes the transcript of a meeting easier to
+	// read, to give to the store, and tells what it took. It needs only
+	// what was said, so it runs while the speakers are told apart. What it
+	// fails at does not fail the meeting.
+	Polish func(ctx context.Context, id string, utterances []store.Utterance) ([]store.Utterance, trace.Detail, error)
 	// Progress hears how far a meeting got.
 	Progress func(Progress)
 	// Changed hears that a meeting's record changed.
@@ -455,7 +455,7 @@ func (p *Processor) process(ctx context.Context, j job) error {
 		go func() {
 			var edits []store.Utterance
 			_ = j.record.Step("polish", func() (detail trace.Detail, err error) {
-				edits, detail, err = p.Polish(ctx, said)
+				edits, detail, err = p.Polish(ctx, j.id, said)
 				return detail, err
 			})
 			polished <- edits

@@ -408,6 +408,21 @@ export interface Status {
 
 export type Step = "import" | "transcribe" | "speakers" | "summary";
 
+/** Term is a word that speech recognition mishears and what it is. */
+export interface Term {
+  heard: string;
+  meant: string;
+  /**
+   * State tells what the user said of it, or is "" when only meetings
+   * set it right.
+   */
+  state: TermState;
+  /** Meetings is how many meetings set it right this way. */
+  meetings: number;
+}
+
+export type TermState = "confirmed" | "dropped";
+
 export interface Todo {
   text: string;
   owner: string;
@@ -637,6 +652,30 @@ export const People = {
   list: bind<[], Known>("People.List", () => []),
   /** Rename gives a person another name, in every meeting they talk in. */
   rename: bind<[number, string], void>("People.Rename", (id: number, name: string) => [id, name]),
+} as const;
+
+/**
+ * Terms keeps the words speech recognition mishears, which polishing sets
+ * right in every meeting.
+ */
+export const Terms = {
+  /**
+   * Confirm keeps that heard is misheard for meant: every meeting to come
+   * that says it is polished so. A word nobody set right before is added.
+   */
+  confirm: bind<[string, string], void>("Terms.Confirm", (heard: string, meant: string) => [heard, meant]),
+  /**
+   * Drop keeps that heard is not misheard for meant: no meeting to come sets
+   * it right so.
+   */
+  drop: bind<[string, string], void>("Terms.Drop", (heard: string, meant: string) => [heard, meant]),
+  /** Forget lets go of what was kept of heard and meant. */
+  forget: bind<[string, string], void>("Terms.Forget", (heard: string, meant: string) => [heard, meant]),
+  /**
+   * List returns the words meetings set right and those the user spoke of:
+   * the ones the user has not spoken of first.
+   */
+  list: bind<[], Term[]>("Terms.List", () => []),
 } as const;
 
 /** Windows shows and hides the app's windows. */

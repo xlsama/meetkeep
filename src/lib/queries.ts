@@ -1,5 +1,5 @@
 import { QueryClient, queryOptions } from "@tanstack/react-query";
-import { Config, events, Library, People, Sources, Updates, type LLMSettings } from "@/mygo";
+import { Config, events, Library, People, Terms, Sources, Updates, type LLMSettings } from "@/mygo";
 import { applyProgress } from "@/lib/progress";
 
 export const queryClient = new QueryClient({
@@ -64,6 +64,11 @@ export const peopleQuery = queryOptions({
   queryFn: () => People.list(),
 });
 
+export const termsQuery = queryOptions({
+  queryKey: ["terms"],
+  queryFn: () => Terms.list(),
+});
+
 export const notesQuery = (id: string) =>
   queryOptions({
     queryKey: ["notes", id],
@@ -92,6 +97,7 @@ export function syncQueries() {
     void queryClient.invalidateQueries({ queryKey: ["meeting"] });
     void queryClient.invalidateQueries({ queryKey: ["search"] });
     void queryClient.invalidateQueries({ queryKey: ["people"] });
+    void queryClient.invalidateQueries({ queryKey: ["terms"] });
   });
   events.processing.on(applyProgress);
   events.notes.on((state) => {
