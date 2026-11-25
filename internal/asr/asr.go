@@ -4,30 +4,32 @@ package asr
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
-	"os"
-	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf16"
 	"unicode/utf8"
 
 	"github.com/xlsama/meetkeep/internal/audio"
 	"github.com/xlsama/meetkeep/internal/config"
+	"github.com/xlsama/meetkeep/modules/speech"
 )
 
 // Transcriber turns speech into text.
 type Transcriber interface {
 	// Transcribe returns what is said in 16 kHz mono speech.
 	Transcribe(ctx context.Context, pcm []int16) (string, error)
-	// TranscribeFile returns the sentences of an audio file with when they
-	// are said.
-	TranscribeFile(ctx context.Context, path string) ([]Phrase, error)
+	// TranscribeSound returns the sentences of a sound with when they are
+	// said.
+	TranscribeSound(ctx context.Context, sound speech.Sound) ([]Phrase, error)
 }
 
 // Phrase is a sentence and when it is said.
@@ -49,15 +51,16 @@ type Mark struct {
 // ErrNotConfigured means what the service needs to be reached is missing.
 var ErrNotConfigured = errors.New("转写服务还没有配置")
 
-// From returns what transcribes with the settings. files reads the files a
-// service that times nothing is given in pieces.
-func From(s config.ASRSettings, files Files) (Transcriber, error) {
+// From returns what transcribes with the settings. hearing is the file of
+// pyannote segmentation 3.0, which tells where the speech is in a sound that
+// goes to a service that times nothing in pieces.
+func From(s config.ASRSettings, hearing string) (Transcriber, error) {
 	switch s.Provider {
 	case config.ASRDeepSeek:
-		return NewDeepSeek(s.DeepSeek.Key, files)
+		return NewDeepSeek(s.DeepSeek.Key, hearing)
 	case config.ASRCustom:
 		chosen := config.Chosen(s.Services, s.Service)
-		return NewOpenAI(chosen.BaseURL, chosen.Key, chosen.Model, s.Hotwords, files)
+		return NewOpenAI(chosen.BaseURL, chosen.Key, chosen.Model, s.Hotwords, hearing)
 	}
 	return NewMAI(s.Endpoint, s.Key, s.Hotwords)
 }
@@ -78,8 +81,22 @@ func NewMAI(endpoint, key string, hotwords []string) (*MAI, error) {
 		Endpoint: strings.TrimRight(endpoint, "/"),
 		Key:      key,
 		Hotwords: hotwords,
-		Client:   &http.Client{},
+		Client:   client(),
 	}, nil
+}
+
+// client returns what sends sound to a service, each request on a
+// connection of its own. Requests that share one, as HTTP/2 has them do,
+// share what that connection carries, and a recording sent in parts then
+// takes as long as one sent whole.
+func client() *http.Client {
+	return &http.Client{Transport: &http.Transport{
+		Proxy:               http.ProxyFromEnvironment,
+		TLSNextProto:        map[string]func(string, *tls.Conn) http.RoundTripper{},
+		MaxIdleConnsPerHost: atOnce,
+		IdleConnTimeout:     90 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+	}}
 }
 
 type definition struct {
@@ -133,12 +150,84 @@ func (m *MAI) Transcribe(ctx context.Context, pcm []int16) (string, error) {
 	return strings.Join(parts, " "), nil
 }
 
-func (m *MAI) TranscribeFile(ctx context.Context, path string) ([]Phrase, error) {
-	data, err := os.ReadFile(path)
+const (
+	// The service answers in a time that grows with the sound it is sent,
+	// so a recording goes to it in parts of about partMs, atOnce of them at
+	// a time: an hour is heard in the time a part takes.
+	partMs = 4 * 60 * 1000
+	atOnce = 32
+	// A part ends at the quietest pause of pauseMs within swingMs of where
+	// it would end, so that no word is cut.
+	swingMs = 20 * 1000
+	pauseMs = 400
+)
+
+// parts returns where a sound that lasts total is cut into parts, from its
+// start to its end.
+func parts(sound speech.Sound, total int) ([]int, error) {
+	count := max(1, (total+partMs/2)/partMs)
+	cuts := make([]int, 0, count+1)
+	cuts = append(cuts, 0)
+	for i := 1; i < count; i++ {
+		from := max(total*i/count-swingMs, 0)
+		pcm, err := sound.Read(from, total*i/count+swingMs)
+		if err != nil {
+			return nil, err
+		}
+		cuts = append(cuts, from+audio.Quietest(audio.Samples(pcm), pauseMs)+pauseMs/2)
+	}
+	return append(cuts, total), nil
+}
+
+func (m *MAI) TranscribeSound(ctx context.Context, sound speech.Sound) ([]Phrase, error) {
+	total, err := sound.Duration()
+	if err != nil || total == 0 {
+		return nil, err
+	}
+	cuts, err := parts(sound, total)
 	if err != nil {
 		return nil, err
 	}
-	result, err := m.send(ctx, filepath.Base(path), data, true)
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	said := make([][]Phrase, len(cuts)-1)
+	slots := make(chan struct{}, atOnce)
+	var wait sync.WaitGroup
+	for i := range said {
+		wait.Go(func() {
+			select {
+			case slots <- struct{}{}:
+				defer func() { <-slots }()
+			case <-ctx.Done():
+				return
+			}
+			phrases, err := m.part(ctx, sound, cuts[i], cuts[i+1])
+			if err != nil {
+				cancel(err)
+				return
+			}
+			said[i] = phrases
+		})
+	}
+	wait.Wait()
+	if ctx.Err() != nil {
+		return nil, context.Cause(ctx)
+	}
+	return slices.Concat(said...), nil
+}
+
+// part returns the sentences of a stretch of a sound, said when they are in
+// the sound. A request that fails is made once more.
+func (m *MAI) part(ctx context.Context, sound speech.Sound, startMs, endMs int) ([]Phrase, error) {
+	clip, err := sound.Clip(startMs, endMs)
+	if err != nil {
+		return nil, err
+	}
+	result, err := m.send(ctx, "audio.opus", clip, true)
+	if err != nil && ctx.Err() == nil {
+		time.Sleep(time.Second)
+		result, err = m.send(ctx, "audio.opus", clip, true)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -148,6 +237,10 @@ func (m *MAI) TranscribeFile(ctx context.Context, path string) ([]Phrase, error)
 		if text == "" {
 			continue
 		}
+		for i := range p.Words {
+			p.Words[i].Offset += int64(startMs)
+		}
+		p.Offset += int64(startMs)
 		found, ends := marks(text, p.Words)
 		phrase := Phrase{StartMs: p.Offset, EndMs: p.Offset + p.Duration, Text: text, Marks: found}
 		if n := len(p.Words); n > 0 {

@@ -49,20 +49,33 @@ type Engine interface {
 	// output as Ogg Opus. It returns how long the audio lasts, in
 	// milliseconds.
 	Import(ctx context.Context, input string, output string) (int, error)
-	// Hear tells where the speech of the Ogg Opus file at path is. model is
-	// pyannote segmentation 3.0, which hears those far from the microphone
-	// too.
-	Hear(ctx context.Context, path string, model string) (Hearing, error)
-	// Listen opens the Ogg Opus file at path to read its sound.
-	Listen(path string) (Audio, error)
-	// Embed returns the voiceprint of each span of the Ogg Opus file at
-	// path. model is ReDimNet2 b6 as ONNX: a 16 kHz waveform in, 192
-	// dimensions out.
-	Embed(ctx context.Context, path string, model string, spans []Span) ([]Voiceprint, error)
-	// Separate returns who speaks when in the audio at path: an Ogg Opus
-	// file, or a 16 kHz mono 16-bit WAV file. speakers is how many people
-	// talk, or 0 to estimate it.
-	Separate(ctx context.Context, path string, models Models, speakers int) ([]Segment, error)
+	// Open reads the sound of the file at path: an Ogg Opus file, or any
+	// media file Import reads.
+	Open(ctx context.Context, path string) (Sound, error)
+}
+
+// Sound is the sound of a file, held as 16 kHz mono: what the models and
+// the services that transcribe hear. A file is read once, however many of
+// them hear it, and they may hear it at the same time.
+type Sound interface {
+	// Close lets go of the sound.
+	io.Closer
+	// Duration returns how long the sound lasts, in milliseconds.
+	Duration() (int, error)
+	// Read returns a stretch of the sound as 16 kHz mono 16-bit
+	// little-endian PCM.
+	Read(startMs int, endMs int) ([]byte, error)
+	// Clip returns a stretch of the sound as an Ogg Opus file.
+	Clip(startMs int, endMs int) ([]byte, error)
+	// Hear tells where the speech of the sound is. model is pyannote
+	// segmentation 3.0, which hears those far from the microphone too.
+	Hear(ctx context.Context, model string) (Hearing, error)
+	// Embed returns the voiceprint of each span of the sound. model is
+	// ReDimNet2 b6 as ONNX: a 16 kHz waveform in, 192 dimensions out.
+	Embed(ctx context.Context, model string, spans []Span) ([]Voiceprint, error)
+	// Separate returns who speaks when in the sound. speakers is how many
+	// people talk, or 0 to estimate it.
+	Separate(ctx context.Context, models Models, speakers int) ([]Segment, error)
 }
 
 // Recording is an audio file being written.
@@ -80,14 +93,6 @@ type Hearing struct {
 	Speech []float32
 	// Turns are the 32 ms at which another speaker starts to talk.
 	Turns []int
-}
-
-// Audio is the sound of a file, read from its start to its end.
-type Audio interface {
-	io.Closer
-	// Read returns the next seconds of the file as 16 kHz mono 16-bit
-	// little-endian PCM, and nothing once the file has ended.
-	Read() ([]byte, error)
 }
 
 // Detector tells when someone speaks in a stream of audio.

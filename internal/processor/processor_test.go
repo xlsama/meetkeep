@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -81,13 +82,26 @@ func (e *fakeEngine) Mix(_ context.Context, inputs []string, output string) erro
 }
 
 func (e *fakeEngine) Import(_ context.Context, input, output string) (int, error) {
-	if filepath.Ext(input) == ".txt" {
-		return 0, errors.New("no audio")
-	}
 	return 90000, os.WriteFile(output, []byte("imported"), 0o644)
 }
 
-func (e *fakeEngine) Embed(_ context.Context, _ string, _ string, spans []speech.Span) ([]speech.Voiceprint, error) {
+func (e *fakeEngine) Open(_ context.Context, path string) (speech.Sound, error) {
+	if filepath.Ext(path) == ".txt" {
+		return nil, errors.New("no audio")
+	}
+	return &fakeSound{engine: e, path: path}, nil
+}
+
+type fakeSound struct {
+	speech.Sound
+	engine *fakeEngine
+	path   string
+}
+
+func (s *fakeSound) Close() error           { return nil }
+func (s *fakeSound) Duration() (int, error) { return 90000, nil }
+
+func (s *fakeSound) Embed(_ context.Context, _ string, spans []speech.Span) ([]speech.Voiceprint, error) {
 	prints := make([]speech.Voiceprint, len(spans))
 	for i, span := range spans {
 		prints[i].Vector = []float32{1, 0}
@@ -98,22 +112,22 @@ func (e *fakeEngine) Embed(_ context.Context, _ string, _ string, spans []speech
 	return prints, nil
 }
 
-func (e *fakeEngine) Separate(_ context.Context, _ string, _ speech.Models, count int) ([]speech.Segment, error) {
-	e.counts = append(e.counts, count)
+func (s *fakeSound) Separate(_ context.Context, _ speech.Models, count int) ([]speech.Segment, error) {
+	s.engine.counts = append(s.engine.counts, count)
 	if count == 1 {
 		return []speech.Segment{{StartMs: 0, EndMs: 60000, Speaker: 0}}, nil
 	}
-	return e.segments, nil
+	return s.engine.segments, nil
 }
 
 type fakeTranscriber struct{ fail bool }
 
 func (fakeTranscriber) Transcribe(context.Context, []int16) (string, error) { return "", nil }
-func (f fakeTranscriber) TranscribeFile(_ context.Context, path string) ([]asr.Phrase, error) {
+func (f fakeTranscriber) TranscribeSound(_ context.Context, sound speech.Sound) ([]asr.Phrase, error) {
 	if f.fail {
 		return nil, errors.New("offline")
 	}
-	if filepath.Base(path) == "mic.opus" {
+	if filepath.Base(sound.(*fakeSound).path) == "mic.opus" {
 		return []asr.Phrase{{StartMs: 3000, EndMs: 4000, Text: "我来排。"}}, nil
 	}
 	return []asr.Phrase{
@@ -169,8 +183,9 @@ func newHarness(t *testing.T, transcriber fakeTranscriber) *harness {
 }
 
 // steps returns the steps recorded of a meeting, each as its kind and name,
-// with a mark when it failed. Polishing, which runs beside the steps after
-// transcribing, is not among them: recorded finds it.
+// with a mark when it failed, those of a processing sorted: some of them go
+// on beside the others, and end in any order. Polishing is not among them:
+// recorded finds it.
 func (h *harness) steps(t *testing.T, id string) []string {
 	t.Helper()
 	recorded, err := h.db.Steps(context.Background(), id)
@@ -178,6 +193,7 @@ func (h *harness) steps(t *testing.T, id string) []string {
 		t.Fatal(err)
 	}
 	var names []string
+	var runs []int64
 	for _, s := range recorded {
 		name := s.Kind + "/" + s.Name
 		if s.Error != "" {
@@ -188,7 +204,16 @@ func (h *harness) steps(t *testing.T, id string) []string {
 		}
 		if s.Name != "polish" {
 			names = append(names, name)
+			runs = append(runs, s.Run)
 		}
+	}
+	for from := 0; from < len(names); {
+		to := from
+		for to < len(names) && runs[to] == runs[from] {
+			to++
+		}
+		sort.Strings(names[from:to])
+		from = to
 	}
 	return names
 }
@@ -296,11 +321,11 @@ func TestProcessesBothTracks(t *testing.T) {
 	if len(h.summarized) != 1 || h.summarized[0] != "a" {
 		t.Errorf("notes were asked for %v", h.summarized)
 	}
-	steps := "process/queue process/transcribe process/transcribe process/mix process/speakers process/voices process/notes"
+	steps := "process/mix process/notes process/open process/queue process/speakers process/transcribe process/transcribe process/voices"
 	if got := strings.Join(h.steps(t, "a"), " "); got != steps {
 		t.Fatalf("the steps recorded are %q, want %q", got, steps)
 	}
-	if got := h.recorded(t, "a", "process", "speakers"); len(got) != 1 || got[0].Detail != `{"segments":3,"sentences":3,"speakers":2}` {
+	if got := h.recorded(t, "a", "process", "speakers"); len(got) != 1 || got[0].Detail != `{"segments":3,"speakers":2}` {
 		t.Errorf("telling the speakers apart is recorded as %+v", got)
 	}
 	if got := h.recorded(t, "a", "process", "notes"); len(got) != 1 || got[0].Detail != `{"topics":2}` {
@@ -325,7 +350,7 @@ func TestProcessesBothTracks(t *testing.T) {
 	if got := h.engine.counts; len(got) != 2 || got[1] != 1 {
 		t.Errorf("asked for %v speakers", got)
 	}
-	if got := strings.Join(h.steps(t, "a")[7:], " "); got != "speakers/queue speakers/speakers speakers/voices" {
+	if got := strings.Join(h.steps(t, "a")[8:], " "); got != "speakers/open speakers/queue speakers/speakers speakers/voices" {
 		t.Errorf("telling the speakers apart again recorded %q", got)
 	}
 	first, second := h.recorded(t, "a", "process", "queue"), h.recorded(t, "a", "speakers", "queue")
@@ -389,10 +414,10 @@ func TestProcessesOneTrackAndImports(t *testing.T) {
 	if m := h.wait(t, "bad"); m.Status != store.Failed || m.Error == "" {
 		t.Errorf("a text file was imported as %+v", m)
 	}
-	if got := strings.Join(h.steps(t, "bad"), " "); got != "import/queue import/import!" {
+	if got := strings.Join(h.steps(t, "bad"), " "); got != "import/import! import/queue" {
 		t.Errorf("the failed import recorded %q", got)
 	}
-	if got := strings.Join(h.steps(t, "file"), " "); got != "import/queue import/import import/transcribe import/speakers import/voices import/notes" {
+	if got := strings.Join(h.steps(t, "file"), " "); got != "import/encode import/import import/notes import/queue import/speakers import/transcribe import/voices" {
 		t.Errorf("the import recorded %q", got)
 	}
 }

@@ -227,6 +227,8 @@ func size(path string) int64 {
 type track struct {
 	name store.Track
 	path string
+	// sound is what the track holds, once it was opened.
+	sound speech.Sound
 }
 
 func tracks(m store.Meeting) []track {
@@ -234,13 +236,13 @@ func tracks(m store.Meeting) []track {
 	for _, name := range []store.Track{store.Mic, store.System} {
 		path := filepath.Join(m.Directory, string(name)+".opus")
 		if info, err := os.Stat(path); err == nil && info.Size() > 0 {
-			found = append(found, track{name, path})
+			found = append(found, track{name: name, path: path})
 		}
 	}
 	if len(found) == 0 {
 		path := filepath.Join(m.Directory, audioFile)
 		if _, err := os.Stat(path); err == nil {
-			found = append(found, track{store.File, path})
+			found = append(found, track{name: store.File, path: path})
 		}
 	}
 	return found
@@ -257,18 +259,91 @@ func several(found []track) track {
 	return found[0]
 }
 
+// beside starts a step that goes on beside the others and returns what
+// tells how it ended.
+func beside(record *trace.Run, name string, work func() (trace.Detail, error)) <-chan error {
+	ended := make(chan error, 1)
+	go func() { ended <- record.Step(name, work) }()
+	return ended
+}
+
+// open reads the sound of each of the tracks, at once.
+func (p *Processor) open(ctx context.Context, j job, found []track) error {
+	return j.record.Step("open", func() (trace.Detail, error) {
+		failures := make([]error, len(found))
+		var wait sync.WaitGroup
+		for i := range found {
+			wait.Go(func() { found[i].sound, failures[i] = p.Speech.Open(ctx, found[i].path) })
+		}
+		wait.Wait()
+		detail := trace.Detail{"tracks": len(found)}
+		if err := errors.Join(failures...); err != nil {
+			shut(found)
+			return detail, fmt.Errorf("读取录音失败：%w", err)
+		}
+		longest := 0
+		for _, t := range found {
+			if ms, err := t.sound.Duration(); err == nil {
+				longest = max(longest, ms)
+			}
+		}
+		detail["audioMs"] = longest
+		return detail, nil
+	})
+}
+
+func shut(found []track) {
+	for _, t := range found {
+		if t.sound != nil {
+			_ = t.sound.Close()
+		}
+	}
+}
+
+// tell says who speaks when in a sound, count of them, or as many as are
+// found when count is 0.
+func (p *Processor) tell(ctx context.Context, j job, sound speech.Sound) ([]speech.Segment, error) {
+	var segments []speech.Segment
+	err := j.record.Step("speakers", func() (trace.Detail, error) {
+		var err error
+		if segments, err = sound.Separate(ctx, p.Models, j.count); err != nil {
+			return nil, fmt.Errorf("识别说话人失败：%w", err)
+		}
+		told := map[int]bool{}
+		for _, s := range segments {
+			told[s.Speaker] = true
+		}
+		return trace.Detail{"segments": len(segments), "speakers": len(told)}, nil
+	})
+	return segments, err
+}
+
 func (p *Processor) process(ctx context.Context, j job) error {
 	meeting, err := p.Store.Meeting(ctx, j.id)
 	if err != nil {
 		return err
 	}
+	// What goes on beside the steps ends with them.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// written tells how writing the file the meeting is played from ended:
+	// it is written while the meeting is transcribed.
+	var found []track
+	var written <-chan error
+	played := filepath.Join(meeting.Directory, audioFile)
 	if j.source != "" {
 		p.report(j.id, Importing, 0)
+		var sound speech.Sound
 		err := j.record.Step("import", func() (trace.Detail, error) {
 			detail := trace.Detail{"format": strings.TrimPrefix(strings.ToLower(filepath.Ext(j.source)), "."), "bytes": size(j.source)}
-			ms, err := p.Speech.Import(ctx, j.source, filepath.Join(meeting.Directory, audioFile))
-			if err != nil {
+			var err error
+			if sound, err = p.Speech.Open(ctx, j.source); err != nil {
 				return detail, fmt.Errorf("无法读取这个文件：%w", err)
+			}
+			ms, err := sound.Duration()
+			if err != nil {
+				return detail, err
 			}
 			detail["audioMs"] = ms
 			return detail, p.Store.SetDuration(ctx, j.id, int64(ms))
@@ -276,43 +351,98 @@ func (p *Processor) process(ctx context.Context, j job) error {
 		if err != nil {
 			return err
 		}
+		found = []track{{name: store.File, path: played, sound: sound}}
+		defer shut(found)
 		p.Changed(j.id)
-	}
-	found := tracks(meeting)
-	if len(found) == 0 {
-		return errors.New("找不到这场会议的录音")
+		written = beside(j.record, "encode", func() (trace.Detail, error) {
+			part := played + ".part"
+			_, err := p.Speech.Import(ctx, j.source, part)
+			if err == nil {
+				err = os.Rename(part, played)
+			}
+			if err != nil {
+				_ = os.Remove(part)
+				return nil, fmt.Errorf("无法读取这个文件：%w", err)
+			}
+			return trace.Detail{"bytes": size(played)}, nil
+		})
+	} else {
+		if found = tracks(meeting); len(found) == 0 {
+			return errors.New("找不到这场会议的录音")
+		}
+		if err := p.open(ctx, j, found); err != nil {
+			return err
+		}
+		defer shut(found)
 	}
 	transcriber, err := p.Transcriber(p.Settings().ASR)
 	if err != nil {
 		return err
 	}
 
-	p.report(j.id, Transcribing, 5)
-	var utterances []store.Utterance
-	for i, t := range found {
-		err := j.record.Step("transcribe", func() (trace.Detail, error) {
-			detail := trace.Detail{"track": t.name, "bytes": size(t.path)}
-			phrases, err := transcriber.TranscribeFile(ctx, t.path)
-			if err != nil {
-				return detail, fmt.Errorf("重新转写失败：%w", err)
-			}
-			detail["sentences"] = len(phrases)
-			for _, phrase := range phrases {
-				marks := make([]store.Mark, len(phrase.Marks))
-				for i, m := range phrase.Marks {
-					marks[i] = store.Mark{At: m.At, Ms: m.Ms}
-				}
-				utterances = append(utterances, store.Utterance{
-					Track: t.name, StartMs: phrase.StartMs, EndMs: phrase.EndMs, Text: phrase.Text, Marks: marks,
-				})
-			}
-			return detail, nil
+	audio := filepath.Base(found[0].path)
+	if kept := original(meeting.Directory); kept != "" && found[0].name == store.File {
+		audio = kept
+	}
+	if len(found) > 1 {
+		paths := make([]string, len(found))
+		for i, t := range found {
+			paths[i] = t.path
+		}
+		written = beside(j.record, "mix", func() (trace.Detail, error) {
+			err := p.Speech.Mix(ctx, paths, played)
+			return trace.Detail{"tracks": len(paths), "bytes": size(played)}, err
 		})
-		if err != nil {
+		audio = audioFile
+	}
+
+	// Who speaks when needs only the sound, so it is told while the tracks
+	// are transcribed.
+	type telling struct {
+		segments []speech.Segment
+		err      error
+	}
+	told := make(chan telling, 1)
+	go func() {
+		segments, err := p.tell(ctx, j, several(found).sound)
+		told <- telling{segments, err}
+	}()
+
+	p.report(j.id, Transcribing, 5)
+	heard := make([][]store.Utterance, len(found))
+	transcribed := make(chan error, len(found))
+	for i, t := range found {
+		go func() {
+			transcribed <- j.record.Step("transcribe", func() (trace.Detail, error) {
+				detail := trace.Detail{"track": t.name}
+				if ms, err := t.sound.Duration(); err == nil {
+					detail["audioMs"] = ms
+				}
+				phrases, err := transcriber.TranscribeSound(ctx, t.sound)
+				if err != nil {
+					return detail, fmt.Errorf("重新转写失败：%w", err)
+				}
+				detail["sentences"] = len(phrases)
+				for _, phrase := range phrases {
+					marks := make([]store.Mark, len(phrase.Marks))
+					for i, m := range phrase.Marks {
+						marks[i] = store.Mark{At: m.At, Ms: m.Ms}
+					}
+					heard[i] = append(heard[i], store.Utterance{
+						Track: t.name, StartMs: phrase.StartMs, EndMs: phrase.EndMs, Text: phrase.Text, Marks: marks,
+					})
+				}
+				return detail, nil
+			})
+		}()
+	}
+	for i := range found {
+		if err := <-transcribed; err != nil {
 			return err
 		}
 		p.report(j.id, Transcribing, 5+55*(i+1)/len(found))
 	}
+	utterances := slices.Concat(heard...)
 	sort.SliceStable(utterances, func(a, b int) bool { return utterances[a].StartMs < utterances[b].StartMs })
 	for i := range utterances {
 		utterances[i].Seq = i + 1
@@ -333,29 +463,17 @@ func (p *Processor) process(ctx context.Context, j job) error {
 	}
 
 	p.report(j.id, Separating, 60)
-	audio := filepath.Base(found[0].path)
-	if kept := original(meeting.Directory); kept != "" && found[0].name == store.File {
-		audio = kept
-	}
-	if len(found) > 1 {
-		paths := make([]string, len(found))
-		for i, t := range found {
-			paths[i] = t.path
-		}
-		mixed := filepath.Join(meeting.Directory, audioFile)
-		err := j.record.Step("mix", func() (trace.Detail, error) {
-			err := p.Speech.Mix(ctx, paths, mixed)
-			return trace.Detail{"tracks": len(paths), "bytes": size(mixed)}, err
-		})
-		if err != nil {
-			return err
-		}
-		audio = audioFile
-	}
-	p.report(j.id, Separating, 70)
-	speakers, err := p.label(ctx, j, found, utterances)
+	speakers, err := p.label(ctx, j, found, utterances, func() ([]speech.Segment, error) {
+		t := <-told
+		return t.segments, t.err
+	})
 	if err != nil {
 		return err
+	}
+	if written != nil {
+		if err := <-written; err != nil {
+			return err
+		}
 	}
 	if err := p.Store.ReplaceTranscript(ctx, j.id, utterances, speakers, audio); err != nil {
 		return err
@@ -388,8 +506,20 @@ func (p *Processor) separate(ctx context.Context, j job) error {
 	if err != nil {
 		return err
 	}
+	mixed := several(found)
+	for i := range found {
+		if found[i].name == mixed.name {
+			if err := p.open(ctx, j, found[i:i+1]); err != nil {
+				return err
+			}
+			defer shut(found[i : i+1])
+			mixed = found[i]
+		}
+	}
 	p.report(j.id, Separating, 60)
-	speakers, err := p.label(ctx, j, found, utterances)
+	speakers, err := p.label(ctx, j, found, utterances, func() ([]speech.Segment, error) {
+		return p.tell(ctx, j, mixed.sound)
+	})
 	if err != nil {
 		return err
 	}
@@ -398,8 +528,8 @@ func (p *Processor) separate(ctx context.Context, j job) error {
 
 // label sets who says each utterance and returns the speakers: the user,
 // when the microphone is a track of its own, and those told apart in the
-// other track.
-func (p *Processor) label(ctx context.Context, j job, found []track, utterances []store.Utterance) ([]store.Speaker, error) {
+// other track, as told says who speaks when in it.
+func (p *Processor) label(ctx context.Context, j job, found []track, utterances []store.Utterance, told func() ([]speech.Segment, error)) ([]store.Speaker, error) {
 	var speakers []store.Speaker
 	self := 0
 	if len(found) > 1 {
@@ -420,23 +550,11 @@ func (p *Processor) label(ctx context.Context, j job, found []track, utterances 
 	if len(phrases) == 0 {
 		return speakers, nil
 	}
-	var who []int
-	var uncertain []bool
-	err := j.record.Step("speakers", func() (trace.Detail, error) {
-		segments, err := p.Speech.Separate(ctx, mixed.path, p.Models, j.count)
-		if err != nil {
-			return nil, fmt.Errorf("识别说话人失败：%w", err)
-		}
-		who, uncertain = assign(phrases, segments)
-		told := map[int]bool{}
-		for _, s := range segments {
-			told[s.Speaker] = true
-		}
-		return trace.Detail{"sentences": len(phrases), "segments": len(segments), "speakers": len(told)}, nil
-	})
+	segments, err := told()
 	if err != nil {
 		return nil, err
 	}
+	who, uncertain := assign(phrases, segments)
 	p.report(j.id, Separating, 80)
 	sentences := make([]store.Utterance, len(index))
 	for k, i := range index {
@@ -447,7 +565,7 @@ func (p *Processor) label(ctx context.Context, j job, found []track, utterances 
 	var recognizedAs map[int]int
 	err = j.record.Step("voices", func() (trace.Detail, error) {
 		var err error
-		if heard, err = p.listen(ctx, mixed.path, sentences, who, uncertain); err != nil {
+		if heard, err = p.listen(ctx, mixed.sound, sentences, who, uncertain); err != nil {
 			return nil, fmt.Errorf("识别说话人失败：%w", err)
 		}
 		known, named, err := p.Store.Voices(ctx)

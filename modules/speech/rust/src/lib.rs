@@ -5,6 +5,7 @@ mod media;
 mod mygo;
 mod recording;
 mod regions;
+mod sound;
 mod spectral;
 mod voice;
 
@@ -14,16 +15,18 @@ use ort::environment::Environment;
 use ort::session::builder::{AutoDevicePolicy, SessionBuilder};
 use ort::session::Session;
 use ort::value::Tensor;
-use rayon::prelude::*;
 use std::collections::BTreeMap;
 use std::fmt::Display;
-use std::sync::{Arc, OnceLock};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 
 const RATE: f64 = 16000.0;
 const WINDOW: f64 = 1.5;
 const HOP: f64 = 0.6;
-const BATCH: usize = 16;
-const GROUP: usize = 512;
+const BATCH: usize = 4;
+/// Windows are embedded by up to this many sessions, side by side: a core
+/// each embeds more of them than the cores do together in one.
+const EMBEDDERS: usize = 8;
 
 pub fn make_engine() -> Result<Arc<dyn Engine>, Error> {
     Ok(Arc::new(NativeEngine))
@@ -48,38 +51,28 @@ impl Engine for NativeEngine {
         media::import(ctx, &input, &output)
     }
 
-    fn listen(&self, path: String) -> Result<Arc<dyn Audio>, Error> {
-        Ok(Arc::new(decode::Sound::open(&path)?))
+    fn open(&self, ctx: &Context, path: String) -> Result<Arc<dyn Sound>, Error> {
+        Ok(Arc::new(sound::Held::open(ctx, &path)?))
     }
+}
 
-    fn hear(&self, ctx: &Context, path: String, model: String) -> Result<Hearing, Error> {
-        let samples = read_audio(&path)?;
-        ctx.check()?;
-        regions::hear(&model, &samples)
+/// Tells who speaks when in samples.
+pub(crate) fn separate(ctx: &Context, samples: &[i16], models: &Models, speakers: i64) -> Result<Vec<Segment>, Error> {
+    if samples.len() < RATE as usize {
+        return Err(Error::other("the audio is too short"));
     }
-
-    fn embed(&self, ctx: &Context, path: String, model: String, spans: Vec<Span>) -> Result<Vec<Voiceprint>, Error> {
-        voice::embed(ctx, &path, &model, &spans)
+    let regions = regions::detect(ctx, &models.segmentation, samples)?;
+    ctx.check()?;
+    let windows: Vec<(f64, f64)> = windows(&regions)
+        .into_iter()
+        .filter(|w| slice(samples, *w).len() >= fbank::FRAME_LENGTH)
+        .collect();
+    if windows.is_empty() {
+        return Ok(Vec::new());
     }
-
-    fn separate(&self, ctx: &Context, path: String, models: Models, speakers: i64) -> Result<Vec<Segment>, Error> {
-        let samples = read_audio(&path)?;
-        if samples.len() < RATE as usize {
-            return Err(Error::other("the audio is too short"));
-        }
-        let regions = regions::detect(&models.segmentation, &samples)?;
-        ctx.check()?;
-        let windows: Vec<(f64, f64)> = windows(&regions)
-            .into_iter()
-            .filter(|w| slice(&samples, *w).len() >= fbank::FRAME_LENGTH)
-            .collect();
-        if windows.is_empty() {
-            return Ok(Vec::new());
-        }
-        let vectors = embeddings(ctx, &models.embedding, &samples, &windows)?;
-        let labels = spectral::labels(&vectors, (speakers > 0).then_some(speakers as usize));
-        Ok(assemble(&windows, &labels))
-    }
+    let vectors = embeddings(ctx, &models.embedding, samples, &windows)?;
+    let labels = spectral::labels(&vectors, (speakers > 0).then_some(speakers as usize));
+    Ok(assemble(&windows, &labels))
 }
 
 pub(crate) fn fail(e: impl Display) -> Error {
@@ -102,32 +95,59 @@ pub(crate) fn builder(threads: usize) -> Result<SessionBuilder, Error> {
         .map_err(fail)
 }
 
-pub(crate) fn session(model: &str) -> Result<Session, Error> {
-    let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
-    builder(threads)?.commit_from_file(model).map_err(fail)
-}
-
-fn read_audio(path: &str) -> Result<Vec<f32>, Error> {
-    if path.ends_with(".wav") {
-        return read_wav(path);
+/// Does jobs with sessions of a model, up to most of them side by side
+/// that share the cores, and returns what each job made, in their order.
+pub(crate) fn pooled<T: Send>(
+    ctx: &Context,
+    model: &str,
+    jobs: usize,
+    most: usize,
+    run: impl Fn(&mut Session, usize) -> Result<T, Error> + Sync,
+) -> Result<Vec<T>, Error> {
+    if jobs == 0 {
+        return Ok(Vec::new());
     }
-    let samples = decode::OpusFile::open(path, RATE as u32)?.all()?;
-    Ok(samples.into_iter().map(|v| v as f32 / 32768.0).collect())
-}
+    let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
+    let workers = most.min(cores).min(jobs).max(1);
+    let next = AtomicUsize::new(0);
+    let made: Mutex<Vec<Option<T>>> = Mutex::new((0..jobs).map(|_| None).collect());
+    let failure: Mutex<Option<Error>> = Mutex::new(None);
 
-fn read_wav(path: &str) -> Result<Vec<f32>, Error> {
-    let mut reader = hound::WavReader::open(path).map_err(fail)?;
-    let spec = reader.spec();
-    if spec.sample_rate != RATE as u32 || spec.channels != 1 || spec.bits_per_sample != 16 {
-        return Err(Error::other("the audio is not 16 kHz mono 16-bit PCM"));
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| {
+                let work = || -> Result<(), Error> {
+                    let mut session = builder((cores / workers).max(1))?.commit_from_file(model).map_err(fail)?;
+                    loop {
+                        let i = next.fetch_add(1, Ordering::Relaxed);
+                        if i >= jobs || failure.lock().map_err(fail)?.is_some() {
+                            return Ok(());
+                        }
+                        ctx.check()?;
+                        let value = run(&mut session, i)?;
+                        made.lock().map_err(fail)?[i] = Some(value);
+                    }
+                };
+                if let Err(e) = work() {
+                    if let Ok(mut slot) = failure.lock() {
+                        slot.get_or_insert(e);
+                    }
+                }
+            });
+        }
+    });
+
+    if let Some(e) = failure.into_inner().map_err(fail)? {
+        return Err(e);
     }
-    reader
-        .samples::<i16>()
-        .map(|s| s.map(|v| v as f32 / 32768.0).map_err(fail))
+    made.into_inner()
+        .map_err(fail)?
+        .into_iter()
+        .map(|value| value.ok_or_else(|| Error::other("a part of the audio was not heard")))
         .collect()
 }
 
-fn slice(samples: &[f32], window: (f64, f64)) -> &[f32] {
+fn slice(samples: &[i16], window: (f64, f64)) -> &[i16] {
     let lo = ((window.0 * RATE) as isize).max(0) as usize;
     let hi = ((window.1 * RATE) as isize).max(0) as usize;
     let hi = hi.min(samples.len());
@@ -149,28 +169,21 @@ fn windows(regions: &[(f64, f64)]) -> Vec<(f64, f64)> {
     out
 }
 
-fn embeddings(ctx: &Context, model: &str, samples: &[f32], windows: &[(f64, f64)]) -> Result<Vec<Vec<f32>>, Error> {
-    let mut session = session(model)?;
-    let mut vectors = Vec::with_capacity(windows.len());
-    for group in windows.chunks(GROUP) {
-        ctx.check()?;
-        let features: Vec<Vec<f32>> = group
-            .par_iter()
-            .map_init(Fbank::new, |fbank, window| {
-                let (frames, values) = fbank.features(slice(samples, *window));
-                fbank::fixed_length(frames, values)
-            })
-            .collect();
-        for batch in features.chunks(BATCH) {
-            let data: Vec<f32> = batch.iter().flatten().copied().collect();
-            let input = Tensor::from_array(([batch.len(), FIXED_FRAMES, MEL_BINS], data)).map_err(fail)?;
-            let outputs = session.run(ort::inputs!["x" => input]).map_err(fail)?;
-            let (shape, values) = outputs["embedding"].try_extract_tensor::<f32>().map_err(fail)?;
-            let width = shape[1] as usize;
-            vectors.extend(values.chunks(width).map(<[f32]>::to_vec));
+fn embeddings(ctx: &Context, model: &str, samples: &[i16], windows: &[(f64, f64)]) -> Result<Vec<Vec<f32>>, Error> {
+    let batches: Vec<&[(f64, f64)]> = windows.chunks(BATCH).collect();
+    let embedded = pooled(ctx, model, batches.len(), EMBEDDERS, |session, i| {
+        let fbank = Fbank::new();
+        let mut data = Vec::with_capacity(batches[i].len() * FIXED_FRAMES * MEL_BINS);
+        for window in batches[i] {
+            let (frames, values) = fbank.features(&sound::floats(slice(samples, *window)));
+            data.extend(fbank::fixed_length(frames, values));
         }
-    }
-    Ok(vectors)
+        let input = Tensor::from_array(([batches[i].len(), FIXED_FRAMES, MEL_BINS], data)).map_err(fail)?;
+        let outputs = session.run(ort::inputs!["x" => input]).map_err(fail)?;
+        let (shape, values) = outputs["embedding"].try_extract_tensor::<f32>().map_err(fail)?;
+        Ok(values.chunks(shape[1] as usize).map(<[f32]>::to_vec).collect::<Vec<_>>())
+    })?;
+    Ok(embedded.into_iter().flatten().collect())
 }
 
 fn assemble(windows: &[(f64, f64)], labels: &[usize]) -> Vec<Segment> {

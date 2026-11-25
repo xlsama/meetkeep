@@ -44,6 +44,20 @@ pub fn mix(ctx: &Context, inputs: &[String], output: &str) -> Result<(), Error> 
 /// Decodes the audio of a media file and writes it, mono at 48 kHz, as Ogg
 /// Opus. It returns how long the audio lasts, in milliseconds.
 pub fn import(ctx: &Context, input: &str, output: &str) -> Result<i64, Error> {
+    let out = OggOpus::create(output)?;
+    let written = decode(ctx, input, RATE, |samples| out.push(samples))?;
+    out.finish()?;
+    Ok((written * 1000 / RATE as u64) as i64)
+}
+
+/// Decodes the audio of a media file and shows emit its sound, mono at
+/// rate, part after part. It returns how many samples the sound holds.
+pub fn decode(
+    ctx: &Context,
+    input: &str,
+    rate: u32,
+    mut emit: impl FnMut(&[i16]) -> Result<(), Error>,
+) -> Result<u64, Error> {
     let source = MediaSourceStream::new(Box::new(File::open(input).map_err(fail)?), Default::default());
     let mut hint = Hint::new();
     if let Some(extension) = Path::new(input).extension().and_then(|e| e.to_str()) {
@@ -61,15 +75,17 @@ pub fn import(ctx: &Context, input: &str, output: &str) -> Result<i64, Error> {
         .ok_or_else(|| Error::other("the file has no audio"))?
         .clone();
 
-    let out = OggOpus::create(output)?;
     let mut resampler: Option<Resampler> = None;
     let mut written = 0u64;
-    let mut emit = |mono: &[f32], rate: u32| -> Result<(), Error> {
-        let resampler = resampler.get_or_insert_with(|| Resampler::new(rate, RATE));
-        let samples: Vec<i16> =
-            resampler.push(mono).iter().map(|v| (v.clamp(-1.0, 1.0) * 32767.0) as i16).collect();
+    let mut heard = |mono: &[f32], from: u32| -> Result<(), Error> {
+        let resampler = resampler.get_or_insert_with(|| Resampler::new(from, rate));
+        let samples: Vec<i16> = resampler
+            .push(mono)
+            .iter()
+            .map(|v| (v * 32768.0).round().clamp(i16::MIN as f32, i16::MAX as f32) as i16)
+            .collect();
         written += samples.len() as u64;
-        out.push(&samples)
+        emit(&samples)
     };
 
     if params.codec == CODEC_ID_OPUS {
@@ -88,7 +104,7 @@ pub fn import(ctx: &Context, input: &str, output: &str) -> Result<i64, Error> {
             }
             if let Ok(n) = decoder.decode_float(&packet.data, &mut pcm, DecodeMode::Normal) {
                 let mono: Vec<f32> = pcm[..n * count].chunks(count).map(|f| f.iter().sum::<f32>() / count as f32).collect();
-                emit(&mono, RATE)?;
+                heard(&mono, RATE)?;
             }
         }
     } else {
@@ -104,10 +120,10 @@ pub fn import(ctx: &Context, input: &str, output: &str) -> Result<i64, Error> {
             match decoder.decode(&packet) {
                 Ok(buffer) => {
                     let count = buffer.spec().channels().count();
-                    let rate = buffer.spec().rate();
+                    let from = buffer.spec().rate();
                     buffer.copy_to_vec_interleaved(&mut samples);
                     let mono: Vec<f32> = samples.chunks(count).map(|f| f.iter().sum::<f32>() / count as f32).collect();
-                    emit(&mono, rate)?;
+                    heard(&mono, from)?;
                 }
                 Err(MediaError::DecodeError(_)) => continue,
                 Err(_) => break,
@@ -117,8 +133,7 @@ pub fn import(ctx: &Context, input: &str, output: &str) -> Result<i64, Error> {
     if written == 0 {
         return Err(Error::other("no audio could be decoded from the file"));
     }
-    out.finish()?;
-    Ok((written * 1000 / RATE as u64) as i64)
+    Ok(written)
 }
 
 const TAPS: usize = 32;
@@ -174,7 +189,7 @@ impl Resampler {
             }
             let phase = ((self.position - base as f64) * PHASES as f64).round() as usize;
             let taps = &self.kernel[phase * TAPS..(phase + 1) * TAPS];
-            out.push(taps.iter().zip(&self.buffer[base..base + TAPS]).map(|(t, v)| t * v).sum());
+            out.push(dot(taps, &self.buffer[base..base + TAPS]));
             self.position += self.step;
         }
         let used = self.position as usize;
@@ -182,4 +197,15 @@ impl Resampler {
         self.position -= used as f64;
         out
     }
+}
+
+/// The sum of the products of taps and values, eight at a time.
+fn dot(taps: &[f32], values: &[f32]) -> f32 {
+    let mut sums = [0f32; 8];
+    for (t, v) in taps.chunks_exact(8).zip(values.chunks_exact(8)) {
+        for i in 0..8 {
+            sums[i] += t[i] * v[i];
+        }
+    }
+    sums.iter().sum()
 }

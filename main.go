@@ -101,7 +101,7 @@ func (a *app) start() error {
 		Embedding:    filepath.Join(resources, "models", "embedding.onnx"),
 	}
 	transcriber := func(s config.ASRSettings) (asr.Transcriber, error) {
-		return asr.From(s, asr.Recordings{Engine: engine, Model: models.Segmentation})
+		return asr.From(s, models.Segmentation)
 	}
 	a.recorder = &recorder.Recorder{
 		Capture:     a.capture,

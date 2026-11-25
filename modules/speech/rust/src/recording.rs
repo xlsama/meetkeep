@@ -7,35 +7,36 @@ use std::io::{BufWriter, Write};
 use std::sync::Mutex;
 
 const RATE: u32 = 48_000;
-const FRAME: usize = 960;
 const BITRATE: u32 = 32_000;
 const SERIAL: u32 = 0x4D45_4554;
 const PAGE_PACKETS: usize = 50;
 
-pub struct OggOpus(Mutex<Option<State>>);
-
-struct State {
+/// Writes mono sound into an Ogg Opus stream, 20 ms to a packet.
+pub struct Stream<W: Write + 'static> {
     encoder: Encoder,
-    writer: PacketWriter<'static, BufWriter<File>>,
+    writer: PacketWriter<'static, W>,
+    frame: usize,
     pending: Vec<i16>,
     held: Option<Vec<u8>>,
     position: u64,
     in_page: usize,
 }
 
-impl OggOpus {
-    pub fn create(path: &str) -> Result<Self, Error> {
-        let encoder = Encoder::builder(RATE, Channels::Mono, Application::Audio)
+impl<W: Write + 'static> Stream<W> {
+    /// Starts a stream of sound sampled at rate, which Opus takes: 8, 12,
+    /// 16, 24 or 48 kHz.
+    pub fn start(to: W, rate: u32) -> Result<Self, Error> {
+        let encoder = Encoder::builder(rate, Channels::Mono, Application::Audio)
             .bitrate(Bitrate::Bits(BITRATE))
             .build()
             .map_err(fail)?;
-        let mut writer = PacketWriter::new(BufWriter::new(File::create(path).map_err(fail)?));
+        let mut writer = PacketWriter::new(to);
 
         let mut head = Vec::with_capacity(19);
         head.extend_from_slice(b"OpusHead");
         head.extend_from_slice(&[1, 1]);
-        head.extend_from_slice(&(encoder.lookahead() as u16).to_le_bytes());
-        head.extend_from_slice(&RATE.to_le_bytes());
+        head.extend_from_slice(&((encoder.lookahead() * RATE / rate) as u16).to_le_bytes());
+        head.extend_from_slice(&rate.to_le_bytes());
         head.extend_from_slice(&[0, 0, 0]);
         writer.write_packet(head, SERIAL, PacketWriteEndInfo::EndPage, 0).map_err(fail)?;
 
@@ -48,20 +49,12 @@ impl OggOpus {
         writer.write_packet(tags, SERIAL, PacketWriteEndInfo::EndPage, 0).map_err(fail)?;
         writer.inner_mut().flush().map_err(fail)?;
 
-        Ok(OggOpus(Mutex::new(Some(State {
-            encoder,
-            writer,
-            pending: Vec::with_capacity(4 * FRAME),
-            held: None,
-            position: 0,
-            in_page: 0,
-        }))))
+        let frame = rate as usize / 50;
+        Ok(Stream { encoder, writer, frame, pending: Vec::with_capacity(4 * frame), held: None, position: 0, in_page: 0 })
     }
-}
 
-impl State {
     fn emit(&mut self, packet: Vec<u8>, last: bool) -> Result<(), Error> {
-        self.position += FRAME as u64;
+        self.position += RATE as u64 / 50;
         self.in_page += 1;
         let end = if last {
             PacketWriteEndInfo::EndStream
@@ -88,34 +81,50 @@ impl State {
         }
         Ok(())
     }
-}
 
-impl OggOpus {
-    pub fn push(&self, samples: &[i16]) -> Result<(), Error> {
-        let mut guard = self.0.lock().map_err(fail)?;
-        let state = guard.as_mut().ok_or(Error::Closed)?;
-        state.pending.extend_from_slice(samples);
+    pub fn push(&mut self, samples: &[i16]) -> Result<(), Error> {
+        self.pending.extend_from_slice(samples);
         let mut used = 0;
-        while state.pending.len() - used >= FRAME {
-            let frame: Vec<i16> = state.pending[used..used + FRAME].to_vec();
-            state.encode(&frame)?;
-            used += FRAME;
+        while self.pending.len() - used >= self.frame {
+            let frame: Vec<i16> = self.pending[used..used + self.frame].to_vec();
+            self.encode(&frame)?;
+            used += self.frame;
         }
-        state.pending.drain(..used);
+        self.pending.drain(..used);
         Ok(())
     }
 
+    /// Ends the stream and returns what it was written to.
+    pub fn finish(mut self) -> Result<W, Error> {
+        if !self.pending.is_empty() || self.held.is_none() {
+            let mut frame = std::mem::take(&mut self.pending);
+            frame.resize(self.frame, 0);
+            self.encode(&frame)?;
+        }
+        if let Some(last) = self.held.take() {
+            self.emit(last, true)?;
+        }
+        self.writer.inner_mut().flush().map_err(fail)?;
+        Ok(self.writer.into_inner())
+    }
+}
+
+/// An Ogg Opus file being written from 48 kHz sound.
+pub struct OggOpus(Mutex<Option<Stream<BufWriter<File>>>>);
+
+impl OggOpus {
+    pub fn create(path: &str) -> Result<Self, Error> {
+        let file = BufWriter::new(File::create(path).map_err(fail)?);
+        Ok(OggOpus(Mutex::new(Some(Stream::start(file, RATE)?))))
+    }
+
+    pub fn push(&self, samples: &[i16]) -> Result<(), Error> {
+        self.0.lock().map_err(fail)?.as_mut().ok_or(Error::Closed)?.push(samples)
+    }
+
     pub fn finish(&self) -> Result<(), Error> {
-        let Some(mut state) = self.0.lock().map_err(fail)?.take() else { return Ok(()) };
-        if !state.pending.is_empty() || state.held.is_none() {
-            let mut frame = std::mem::take(&mut state.pending);
-            frame.resize(FRAME, 0);
-            state.encode(&frame)?;
-        }
-        if let Some(last) = state.held.take() {
-            state.emit(last, true)?;
-        }
-        state.writer.inner_mut().flush().map_err(fail)
+        let Some(stream) = self.0.lock().map_err(fail)?.take() else { return Ok(()) };
+        stream.finish().map(|_| ())
     }
 }
 

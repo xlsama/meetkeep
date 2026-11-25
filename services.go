@@ -53,7 +53,7 @@ func (c *Config) Save(s config.Settings) error {
 func (c *Config) TestTranscription(ctx context.Context, s config.ASRSettings) error {
 	trimASR(&s)
 	s.Hotwords = nil
-	transcriber, err := asr.From(s, nil)
+	transcriber, err := asr.From(s, "")
 	if err != nil {
 		return err
 	}

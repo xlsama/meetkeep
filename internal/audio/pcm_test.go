@@ -63,3 +63,25 @@ func TestBytesRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+func TestQuietest(t *testing.T) {
+	samples := make([]int16, 10*SampleRate)
+	for i := range samples {
+		samples[i] = 4000
+	}
+	for i := 6200 * 16; i < 6800*16; i++ {
+		samples[i] = 3
+	}
+	for i := 2000 * 16; i < 2300*16; i++ {
+		samples[i] = 0
+	}
+	if got := Quietest(samples, 400); got != 6200 {
+		t.Errorf("the quietest pause starts at %d ms, want 6200: the start of the only pause long enough", got)
+	}
+	if got := Quietest(make([]int16, 10*SampleRate), 400); got != 4800 {
+		t.Errorf("silence is cut at %d ms, want its middle", got)
+	}
+	if got := Quietest(samples[:100], 400); got != 0 {
+		t.Errorf("a sound shorter than a pause is cut at %d", got)
+	}
+}

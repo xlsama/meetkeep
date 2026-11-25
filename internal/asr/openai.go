@@ -27,28 +27,11 @@ type OpenAI struct {
 	Key      string
 	Model    string
 	Hotwords []string
-	Files    Files
-	Client   *http.Client
+	// Hearing is the file of the model that tells where the speech of a
+	// sound is: pyannote segmentation 3.0.
+	Hearing string
+	Client  *http.Client
 }
-
-// Files reads audio files and tells where the speech in them is.
-type Files interface {
-	Hear(ctx context.Context, path string) (speech.Hearing, error)
-	Listen(path string) (speech.Audio, error)
-}
-
-// Recordings reads files with the engine, which hears them with Model:
-// pyannote segmentation 3.0.
-type Recordings struct {
-	Engine speech.Engine
-	Model  string
-}
-
-func (r Recordings) Hear(ctx context.Context, path string) (speech.Hearing, error) {
-	return r.Engine.Hear(ctx, path, r.Model)
-}
-
-func (r Recordings) Listen(path string) (speech.Audio, error) { return r.Engine.Listen(path) }
 
 const (
 	// parallel is how many utterances of a file are with a service of the
@@ -62,7 +45,7 @@ const (
 	tail = audio.SampleRate * 3 / 10
 )
 
-func NewOpenAI(baseURL, key, model string, hotwords []string, files Files) (*OpenAI, error) {
+func NewOpenAI(baseURL, key, model string, hotwords []string, hearing string) (*OpenAI, error) {
 	if baseURL == "" || model == "" {
 		return nil, ErrNotConfigured
 	}
@@ -71,8 +54,8 @@ func NewOpenAI(baseURL, key, model string, hotwords []string, files Files) (*Ope
 		Key:      key,
 		Model:    model,
 		Hotwords: hotwords,
-		Files:    files,
-		Client:   &http.Client{},
+		Hearing:  hearing,
+		Client:   client(),
 	}, nil
 }
 
@@ -86,33 +69,33 @@ func (o *OpenAI) Transcribe(ctx context.Context, pcm []int16) (string, error) {
 	return strings.TrimSpace(strings.TrimRight(text, "|")), err
 }
 
-func (o *OpenAI) TranscribeFile(ctx context.Context, path string) ([]Phrase, error) {
-	return pieces(ctx, o.Files, path, parallel, o.Transcribe)
+func (o *OpenAI) TranscribeSound(ctx context.Context, sound speech.Sound) ([]Phrase, error) {
+	return pieces(ctx, sound, o.Hearing, parallel, o.Transcribe)
 }
 
 // DeepSeek is DeepSeek's speech recognition. It gives text alone, of two
 // minutes at most, and takes no words to listen for: a file goes to it in
 // the pieces OpenAI's services get.
 type DeepSeek struct {
-	URL    string
-	Key    string
-	Files  Files
-	Client *http.Client
+	URL     string
+	Key     string
+	Hearing string
+	Client  *http.Client
 }
 
-func NewDeepSeek(key string, files Files) (*DeepSeek, error) {
+func NewDeepSeek(key, hearing string) (*DeepSeek, error) {
 	if key == "" {
 		return nil, ErrNotConfigured
 	}
-	return &DeepSeek{URL: "https://api.deepseek.com/v1/tools/asr", Key: key, Files: files, Client: &http.Client{}}, nil
+	return &DeepSeek{URL: "https://api.deepseek.com/v1/tools/asr", Key: key, Hearing: hearing, Client: client()}, nil
 }
 
 func (d *DeepSeek) Transcribe(ctx context.Context, pcm []int16) (string, error) {
 	return ask(ctx, d.Client, d.URL, d.Key, nil, pcm)
 }
 
-func (d *DeepSeek) TranscribeFile(ctx context.Context, path string) ([]Phrase, error) {
-	return pieces(ctx, d.Files, path, busy, d.Transcribe)
+func (d *DeepSeek) TranscribeSound(ctx context.Context, sound speech.Sound) ([]Phrase, error) {
+	return pieces(ctx, sound, d.Hearing, busy, d.Transcribe)
 }
 
 // ask sends an utterance to url as a WAV file, with the fields, and returns
@@ -168,19 +151,18 @@ func ask(ctx context.Context, client *http.Client, url, key string, fields map[s
 	return strings.Join(strings.Fields(parsed.Text), " "), nil
 }
 
-// pieces cuts the file at path into utterances, at the pauses and where
-// another speaker starts to talk, has transcribe hear each, several at
-// once, and returns their sentences, said where the utterances were cut.
-func pieces(ctx context.Context, files Files, path string, several int, transcribe func(context.Context, []int16) (string, error)) ([]Phrase, error) {
-	heard, err := files.Hear(ctx, path)
+// read is how much of a sound is cut into utterances at a time.
+const read = 10 * 1000
+
+// pieces cuts a sound into utterances, at the pauses and where another
+// speaker starts to talk as the model at hearing tells them, has transcribe
+// hear each, several at once, and returns their sentences, said where the
+// utterances were cut.
+func pieces(ctx context.Context, sound speech.Sound, hearing string, several int, transcribe func(context.Context, []int16) (string, error)) ([]Phrase, error) {
+	heard, err := sound.Hear(ctx, hearing)
 	if err != nil {
 		return nil, err
 	}
-	sound, err := files.Listen(path)
-	if err != nil {
-		return nil, err
-	}
-	defer sound.Close()
 
 	ctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
@@ -222,8 +204,8 @@ func pieces(ctx context.Context, files Files, path string, several int, transcri
 			}()
 		}
 	}
-	for ctx.Err() == nil {
-		pcm, err := sound.Read()
+	for at := 0; ctx.Err() == nil; at += read {
+		pcm, err := sound.Read(at, at+read)
 		if err != nil {
 			cancel(err)
 			break

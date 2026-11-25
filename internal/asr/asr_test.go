@@ -1,10 +1,73 @@
 package asr
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
+
+	"github.com/xlsama/meetkeep/internal/audio"
 )
+
+func TestMAIHearsARecordingInPartsAtOnce(t *testing.T) {
+	var mu sync.Mutex
+	asked := map[string]int{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		file, _, err := r.FormFile("audio")
+		if err != nil || r.Header.Get("Ocp-Apim-Subscription-Key") != "key" {
+			t.Errorf("asked with %v, key %q", err, r.Header.Get("Ocp-Apim-Subscription-Key"))
+			return
+		}
+		clip, _ := io.ReadAll(file)
+		var def definition
+		if json.Unmarshal([]byte(r.FormValue("definition")), &def) != nil || def.EnhancedMode.ModelOptions == nil {
+			t.Errorf("asked for %q", r.FormValue("definition"))
+		}
+		mu.Lock()
+		asked[string(clip)]++
+		again := asked[string(clip)]
+		mu.Unlock()
+		if strings.HasPrefix(string(clip), "200000-") && again == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		_, _ = fmt.Fprintf(w, `{"phrases":[{"offsetMilliseconds":1000,"durationMilliseconds":900,"text":"从%s说起。","words":[{"text":"从","offsetMilliseconds":1200,"durationMilliseconds":100}]}]}`, clip)
+	}))
+	defer server.Close()
+	m, err := NewMAI(server.URL, "key", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := m.TranscribeSound(context.Background(), fakeSound{samples: 10 * 60 * audio.SampleRate})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Phrase{
+		{StartMs: 1200, EndMs: 1300, Text: "从0-200000说起。", Marks: []Mark{{At: 0, Ms: 1200}}},
+		{StartMs: 201200, EndMs: 201300, Text: "从200000-400000说起。", Marks: []Mark{{At: 0, Ms: 201200}}},
+		{StartMs: 401200, EndMs: 401300, Text: "从400000-600000说起。", Marks: []Mark{{At: 0, Ms: 401200}}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+	if asked["200000-400000"] != 2 {
+		t.Errorf("a part the service refused was asked for %d times, want 2", asked["200000-400000"])
+	}
+
+	if got, err := m.TranscribeSound(context.Background(), fakeSound{samples: 90 * audio.SampleRate}); err != nil || len(got) != 1 || got[0].Text != "从0-90000说起。" {
+		t.Errorf("a short recording is heard as %+v (%v)", got, err)
+	}
+	server.Close()
+	if _, err := m.TranscribeSound(context.Background(), fakeSound{samples: 10 * 60 * audio.SampleRate}); err == nil {
+		t.Error("a service that is gone transcribed")
+	}
+}
 
 func TestMarks(t *testing.T) {
 	text := "结果，2026年上线 MeetKeep 1.5 😀好。"

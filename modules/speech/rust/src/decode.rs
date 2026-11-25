@@ -1,35 +1,13 @@
 use crate::fail;
-use crate::mygo::{Audio, Error};
+use crate::mygo::Error;
 use ogg::PacketReader;
 use ropus::{Channels, DecodeMode, Decoder};
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::BufReader;
-use std::sync::Mutex;
-
-const RATE: u32 = 16000;
 
 /// Reads the samples of an Ogg Opus file, downmixed to mono at a rate Opus
 /// decodes to. A file cut short, as by a crash, ends where it was cut.
-pub struct Sound(Mutex<OpusFile>);
-
-impl Sound {
-    pub fn open(path: &str) -> Result<Self, Error> {
-        Ok(Sound(Mutex::new(OpusFile::open(path, RATE)?)))
-    }
-}
-
-impl Audio for Sound {
-    fn close(&self) -> Result<(), Error> {
-        Ok(())
-    }
-
-    fn read(&self) -> Result<Vec<u8>, Error> {
-        let samples = self.0.lock().map_err(fail)?.take(RATE as usize * 10)?;
-        Ok(samples.into_iter().flat_map(i16::to_le_bytes).collect())
-    }
-}
-
 pub struct OpusFile {
     reader: PacketReader<BufReader<File>>,
     decoder: Decoder,

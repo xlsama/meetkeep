@@ -43,6 +43,38 @@ func Level(samples []int16) float64 {
 	return min(max((20*math.Log10(rms)+50)/50, 0), 1)
 }
 
+// Quietest returns where in 16 kHz samples the quietest pause of pauseMs
+// starts, in milliseconds: the one nearest to their middle when several are
+// as quiet.
+func Quietest(samples []int16, pauseMs int) int {
+	const frame = SampleRate / 50
+	frames := len(samples) / frame
+	span := pauseMs / 20
+	if frames <= span {
+		return 0
+	}
+	energy := make([]float64, frames)
+	for i := range energy {
+		for _, s := range samples[i*frame : (i+1)*frame] {
+			energy[i] += float64(s) * float64(s)
+		}
+	}
+	var sum float64
+	for _, e := range energy[:span] {
+		sum += e
+	}
+	middle := (frames - span) / 2
+	distance := func(i int) int { return max(i-middle, middle-i) }
+	best, least := 0, sum
+	for i := 1; i+span <= frames; i++ {
+		sum += energy[i+span-1] - energy[i-1]
+		if sum < least || sum == least && distance(i) < distance(best) {
+			best, least = i, sum
+		}
+	}
+	return best * 20
+}
+
 const decimation = CaptureRate / SampleRate
 
 var lowpass = func() []float32 {

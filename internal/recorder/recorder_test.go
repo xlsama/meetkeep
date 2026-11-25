@@ -88,7 +88,7 @@ func (fakeTranscriber) Transcribe(_ context.Context, pcm []int16) (string, error
 	return "你好", nil
 }
 
-func (fakeTranscriber) TranscribeFile(context.Context, string) ([]asr.Phrase, error) {
+func (fakeTranscriber) TranscribeSound(context.Context, speech.Sound) ([]asr.Phrase, error) {
 	return nil, nil
 }
 

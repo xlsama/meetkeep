@@ -132,10 +132,10 @@ type voiced struct {
 	spans int
 }
 
-// listen takes the voiceprints of the sentences of a track, corrects who
+// listen takes the voiceprints of the sentences of a sound, corrects who
 // says them by voice and returns the voice of each speaker. Without the
 // model it returns nothing and changes nothing.
-func (p *Processor) listen(ctx context.Context, path string, sentences []store.Utterance, who []int, uncertain []bool) (voiced, error) {
+func (p *Processor) listen(ctx context.Context, sound speech.Sound, sentences []store.Utterance, who []int, uncertain []bool) (voiced, error) {
 	result := voiced{voices: map[int][]float32{}, samples: map[int]speech.Span{}}
 	if _, err := os.Stat(p.Recognition); err != nil {
 		return result, nil
@@ -191,7 +191,7 @@ func (p *Processor) listen(ctx context.Context, path string, sentences []store.U
 		spans[n] = speech.Span{StartMs: int(sentences[i].StartMs), EndMs: int(sentences[i].EndMs)}
 	}
 	result.spans = len(spans)
-	prints, err := p.Speech.Embed(ctx, path, p.Recognition, spans)
+	prints, err := sound.Embed(ctx, p.Recognition, spans)
 	if err != nil {
 		return result, err
 	}

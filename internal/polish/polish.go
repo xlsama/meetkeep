@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 )
 
@@ -46,11 +47,14 @@ type Result struct {
 	// they rewrote a line more than lightly.
 	Refused int
 	// Failed is how many parts of the transcript the model did not answer
-	// for, asked twice, and Failure why the last of them.
+	// for, asked three times, and Failure why the last of them.
 	Failed  int
 	Failure string
 	// Unread tells why the model did not say what was misheard, asked twice.
 	Unread string
+	// Read is how long finding what was misheard took: the lines wait for
+	// it to be polished.
+	Read time.Duration
 }
 
 // Completer asks a language model for a JSON object.
@@ -60,7 +64,8 @@ type Completer interface {
 
 const (
 	// part is how many lines the model is given at once, parallel how many
-	// such parts are asked for at a time.
+	// such parts are asked for at a time: more, and a service turns away
+	// those past what it takes from an account at once.
 	part     = 60
 	parallel = 16
 	// A line longer than short is never taken for filler, and keeps at
@@ -85,6 +90,11 @@ const (
 	distinct = 3
 	longest  = 8
 )
+
+// again is how long a part the model did not answer for waits before it is
+// asked for once more, each time it fails: a service that is busy turns
+// requests away for a while.
+var again = []time.Duration{2 * time.Second, 8 * time.Second}
 
 const fillerPrompt = `你在整理会议的逐句转写，让没到场的人也能读懂。每行是「编号 原话」，是语音识别的结果：口语很重，也有听错的字。对每一行做最轻的修订：
 - 删掉语气词和口头填充：呃、嗯、啊、哎、那个、就是说，以及只起填充作用的「然后」「就是」「这个」；
@@ -111,10 +121,12 @@ func Polish(ctx context.Context, model Completer, lines []Line, known []string) 
 	if len(lines) == 0 {
 		return result, nil
 	}
+	started := time.Now()
 	found, err := misheard(ctx, model, lines, known)
 	if err != nil {
 		result.Unread = err.Error()
 	}
+	result.Read = time.Since(started)
 	result.Terms = found
 	var pairs, every []string
 	var hint strings.Builder
@@ -145,7 +157,14 @@ func Polish(ctx context.Context, model Completer, lines []Line, known []string) 
 			defer wg.Done()
 			defer func() { <-slots }()
 			edits, err := fillers(ctx, model, system, chunk)
-			if err != nil && ctx.Err() == nil {
+			for _, wait := range again {
+				if err == nil || ctx.Err() != nil {
+					break
+				}
+				select {
+				case <-time.After(wait):
+				case <-ctx.Done():
+				}
 				edits, err = fillers(ctx, model, system, chunk)
 			}
 			mu.Lock()

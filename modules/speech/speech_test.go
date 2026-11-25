@@ -146,6 +146,65 @@ func TestImportAndMix(t *testing.T) {
 	}
 }
 
+func TestOpenHoldsTheSoundOfAFile(t *testing.T) {
+	e := engine(t)
+	source := filepath.Join("..", "capture", "testdata", "tone.wav")
+	sound, err := e.Open(t.Context(), source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ms, err := sound.Duration(); err != nil || ms < 2900 || ms > 3100 {
+		t.Errorf("a 3 s file lasts %d ms (%v)", ms, err)
+	}
+	pcm, err := sound.Read(1000, 1500)
+	if err != nil || len(pcm) != 16000 {
+		t.Fatalf("half a second is %d bytes (%v), want 16000", len(pcm), err)
+	}
+	loud := false
+	for i := 0; i+1 < len(pcm); i += 2 {
+		v := int16(binary.LittleEndian.Uint16(pcm[i:]))
+		loud = loud || v > 1000 || v < -1000
+	}
+	if !loud {
+		t.Error("a tone was read as silence")
+	}
+	if past, err := sound.Read(2900, 60000); err != nil || len(pcm) == 0 || len(past) > 2*16*200 {
+		t.Errorf("reading past the end gave %d bytes (%v)", len(past), err)
+	}
+
+	clip, err := sound.Clip(500, 2500)
+	if err != nil || !bytes.HasPrefix(clip, []byte("OggS")) {
+		t.Fatalf("the clip does not start as Ogg Opus (%v)", err)
+	}
+	path := filepath.Join(t.TempDir(), "clip.opus")
+	if err := os.WriteFile(path, clip, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := exec.LookPath("ffprobe"); err == nil {
+		if got := duration(t, path); math.Abs(got-2) > 0.1 {
+			t.Errorf("2 s of the sound are clipped as %v s", got)
+		}
+	}
+	again, err := e.Open(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer again.Close()
+	if ms, _ := again.Duration(); ms < 1950 || ms > 2050 {
+		t.Errorf("the clip is read back as %d ms", ms)
+	}
+
+	if err := sound.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sound.Read(0, 100); err == nil {
+		t.Error("a closed sound was read")
+	}
+	if _, err := e.Open(t.Context(), "speech_test.go"); err == nil {
+		t.Error("a Go file was opened as sound")
+	}
+}
+
 func TestSeparateReadsOggOpus(t *testing.T) {
 	dir := fixtures(t)
 	e := engine(t)
@@ -153,7 +212,12 @@ func TestSeparateReadsOggOpus(t *testing.T) {
 	if _, err := e.Import(t.Context(), filepath.Join(dir, "0-four-speakers-zh.wav"), path); err != nil {
 		t.Fatal(err)
 	}
-	segments, err := e.Separate(t.Context(), path, speech.Models{
+	sound, err := e.Open(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sound.Close()
+	segments, err := sound.Separate(t.Context(), speech.Models{
 		Segmentation: filepath.Join(dir, "segmentation.onnx"),
 		Embedding:    filepath.Join(dir, "embedding.onnx"),
 	}, 0)
@@ -184,8 +248,13 @@ func TestEmbedTellsVoicesApart(t *testing.T) {
 	if _, err := e.Import(t.Context(), filepath.Join(dir, "0-four-speakers-zh.wav"), path); err != nil {
 		t.Fatal(err)
 	}
+	sound, err := e.Open(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sound.Close()
 	model := filepath.Join("..", "..", "resources", "models", "recognition.onnx")
-	voices, err := e.Embed(t.Context(), path, model, []speech.Span{
+	voices, err := sound.Embed(t.Context(), model, []speech.Span{
 		{StartMs: 600, EndMs: 6700},
 		{StartMs: 20400, EndMs: 23600},
 		{StartMs: 7100, EndMs: 13600},
@@ -266,7 +335,12 @@ func TestDetectorHearsSpeech(t *testing.T) {
 
 func TestSeparateFourSpeakers(t *testing.T) {
 	dir := fixtures(t)
-	segments, err := engine(t).Separate(t.Context(), filepath.Join(dir, "0-four-speakers-zh.wav"), speech.Models{
+	sound, err := engine(t).Open(t.Context(), filepath.Join(dir, "0-four-speakers-zh.wav"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sound.Close()
+	segments, err := sound.Separate(t.Context(), speech.Models{
 		Segmentation: filepath.Join(dir, "segmentation.onnx"),
 		Embedding:    filepath.Join(dir, "embedding.onnx"),
 	}, 0)

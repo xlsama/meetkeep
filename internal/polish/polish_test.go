@@ -4,13 +4,19 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
+
+func init() { again = []time.Duration{time.Millisecond, time.Millisecond} }
 
 type fake struct {
 	lines string
 	terms string
 	fail  bool
+	// busy is how many times more a part of the transcript is turned away.
+	busy *atomic.Int32
 	// asked takes the instructions each part of the transcript is given.
 	asked *[]string
 }
@@ -21,6 +27,9 @@ func (f fake) CompleteJSON(_ context.Context, system, _ string) (string, error) 
 	}
 	if strings.Contains(system, `{"terms"`) {
 		return f.terms, nil
+	}
+	if f.busy != nil && f.busy.Add(-1) >= 0 {
+		return "", errors.New("429")
 	}
 	if f.asked != nil {
 		*f.asked = append(*f.asked, system)
@@ -115,6 +124,17 @@ func TestPolish(t *testing.T) {
 
 	if _, err := Polish(context.Background(), fake{fail: true}, lines, nil); err == nil {
 		t.Error("polishing with a model that does not answer succeeded")
+	}
+
+	var busy atomic.Int32
+	busy.Store(2)
+	model.busy = &busy
+	if again, err := Polish(context.Background(), model, lines, []string{"顺丰快递"}); err != nil || again.Failed != 0 || len(again.Edits) != len(want) {
+		t.Errorf("a part turned away twice is polished as %+v (%v)", again, err)
+	}
+	busy.Store(3)
+	if _, err := Polish(context.Background(), model, lines, nil); err == nil {
+		t.Error("a part turned away three times was polished")
 	}
 }
 
