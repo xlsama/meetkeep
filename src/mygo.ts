@@ -80,6 +80,16 @@ export interface GeneralSettings {
   menuBar: boolean;
 }
 
+/**
+ * Guess is a word of an utterance that polishing took for misheard and
+ * left for the user to say, and what it may be.
+ */
+export interface Guess {
+  seq: number;
+  heard: string;
+  meant: string;
+}
+
 /** Known are the people whose voices are remembered, and the user. */
 export interface Known {
   /**
@@ -180,6 +190,11 @@ export interface MeetingDetail {
   meeting: Meeting;
   utterances: Utterance[];
   speakers: Speaker[];
+  /**
+   * Guesses are the words polishing took for misheard and left for the
+   * user to say.
+   */
+  guesses: Guess[];
   /**
    * Progress is how far processing the meeting got, while its status is
    * processing.
@@ -553,6 +568,12 @@ export const Recorder = {
 
 /** Library keeps the meetings. */
 export const Library = {
+  /**
+   * AnswerGuess takes what the user says of a word polishing guessed a
+   * meeting misheard: misheard, the lines guessed to say it are set right
+   * and later meetings are read knowing of it.
+   */
+  answerGuess: bind<[string, string, string, boolean], void>("Library.AnswerGuess", (id: string, heard: string, meant: string, misheard: boolean) => [id, heard, meant, misheard]),
   /**
    * Board returns the scene of a meeting's whiteboard as SaveBoard took it,
    * or "" when it has none.

@@ -151,6 +151,16 @@ type Result struct {
 	Reviewed int
 	Revised  int
 	Review   time.Duration
+	// Guesses are the words the model took for misheard and left as they
+	// were, not sure enough of them: the user is asked.
+	Guesses []Guess
+}
+
+// Guess is a word of a line that may be misheard, and what it may be.
+type Guess struct {
+	Seq   int    `json:"seq"`
+	Heard string `json:"heard"`
+	Meant string `json:"meant"`
 }
 
 // Completer asks a language model for a JSON object.
@@ -184,6 +194,8 @@ const (
 	terms    = 20
 	distinct = 3
 	longest  = 8
+	// At most guesses words are left for the user to say.
+	guesses = 30
 )
 
 // again is how long a part the model did not answer for waits before it is
@@ -207,8 +219,8 @@ const fillerPrompt = `你在整理上面这场会议的逐句转写，让没到�
 - 一整行只是附和或应声、不带任何信息（如「对对对」「嗯」「是的是的」「是吧？」「OK」），把它的 text 写成空字符串，表示整行去掉。但如果它是在回答问题或表示决定，要保留；
 - 不许补充原话没有的内容，不许概括、合并或拆分行，不许改变说话人的意思和语气；数字、金额、日期、人名照原样；
 - 拿不准就不动。
-只输出有改动的行，没改动的行不要输出。fixed 列出你在这些行里改正的听错词（听成的写法和改成的写法字数相同；语气词和重复不算），没有就给空数组。
-输出 JSON：{"lines":[{"n":编号,"text":"修订后的话"}],"fixed":[{"heard":"听成的词","meant":"改成的词"}]}`
+只输出有改动的行，没改动的行不要输出。fixed 列出你在这些行里改正的听错词（听成的写法和改成的写法字数相同；语气词和重复不算），没有就给空数组。能从全文确定的照常直接改，不要因为有 unsure 就少改。unsure 只列你确定不了、所以没改的词：这个写法放在这句话里讲不通或很别扭，而有一个读音相近的词放进去就通了。n 是它所在的行，heard 是那一行里的写法（至少两个字，必要时带上相邻的字），meant 是你猜的写法，两者字数相同。只是口语不规范、换个说法也行的不算；没有就给空数组。
+输出 JSON：{"lines":[{"n":编号,"text":"修订后的话"}],"fixed":[{"heard":"听成的词","meant":"改成的词"}],"unsure":[{"n":编号,"heard":"文中的写法","meant":"猜的写法"}]}`
 
 const reviewPrompt = `你在整理上面这场会议的逐句转写。下面这些行已经修订过一轮，是挑出来复查的：每行先是「编号 现在的写法」，下一行「——」后面是要你复查的事。规则和第一轮一样：只删语气词和重复、改正听错的字词，不补充、不改写、不改变意思，数字和人名照原样；拿不准就不动。
 只输出复查后要改的行，确认不用改的行不要输出。
@@ -257,6 +269,7 @@ func Polish(ctx context.Context, model Completer, lines []Line, memory Memory) (
 	}
 	edited := map[int]string{}
 	fixed := map[Term]int{}
+	var unsure []Guess
 	var mu sync.Mutex
 	var failure error
 	several(ctx, len(parts), func(i int) {
@@ -266,7 +279,7 @@ func Polish(ctx context.Context, model Completer, lines []Line, memory Memory) (
 		for _, line := range parts[i] {
 			fmt.Fprintf(&user, "%d %s\n", line.Seq, line.Text)
 		}
-		edits, told, err := revised(ctx, model, read, user.String(), parts[i])
+		edits, told, wondered, err := revised(ctx, model, read, user.String(), parts[i])
 		mu.Lock()
 		defer mu.Unlock()
 		if err != nil {
@@ -280,6 +293,7 @@ func Polish(ctx context.Context, model Completer, lines []Line, memory Memory) (
 		for _, term := range told {
 			fixed[term]++
 		}
+		unsure = append(unsure, wondered...)
 	})
 	if failure != nil {
 		result.Failure = failure.Error()
@@ -316,8 +330,24 @@ func Polish(ctx context.Context, model Completer, lines []Line, memory Memory) (
 		return line.Text, false, true
 	}
 
+	// A guess at a word this meeting or earlier ones spell is worth another
+	// look: the reader is told that the word is one of them.
+	named := map[string]bool{}
+	for _, term := range found {
+		named[term.Meant] = true
+	}
+	for _, word := range memory.Known {
+		named[word] = true
+	}
+	wondered := map[int][]Guess{}
+	for _, guess := range unsure {
+		if named[guess.Meant] && guess.Heard != "" && guess.Heard != guess.Meant {
+			wondered[guess.Seq] = append(wondered[guess.Seq], guess)
+		}
+	}
+
 	started = time.Now()
-	doubts := doubted(lines, edited, found, settle)
+	doubts := doubted(lines, edited, found, wondered, settle)
 	result.Reviewed = len(doubts)
 	if len(doubts) > 0 {
 		groups := slices.Collect(slices.Chunk(doubts, part))
@@ -330,7 +360,7 @@ func Polish(ctx context.Context, model Completer, lines []Line, memory Memory) (
 				fmt.Fprintf(&user, "%d %s\n—— %s\n", d.line.Seq, d.now, d.why)
 				given[k] = d.line
 			}
-			edits, _, err := revised(ctx, model, read, user.String(), given)
+			edits, _, _, err := revised(ctx, model, read, user.String(), given)
 			if err != nil {
 				return
 			}
@@ -350,6 +380,7 @@ func Polish(ctx context.Context, model Completer, lines []Line, memory Memory) (
 	}
 	result.Review = time.Since(started)
 
+	reads := map[int]string{}
 	answered := false
 	for _, line := range lines {
 		text := line.Text
@@ -372,8 +403,56 @@ func Polish(ctx context.Context, model Completer, lines []Line, memory Memory) (
 		if text = replacer.Replace(text); text != line.Text {
 			result.Edits = append(result.Edits, Edit{Seq: line.Seq, Text: text})
 		}
+		reads[line.Seq] = text
 	}
+	result.Guesses = guessed(unsure, reads, found, memory)
 	return result, nil
+}
+
+// guessed returns, of the words the model was unsure of, those that still
+// stand in their lines as reads has them and that nothing settled: the
+// ones more lines spell so first, then in the order of the lines.
+func guessed(unsure []Guess, reads map[int]string, found []Term, memory Memory) []Guess {
+	settled := map[string]bool{}
+	for _, term := range found {
+		settled[term.Heard] = true
+	}
+	for _, word := range memory.Known {
+		settled[word] = true
+	}
+	dropped := map[Remembered]bool{}
+	for _, term := range memory.Dropped {
+		dropped[Remembered{Heard: term.Heard, Meant: term.Meant}] = true
+	}
+	type place struct {
+		seq   int
+		heard string
+	}
+	seen := map[place]bool{}
+	often := map[Remembered]int{}
+	var kept []Guess
+	for _, guess := range unsure {
+		was, is := []rune(guess.Heard), []rune(guess.Meant)
+		at := place{guess.Seq, guess.Heard}
+		if seen[at] || settled[guess.Heard] || dropped[Remembered{Heard: guess.Heard, Meant: guess.Meant}] ||
+			guess.Heard == guess.Meant || len(was) != len(is) || len(was) < 2 || len(was) > longest ||
+			!strings.Contains(reads[guess.Seq], guess.Heard) {
+			continue
+		}
+		seen[at] = true
+		often[Remembered{Heard: guess.Heard, Meant: guess.Meant}]++
+		kept = append(kept, guess)
+	}
+	sort.SliceStable(kept, func(a, b int) bool {
+		most, fewer := often[Remembered{Heard: kept[a].Heard, Meant: kept[a].Meant}], often[Remembered{Heard: kept[b].Heard, Meant: kept[b].Meant}]
+		if most != fewer {
+			return most > fewer
+		}
+		return kept[a].Seq < kept[b].Seq
+	})
+	kept = kept[:min(len(kept), guesses)]
+	sort.SliceStable(kept, func(a, b int) bool { return kept[a].Seq < kept[b].Seq })
+	return kept
 }
 
 // several does count jobs, parallel of them at a time.
@@ -411,9 +490,10 @@ type doubt struct {
 }
 
 // doubted returns the lines the first reading left in doubt: those whose
-// edit was refused, and those that still spell a word as other lines told
-// it was misheard, which their own reading was not told.
-func doubted(lines []Line, edited map[int]string, found []Term, settle func(Line, string) (string, bool, bool)) []doubt {
+// edit was refused, those that still spell a word as other lines told it
+// was misheard, which their own reading was not told, and those with a
+// word it wondered about that may be one the meeting names.
+func doubted(lines []Line, edited map[int]string, found []Term, wondered map[int][]Guess, settle func(Line, string) (string, bool, bool)) []doubt {
 	var doubts []doubt
 	for _, line := range lines {
 		now := line.Text
@@ -430,6 +510,11 @@ func doubted(lines []Line, edited map[int]string, found []Term, settle func(Line
 		for _, term := range found {
 			if term.Local && strings.Contains(now, term.Heard) {
 				why = append(why, fmt.Sprintf("别处把「%s」改成了「%s」，这一句如果也是这个意思就改，确实是原词就不动", term.Heard, term.Meant))
+			}
+		}
+		for _, guess := range wondered[line.Seq] {
+			if strings.Contains(now, guess.Heard) {
+				why = append(why, fmt.Sprintf("上一轮怀疑这一句的「%s」是这场会里的「%s」，没有改。全文看确实是它就改，不是就不动", guess.Heard, guess.Meant))
 			}
 		}
 		if len(why) > 0 {
@@ -640,9 +725,10 @@ func common(a, b []rune) int {
 }
 
 // revised asks the model, which has read the whole transcript, for what
-// user says of lines, and returns the lines it changed and the words it
-// tells it set right. A request that fails is made again after a wait.
-func revised(ctx context.Context, model Completer, read, user string, lines []Line) (map[int]string, []Term, error) {
+// user says of lines, and returns the lines it changed, the words it tells
+// it set right and those of the lines it is unsure of. A request that
+// fails is made again after a wait.
+func revised(ctx context.Context, model Completer, read, user string, lines []Line) (map[int]string, []Term, []Guess, error) {
 	answer, err := model.CompleteJSON(ctx, read, user)
 	for _, wait := range again {
 		if err == nil || ctx.Err() != nil {
@@ -655,17 +741,22 @@ func revised(ctx context.Context, model Completer, read, user string, lines []Li
 		answer, err = model.CompleteJSON(ctx, read, user)
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	var parsed struct {
 		Lines []struct {
 			N    int    `json:"n"`
 			Text string `json:"text"`
 		} `json:"lines"`
-		Fixed []Term `json:"fixed"`
+		Fixed  []Term `json:"fixed"`
+		Unsure []struct {
+			N     int    `json:"n"`
+			Heard string `json:"heard"`
+			Meant string `json:"meant"`
+		} `json:"unsure"`
 	}
 	if err := json.Unmarshal([]byte(answer), &parsed); err != nil {
-		return nil, nil, errors.New("模型返回的不是约定的格式")
+		return nil, nil, nil, errors.New("模型返回的不是约定的格式")
 	}
 	given := map[int]bool{}
 	for _, line := range lines {
@@ -681,7 +772,13 @@ func revised(ctx context.Context, model Completer, read, user string, lines []Li
 	for _, term := range parsed.Fixed {
 		told = append(told, Term{Heard: strings.TrimSpace(term.Heard), Meant: strings.TrimSpace(term.Meant)})
 	}
-	return edits, told, nil
+	var unsure []Guess
+	for _, guess := range parsed.Unsure {
+		if given[guess.N] {
+			unsure = append(unsure, Guess{Seq: guess.N, Heard: strings.TrimSpace(guess.Heard), Meant: strings.TrimSpace(guess.Meant)})
+		}
+	}
+	return edits, told, unsure, nil
 }
 
 // names returns the words misheard in what was said, as the model that

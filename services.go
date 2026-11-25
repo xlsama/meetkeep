@@ -234,6 +234,9 @@ type MeetingDetail struct {
 	Meeting    store.Meeting     `json:"meeting"`
 	Utterances []store.Utterance `json:"utterances"`
 	Speakers   []store.Speaker   `json:"speakers"`
+	// Guesses are the words polishing took for misheard and left for the
+	// user to say.
+	Guesses []store.Guess `json:"guesses"`
 	// Progress is how far processing the meeting got, while its status is
 	// processing.
 	Progress *processor.Progress `json:"progress"`
@@ -308,8 +311,12 @@ func (l *Library) Get(ctx context.Context, id string) (MeetingDetail, error) {
 			utterances[i].PolishedMarks = store.Moved(u.Marks, u.Text, u.Polished)
 		}
 	}
+	guesses, err := l.app.store.Guesses(ctx, id)
+	if err != nil {
+		return MeetingDetail{}, err
+	}
 	speakers, err := l.app.store.Speakers(ctx, id)
-	detail := MeetingDetail{Meeting: meeting, Utterances: utterances, Speakers: speakers}
+	detail := MeetingDetail{Meeting: meeting, Utterances: utterances, Speakers: speakers, Guesses: guesses}
 	if progress, ok := l.app.processor.State(id); ok {
 		detail.Progress = &progress
 	}
@@ -631,6 +638,16 @@ func (l *Library) Polish(ctx context.Context, id string) error {
 		return detail, l.app.store.SetPolished(ctx, id, edits)
 	})
 	if err != nil {
+		return err
+	}
+	return libraryChanged.Broadcast(id)
+}
+
+// AnswerGuess takes what the user says of a word polishing guessed a
+// meeting misheard: misheard, the lines guessed to say it are set right
+// and later meetings are read knowing of it.
+func (l *Library) AnswerGuess(ctx context.Context, id, heard, meant string, misheard bool) error {
+	if err := l.app.store.AnswerGuess(ctx, id, heard, meant, misheard); err != nil {
 		return err
 	}
 	return libraryChanged.Broadcast(id)

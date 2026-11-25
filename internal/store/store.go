@@ -150,6 +150,14 @@ type Term struct {
 	Meetings int `json:"meetings"`
 }
 
+// Guess is a word of an utterance that polishing took for misheard and
+// left for the user to say, and what it may be.
+type Guess struct {
+	Seq   int    `json:"seq"`
+	Heard string `json:"heard"`
+	Meant string `json:"meant"`
+}
+
 type TermState string
 
 const (
@@ -301,6 +309,15 @@ var migrations = [][]string{
 				AND json_extract(t.value, '$.heard') IS NOT NULL AND json_extract(t.value, '$.meant') IS NOT NULL`,
 		`INSERT OR IGNORE INTO terms (heard, meant, created_at)
 			SELECT DISTINCT heard, meant, CAST(strftime('%s', 'now') AS INTEGER) * 1000 FROM term_uses`,
+	},
+	{
+		`CREATE TABLE guesses (
+			meeting_id TEXT NOT NULL REFERENCES meetings (id) ON DELETE CASCADE,
+			seq INTEGER NOT NULL,
+			heard TEXT NOT NULL,
+			meant TEXT NOT NULL,
+			PRIMARY KEY (meeting_id, seq, heard)
+		)`,
 	},
 }
 
@@ -566,10 +583,16 @@ func (s *Store) ReplaceTranscript(ctx context.Context, id string, utterances []U
 			Args: []any{id, u.Seq, string(u.Track), u.StartMs, u.EndMs, u.Text, u.Speaker, u.Uncertain, u.Polished, u.Filler, encodeMarks(u.Marks)},
 		})
 	}
-	batch = append(batch, sqlite.Statement{
-		SQL:  "UPDATE meetings SET audio = ? WHERE id = ?",
-		Args: []any{audio, id},
-	})
+	batch = append(batch,
+		sqlite.Statement{SQL: "UPDATE meetings SET audio = ? WHERE id = ?", Args: []any{audio, id}},
+		// A guess goes with the words it was made of.
+		sqlite.Statement{
+			SQL: `DELETE FROM guesses WHERE meeting_id = ? AND NOT EXISTS (SELECT 1 FROM utterances u
+				WHERE u.meeting_id = guesses.meeting_id AND u.seq = guesses.seq AND u.filler = 0
+					AND instr(CASE WHEN u.polished = '' THEN u.text ELSE u.polished END, guesses.heard) > 0)`,
+			Args: []any{id},
+		},
+	)
 	_, err := s.db.Transaction(ctx, batch)
 	return err
 }
@@ -1074,6 +1097,58 @@ func (s *Store) SetTerm(ctx context.Context, heard, meant string, state TermStat
 	_, err := s.db.Execute(ctx, `INSERT INTO terms (heard, meant, state, created_at) VALUES (?, ?, ?, ?)
 		ON CONFLICT (heard, meant) DO UPDATE SET state = excluded.state`, heard, meant, string(state), time.Now().UnixMilli())
 	return err
+}
+
+// AnswerGuess takes what the user says of a word a meeting was guessed to
+// mishear. Misheard, the utterances guessed to say it are set right and
+// the meeting counts as one that set it right, as if polishing had; not
+// misheard, they stay as they read. Either way the guess is gone.
+func (s *Store) AnswerGuess(ctx context.Context, meetingID, heard, meant string, misheard bool) error {
+	var batch []sqlite.Statement
+	if misheard {
+		batch = append(batch,
+			sqlite.Statement{
+				SQL: `UPDATE utterances SET polished = replace(CASE WHEN polished = '' THEN text ELSE polished END, ?, ?)
+					WHERE meeting_id = ? AND seq IN (SELECT seq FROM guesses WHERE meeting_id = ? AND heard = ? AND meant = ?)`,
+				Args: []any{heard, meant, meetingID, meetingID, heard, meant},
+			},
+			sqlite.Statement{SQL: "INSERT OR IGNORE INTO terms (heard, meant, created_at) VALUES (?, ?, ?)", Args: []any{heard, meant, time.Now().UnixMilli()}},
+			sqlite.Statement{SQL: "INSERT OR IGNORE INTO term_uses (heard, meant, meeting_id) VALUES (?, ?, ?)", Args: []any{heard, meant, meetingID}},
+		)
+	}
+	batch = append(batch, sqlite.Statement{
+		SQL:  "DELETE FROM guesses WHERE meeting_id = ? AND heard = ? AND meant = ?",
+		Args: []any{meetingID, heard, meant},
+	})
+	_, err := s.db.Transaction(ctx, batch)
+	return err
+}
+
+// SetGuesses replaces the words of a meeting left for the user to say.
+func (s *Store) SetGuesses(ctx context.Context, meetingID string, guesses []Guess) error {
+	batch := []sqlite.Statement{{SQL: "DELETE FROM guesses WHERE meeting_id = ?", Args: []any{meetingID}}}
+	for _, g := range guesses {
+		batch = append(batch, sqlite.Statement{
+			SQL:  "INSERT OR IGNORE INTO guesses (meeting_id, seq, heard, meant) VALUES (?, ?, ?, ?)",
+			Args: []any{meetingID, g.Seq, g.Heard, g.Meant},
+		})
+	}
+	_, err := s.db.Transaction(ctx, batch)
+	return err
+}
+
+// Guesses returns the words of a meeting left for the user to say, in the
+// order of its utterances.
+func (s *Store) Guesses(ctx context.Context, meetingID string) ([]Guess, error) {
+	rows, err := s.db.Query(ctx, "SELECT seq, heard, meant FROM guesses WHERE meeting_id = ? ORDER BY seq, heard", meetingID)
+	if err != nil {
+		return nil, err
+	}
+	guesses := make([]Guess, 0, len(rows.Values))
+	for _, row := range rows.Values {
+		guesses = append(guesses, Guess{Seq: int(row[0].(int64)), Heard: row[1].(string), Meant: row[2].(string)})
+	}
+	return guesses, nil
 }
 
 // ForgetTerm lets go of a word and of the meetings that set it right.

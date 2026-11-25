@@ -490,3 +490,65 @@ func TestTermsAreLearnedFromMeetingsAndTheUser(t *testing.T) {
 		t.Errorf("after a meeting was deleted and a term forgotten the terms are %q", got)
 	}
 }
+
+func TestGuessesAreAnsweredByWhatTheUserSaysOfAWord(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	for _, id := range []string{"a", "b"} {
+		if err := s.CreateMeeting(ctx, Meeting{ID: id, Title: id, StartedAt: 1000, Status: Done, Directory: "/tmp/" + id, Apps: []config.AppRef{}}); err != nil {
+			t.Fatal(err)
+		}
+		utterances := []Utterance{
+			{Seq: 1, Track: File, StartMs: 0, EndMs: 800, Text: "视频背书开慢。", Speaker: 1},
+			{Seq: 2, Track: File, StartMs: 900, EndMs: 1200, Text: "呃，背书看一下。", Speaker: 1, Polished: "背书看一下。"},
+			{Seq: 3, Track: File, StartMs: 1300, EndMs: 2400, Text: "他给项目背书。", Speaker: 1},
+		}
+		if err := s.ReplaceTranscript(ctx, id, utterances, []Speaker{{ID: 1, Name: "甲"}}, "audio.opus"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.SetGuesses(ctx, "a", []Guess{{1, "背书", "倍速"}, {2, "背书", "倍速"}, {3, "项目", "向木"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetGuesses(ctx, "b", []Guess{{1, "背书", "倍速"}, {3, "项目", "向木"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AnswerGuess(ctx, "a", "项目", "向木", false); err != nil {
+		t.Fatal(err)
+	}
+	if guesses, _ := s.Guesses(ctx, "a"); !reflect.DeepEqual(guesses, []Guess{{1, "背书", "倍速"}, {2, "背书", "倍速"}}) {
+		t.Fatalf("after a word was said not to be misheard the guesses are %+v", guesses)
+	}
+	if err := s.AnswerGuess(ctx, "a", "背书", "倍速", true); err != nil {
+		t.Fatal(err)
+	}
+	stored, _ := s.Utterances(ctx, "a")
+	if stored[0].Polished != "视频倍速开慢。" || stored[1].Polished != "倍速看一下。" || stored[2].Polished != "" {
+		t.Errorf("the lines read %q, %q, %q", stored[0].Polished, stored[1].Polished, stored[2].Polished)
+	}
+	if guesses, _ := s.Guesses(ctx, "a"); len(guesses) != 0 {
+		t.Errorf("the guesses are still %+v", guesses)
+	}
+	if other, _ := s.Utterances(ctx, "b"); other[0].Polished != "" {
+		t.Errorf("another meeting reads %q", other[0].Polished)
+	}
+	if guesses, _ := s.Guesses(ctx, "b"); len(guesses) != 2 {
+		t.Errorf("the guesses of another meeting are %+v", guesses)
+	}
+	terms, _ := s.Terms(ctx)
+	if len(terms) != 1 || terms[0] != (Term{Heard: "背书", Meant: "倍速", Meetings: 1}) {
+		t.Errorf("the terms are %+v", terms)
+	}
+
+	if err := s.SetGuesses(ctx, "a", []Guess{{2, "看一", "刊一"}, {3, "背书", "倍速"}}); err != nil {
+		t.Fatal(err)
+	}
+	stored, _ = s.Utterances(ctx, "a")
+	stored[1].Text, stored[1].Polished = "下一个。", ""
+	if err := s.ReplaceTranscript(ctx, "a", stored, []Speaker{{ID: 1, Name: "甲"}}, "audio.opus"); err != nil {
+		t.Fatal(err)
+	}
+	if guesses, _ := s.Guesses(ctx, "a"); !reflect.DeepEqual(guesses, []Guess{{3, "背书", "倍速"}}) {
+		t.Errorf("a transcript put in place of another left the guesses %+v", guesses)
+	}
+}

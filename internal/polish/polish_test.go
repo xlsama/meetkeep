@@ -3,6 +3,7 @@ package polish
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -273,6 +274,63 @@ func TestLinesInDoubtAreLookedAtOnceMore(t *testing.T) {
 	want := []Edit{{Seq: 1, Text: "这个委案批次是三月一号进来的。"}, {Seq: 3, Text: "委案以后先过强规则，然后再分。"}}
 	if result.Revised != 1 || result.Refused != 1 || len(result.Edits) != 2 || result.Edits[0] != want[0] || result.Edits[1] != want[1] {
 		t.Errorf("revised %d, refused %d, edits %+v", result.Revised, result.Refused, result.Edits)
+	}
+}
+
+func TestWordsTheModelIsUnsureOfAreLeftToTheUser(t *testing.T) {
+	lines := []Line{
+		{1, "视频可以背书开慢一点。"},
+		{2, "呃，那个背书我们再看。"},
+		{3, "尾案进来了。"},
+		{4, "我们明天上线。"},
+	}
+	model := fake{
+		lines: `{"lines":[{"n":2,"text":"那个背书我们再看。"}],"fixed":[],"unsure":[
+			{"n":2,"heard":"背书","meant":"倍速"},{"n":1,"heard":"背书","meant":"倍速"},{"n":1,"heard":"背书","meant":"倍速"},
+			{"n":3,"heard":"尾案","meant":"委案"},{"n":4,"heard":"线","meant":"限"},{"n":4,"heard":"下线","meant":"上线"},
+			{"n":4,"heard":"明天","meant":"后天吧"},{"n":9,"heard":"上线","meant":"上限"}]}`,
+		terms: `{"terms":[]}`,
+	}
+	result, err := Polish(context.Background(), model, lines, Memory{Dropped: []Remembered{{Heard: "尾案", Meant: "委案"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Guess{{1, "背书", "倍速"}, {2, "背书", "倍速"}}
+	if !slices.Equal(result.Guesses, want) {
+		t.Errorf("guesses are %+v, want %+v", result.Guesses, want)
+	}
+	if len(result.Edits) != 1 || result.Edits[0] != (Edit{Seq: 2, Text: "那个背书我们再看。"}) {
+		t.Errorf("edits are %+v: a guess changes no line", result.Edits)
+	}
+}
+
+func TestAGuessAtAWordTheMeetingNamesIsLookedAtOnceMore(t *testing.T) {
+	lines := []Line{
+		{1, "回韩必达。"},
+		{2, "韩必达那边没问题。"},
+		{3, "海明达代发函。"},
+		{4, "哈密娜也是。"},
+	}
+	var asked []string
+	model := fake{
+		lines:  `{"lines":[],"fixed":[],"unsure":[{"n":3,"heard":"海明达","meant":"函必达"},{"n":4,"heard":"哈密娜","meant":"函必达"},{"n":4,"heard":"也是","meant":"夜市"}]}`,
+		terms:  `{"terms":[{"heard":"韩必达","meant":"函必达","why":""}]}`,
+		review: `{"lines":[{"n":3,"text":"函必达代发函。"}]}`,
+		asked:  &asked,
+	}
+	result, err := Polish(context.Background(), model, lines, Memory{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	review := asked[len(asked)-1]
+	if result.Reviewed != 2 || !strings.Contains(review, "3 海明达代发函。\n—— 上一轮怀疑这一句的「海明达」是这场会里的「函必达」") || strings.Contains(review, "夜市") {
+		t.Errorf("%d lines were looked at once more, asked as %q", result.Reviewed, review)
+	}
+	if want := []Guess{{4, "哈密娜", "函必达"}, {4, "也是", "夜市"}}; !slices.Equal(result.Guesses, want) {
+		t.Errorf("guesses are %+v, want %+v", result.Guesses, want)
+	}
+	if len(result.Edits) != 3 || result.Edits[2] != (Edit{Seq: 3, Text: "函必达代发函。"}) {
+		t.Errorf("edits are %+v", result.Edits)
 	}
 }
 

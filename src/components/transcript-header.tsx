@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Search } from "lucide-react";
+import { ChevronDown, ChevronUp, Search, SpellCheck } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Line } from "@/lib/transcript";
 import { withCommand } from "@/lib/ui";
@@ -45,7 +45,15 @@ type TranscriptSearch = ReturnType<typeof useTranscriptSearch>;
 const iconButton =
   "inline-flex size-7 shrink-0 items-center justify-center rounded-[8px] text-subtle transition-colors outline-none hover:bg-hover hover:text-foreground focus-visible:bg-hover disabled:pointer-events-none disabled:opacity-40";
 
-export function TranscriptHeader({ search, menu }: { search: TranscriptSearch; menu?: ReactNode }) {
+export function TranscriptHeader({
+  search,
+  guesses,
+  menu,
+}: {
+  search: TranscriptSearch;
+  guesses?: { count: number; next: () => void };
+  menu?: ReactNode;
+}) {
   const input = useRef<HTMLInputElement>(null);
   const handle = usePaneHandle();
   const movable = usePaneMovable();
@@ -134,6 +142,18 @@ export function TranscriptHeader({ search, menu }: { search: TranscriptSearch; m
       ) : (
         <>
           <h2 className="m-0 min-w-0 flex-1 truncate text-row font-semibold text-foreground">文字稿</h2>
+          {guesses && guesses.count > 0 && (
+            <button
+              type="button"
+              aria-label="下一处拿不准的词"
+              data-testid="transcript-guesses"
+              onClick={guesses.next}
+              className="inline-flex h-7 shrink-0 items-center gap-1 rounded-[8px] px-2 text-label font-semibold text-warning tabular-nums transition-colors outline-none hover:bg-hover focus-visible:bg-hover"
+            >
+              <SpellCheck className="size-4" />
+              {guesses.count}
+            </button>
+          )}
           <button type="button" aria-label="搜索文字稿" data-testid="transcript-search-open" onClick={show} className={iconButton}>
             <Search className="size-4" />
           </button>

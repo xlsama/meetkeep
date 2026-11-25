@@ -11,7 +11,7 @@ import (
 // polish returns what makes the utterances of a meeting easier to read, to
 // give to SetPolished, and tells what it took. The meeting is read with the
 // words earlier meetings and the user set right, and those it sets right
-// are kept for the next. It returns no edits when polishing is off or there
+// are kept for the next, as are those it leaves for the user to say. It returns no edits when polishing is off or there
 // is no model to ask.
 func (a *app) polish(ctx context.Context, id string, utterances []store.Utterance) ([]store.Utterance, trace.Detail, error) {
 	settings := a.current()
@@ -44,6 +44,11 @@ func (a *app) polish(ctx context.Context, id string, utterances []store.Utteranc
 			}
 		}
 		_ = a.store.Learn(ctx, id, found)
+		guesses := make([]store.Guess, len(result.Guesses))
+		for i, g := range result.Guesses {
+			guesses[i] = store.Guess{Seq: g.Seq, Heard: g.Heard, Meant: g.Meant}
+		}
+		_ = a.store.SetGuesses(ctx, id, guesses)
 	}
 	used := model.Used()
 	fillers := 0
@@ -57,7 +62,7 @@ func (a *app) polish(ctx context.Context, id string, utterances []store.Utteranc
 	detail := trace.Detail{
 		"model": model.Model, "lines": len(lines), "changed": len(edits) - fillers, "fillers": fillers,
 		"refused": result.Refused, "failed": result.Failed, "failure": result.Failure, "unread": result.Unread, "terms": result.Terms, "readMs": result.Read.Milliseconds(),
-		"reviewed": result.Reviewed, "revised": result.Revised, "reviewMs": result.Review.Milliseconds(),
+		"reviewed": result.Reviewed, "revised": result.Revised, "reviewMs": result.Review.Milliseconds(), "guesses": result.Guesses,
 		"requests": used.Requests, "promptTokens": used.PromptTokens, "cachedTokens": used.CachedTokens, "completionTokens": used.CompletionTokens,
 	}
 	if err != nil {

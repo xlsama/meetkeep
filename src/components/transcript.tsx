@@ -2,14 +2,17 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { motion } from "motion/react";
 import {} from "lucide-react";
 import { Popover } from "radix-ui";
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Avatar } from "@/components/avatar";
 import { Highlight } from "@/components/highlight";
 import { SpeakerPopover } from "@/components/speaker-popover";
+import { Button } from "@/components/ui/button";
 import { clock } from "@/lib/format";
 import { spaced, useTranscript, type Group, type Line } from "@/lib/transcript";
+import { errorMessage } from "@/lib/queries";
 import { cn } from "@/lib/utils";
-import { wordAt, wordNear, wordsOf } from "@/lib/words";
+import { wordAt, wordNear, wordsOf, type Word } from "@/lib/words";
+import { Library, type Guess } from "@/mygo";
 
 type Variant = "main" | "panel";
 
@@ -231,6 +234,7 @@ function GroupView({
             {group.lines.map((line, index) => (
               <LineView
                 key={line.seq}
+                meetingId={meetingId}
                 line={line}
                 spaced={spaced(group.lines[index - 1]?.text ?? "")}
                 caret={style.caret}
@@ -260,6 +264,7 @@ function Badge({ children }: { children: string }) {
 }
 
 function LineView({
+  meetingId,
   line,
   spaced,
   caret,
@@ -269,6 +274,7 @@ function LineView({
   playhead,
   onSeek,
 }: {
+  meetingId: string;
   line: Line;
   spaced: boolean;
   caret: string;
@@ -299,7 +305,7 @@ function LineView({
             found && "bg-mark/45",
           )}
         >
-          {playhead ? <Spoken line={line} query={query} playhead={playhead} /> : <Highlight text={line.text} query={query} />}
+          <Spoken meetingId={meetingId} line={line} query={query} playhead={playhead} />
         </span>
       </>
     );
@@ -355,13 +361,27 @@ function offsetAt(event: MouseEvent<HTMLElement>) {
   return !over(at) && over(at - 1) ? offset - 1 : offset;
 }
 
-function Spoken({ line, query, playhead }: { line: Line; query: string; playhead: Playhead }) {
-  const { now, playing, ms } = playhead;
-  const words = wordsOf(line);
+const silent: Word[] = [];
+
+function Spoken({
+  meetingId,
+  line,
+  query,
+  playhead,
+}: {
+  meetingId: string;
+  line: Line;
+  query: string;
+  playhead: Playhead | undefined;
+}) {
+  const now = playhead?.now;
+  const playing = playhead?.playing ?? false;
+  const ms = playhead?.ms ?? 0;
+  const words = playhead ? wordsOf(line) : silent;
   const [heard, setHeard] = useState(() => wordAt(words, ms));
 
   useEffect(() => {
-    if (!playing) return;
+    if (!playing || !now) return;
     let frame = requestAnimationFrame(function tick() {
       setHeard(wordAt(words, now()));
       frame = requestAnimationFrame(tick);
@@ -369,15 +389,109 @@ function Spoken({ line, query, playhead }: { line: Line; query: string; playhead
     return () => cancelAnimationFrame(frame);
   }, [words, now, playing]);
 
-  const word = words[playing ? heard : wordAt(words, ms)];
-  if (!word) return <Highlight text={line.text} query={query} />;
+  return <Words meetingId={meetingId} line={line} query={query} word={words[playing ? heard : wordAt(words, ms)]} />;
+}
+
+function Words({ meetingId, line, query, word }: { meetingId: string; line: Line; query: string; word?: Word }) {
+  const { text } = line;
+  const places = line.guesses
+    .flatMap((guess) => {
+      const found: { at: number; end: number; guess: Guess }[] = [];
+      for (let at = text.indexOf(guess.heard); at !== -1; at = text.indexOf(guess.heard, at + guess.heard.length)) {
+        found.push({ at, end: at + guess.heard.length, guess });
+      }
+      return found;
+    })
+    .toSorted((a, b) => a.at - b.at);
+  const parts: ReactNode[] = [];
+  let from = 0;
+  for (const place of places) {
+    if (place.at < from) continue;
+    if (place.at > from) parts.push(<Stretch key={from} text={text} from={from} to={place.at} query={query} word={word} />);
+    parts.push(
+      <Guessed key={place.at} meetingId={meetingId} testId={`guess-${line.seq}-${place.at}`} guess={place.guess}>
+        <Stretch text={text} from={place.at} to={place.end} query={query} word={word} />
+      </Guessed>,
+    );
+    from = place.end;
+  }
+  if (from < text.length) parts.push(<Stretch key={from} text={text} from={from} to={text.length} query={query} word={word} />);
+  return parts;
+}
+
+function Stretch({ text, from, to, query, word }: { text: string; from: number; to: number; query: string; word?: Word }) {
+  if (!word || word.end <= from || word.at >= to) return <Highlight text={text.slice(from, to)} query={query} />;
+  const at = Math.max(word.at, from);
+  const end = Math.min(word.end, to);
   return (
     <>
-      <Highlight text={line.text.slice(0, word.at)} query={query} />
+      <Highlight text={text.slice(from, at)} query={query} />
       <span data-testid="word-active" className="-mx-0.5 rounded-[4px] bg-primary box-decoration-clone px-0.5 text-primary-foreground">
-        {line.text.slice(word.at, word.end)}
+        {text.slice(at, end)}
       </span>
-      <Highlight text={line.text.slice(word.end)} query={query} />
+      <Highlight text={text.slice(end, to)} query={query} />
     </>
+  );
+}
+
+function Guessed({
+  meetingId,
+  testId,
+  guess,
+  children,
+}: {
+  meetingId: string;
+  testId: string;
+  guess: Guess;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const answer = async (misheard: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await Library.answerGuess(meetingId, guess.heard, guess.meant, misheard);
+      setOpen(false);
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+    setBusy(false);
+  };
+
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild>
+        <span
+          role="button"
+          tabIndex={-1}
+          data-testid={testId}
+          className="cursor-pointer underline decoration-warning decoration-dotted decoration-[1.5px] underline-offset-[5px] data-[state=open]:decoration-solid"
+        >
+          {children}
+        </span>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          side="top"
+          sideOffset={6}
+          collisionPadding={12}
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          onClick={(event) => event.stopPropagation()}
+          className="z-50 flex max-w-[320px] flex-col gap-1 rounded-xl bg-popover p-1.5 text-popover-foreground shadow-[0_12px_36px_rgba(0,0,0,0.14),0_0_0_0.5px_rgba(0,0,0,0.12)] outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
+        >
+          <div className="flex items-center gap-1">
+            <Button variant="primary" size="md" disabled={busy} data-testid="guess-confirm" onClick={() => void answer(true)}>
+              改成「{guess.meant}」
+            </Button>
+            <Button variant="ghost" size="md" disabled={busy} data-testid="guess-drop" onClick={() => void answer(false)}>
+              没听错
+            </Button>
+          </div>
+          {error && <span className="px-1.5 pb-0.5 text-label text-destructive">{error}</span>}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }

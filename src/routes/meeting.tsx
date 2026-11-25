@@ -246,6 +246,8 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
   const [error, setError] = useState<string | null>(null);
   const [speakersOpen, setSpeakersOpen] = useState(false);
   const search = useTranscriptSearch(lines);
+  const guessed = lines.filter((line) => line.guesses.length > 0);
+  const [shown, setShown] = useState<{ seq: number; key: number } | null>(null);
   const playback = usePlayback();
   const activeSeq = playback.started ? (lineAt(lines, playback.currentMs)?.seq ?? null) : null;
   const revealSeq = t === undefined ? null : (lineAt(lines, t)?.seq ?? null);
@@ -294,6 +296,13 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
         <section aria-label="文字稿" className="flex min-h-0 min-w-0 flex-1 flex-col [container-type:size]">
           <TranscriptHeader
             search={search}
+            guesses={{
+              count: guessed.reduce((count, line) => count + line.guesses.length, 0),
+              next: () => {
+                const next = guessed.find((line) => shown !== null && line.seq > shown.seq) ?? guessed[0];
+                if (next) setShown({ seq: next.seq, key: (shown?.key ?? 0) + 1 });
+              },
+            }}
             menu={
               meeting.status === "done" && lines.length > 0 ? (
                 <TranscriptMenu meetingId={meeting.id} groups={groups} polished={polished} onError={setError} />
@@ -333,7 +342,8 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
             variant="main"
             paddingEnd={28}
             activeSeq={activeSeq}
-            revealSeq={revealSeq}
+            revealSeq={shown?.seq ?? revealSeq}
+            revealKey={shown?.key}
             query={search.query}
             findSeq={search.current}
             playhead={playhead}

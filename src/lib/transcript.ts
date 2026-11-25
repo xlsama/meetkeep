@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { LiveUtterance, Mark, Speaker, Track, UtteranceState } from "@/mygo";
+import type { Guess, LiveUtterance, Mark, Speaker, Track, UtteranceState } from "@/mygo";
 import { meetingQuery } from "@/lib/queries";
 import { useRecorder } from "@/lib/recorder";
 import { voiceOf, type Voice } from "@/lib/speakers";
@@ -14,6 +14,7 @@ export type Line = {
   marks: Mark[];
   speaker: number;
   uncertain: boolean;
+  guesses: Guess[];
   state: UtteranceState;
   error?: string;
 };
@@ -41,6 +42,7 @@ export function joined(lines: Line[]) {
 const none: Record<number, LiveUtterance> = {};
 const nobody: Speaker[] = [];
 const unmarked: Mark[] = [];
+const sure: Guess[] = [];
 
 export function useTranscript(meetingId: string, live: boolean) {
   const detail = useQuery(meetingQuery(meetingId));
@@ -49,16 +51,19 @@ export function useTranscript(meetingId: string, live: boolean) {
   const original = useWorkspace((s) => s.original);
   const utterances = detail.data?.utterances ?? [];
   const polished = utterances.some((u) => u.filler || u.polished !== "");
+  const guessed = new Map<number, Guess[]>();
+  for (const guess of original ? sure : (detail.data?.guesses ?? sure)) guessed.set(guess.seq, [...(guessed.get(guess.seq) ?? sure), guess]);
 
   const merged = new Map<number, Line>();
   for (const u of utterances) {
     if (!original && u.filler) continue;
     const shown = original || u.polished === "" ? { text: u.text, marks: u.marks } : { text: u.polished, marks: u.polishedMarks };
-    merged.set(u.seq, { seq: u.seq, track: u.track, startMs: u.startMs, endMs: u.endMs, text: shown.text, marks: shown.marks ?? unmarked, speaker: u.speaker, uncertain: u.uncertain, state: "done" });
+    const guesses = guessed.get(u.seq)?.filter((guess) => shown.text.includes(guess.heard)) ?? sure;
+    merged.set(u.seq, { seq: u.seq, track: u.track, startMs: u.startMs, endMs: u.endMs, text: shown.text, marks: shown.marks ?? unmarked, speaker: u.speaker, uncertain: u.uncertain, guesses, state: "done" });
   }
   for (const u of Object.values(items)) {
     if (u.state === "dropped") merged.delete(u.seq);
-    else merged.set(u.seq, { ...u, marks: unmarked, speaker: 0, uncertain: false });
+    else merged.set(u.seq, { ...u, marks: unmarked, speaker: 0, uncertain: false, guesses: sure });
   }
   const lines = [...merged.values()].toSorted((a, b) => a.startMs - b.startMs || a.seq - b.seq);
 
