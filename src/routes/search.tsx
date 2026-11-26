@@ -1,6 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
+import { Empty } from "@/components/empty";
 import { PageTitle } from "@/components/header-slot";
 import { Highlight } from "@/components/highlight";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -33,8 +34,9 @@ export function SearchPage() {
     <div className="flex min-h-0 flex-1 flex-col">
       <PageTitle
         title={`“${query}”`}
-        meta={empty ? "没有找到" : hits.length > 0 ? `${hits.length} 场会议 · ${found} 处` : undefined}
+        meta={hits.length > 0 ? `${hits.length} 场会议 · ${found} 处` : undefined}
       />
+      {empty && <Empty kind="search" text="没有找到" />}
       {hits.length > 0 && (
         <Tabs
           value={filter}

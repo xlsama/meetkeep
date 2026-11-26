@@ -257,6 +257,9 @@ type Card struct {
 	// Opening is how the meeting begins.
 	Opening  string          `json:"opening"`
 	Speakers []store.Speaker `json:"speakers"`
+	// Progress is how far processing the meeting got, while it waits or is
+	// processed.
+	Progress *processor.Progress `json:"progress"`
 }
 
 // openingLength is how many characters of a meeting's opening a card shows.
@@ -278,6 +281,9 @@ func (l *Library) Cards(ctx context.Context) ([]Card, error) {
 		card := Card{Meeting: meeting, Topics: []string{}, Speakers: glance.Speakers}
 		if card.Speakers == nil {
 			card.Speakers = []store.Speaker{}
+		}
+		if progress, ok := l.app.processor.State(meeting.ID); ok {
+			card.Progress = &progress
 		}
 		var written notes.Notes
 		if glance.Notes != "" && json.Unmarshal([]byte(glance.Notes), &written) == nil {
@@ -733,6 +739,14 @@ func (p *People) Rename(ctx context.Context, id int, name string) error {
 	}
 	for _, meeting := range meetings {
 		p.app.notes.rename(ctx, meeting, old, name)
+	}
+	return libraryChanged.Broadcast("")
+}
+
+// SetSelf tells whether a person is the user, as only one person is.
+func (p *People) SetSelf(ctx context.Context, id int, self bool) error {
+	if err := p.app.store.SetSelf(ctx, id, self); err != nil {
+		return err
 	}
 	return libraryChanged.Broadcast("")
 }

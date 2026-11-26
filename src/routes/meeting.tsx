@@ -24,13 +24,16 @@ import {
 import { isMyGo } from "mygo-runtime";
 import { useEffect, useState, useRef } from "react";
 import { Avatar } from "@/components/avatar";
+import { Empty } from "@/components/empty";
 import { LevelMeter } from "@/components/level-meter";
 import { DeleteDialog, run } from "@/components/meeting-menu";
 import { MeetingAside, type AsideTab } from "@/components/meeting-aside";
 import { HeaderActions, HeaderTitle } from "@/components/header-slot";
 import { FaultNotice, Notice } from "@/components/notice";
 import { AudioBar, PlayerProvider, usePlayback, VideoStage } from "@/components/player";
+import { ProcessingBand } from "@/components/processing-band";
 import { RecDot } from "@/components/rec-dot";
+import { TranscriptSkeleton } from "@/components/skeleton";
 import { SourceSummary } from "@/components/source-summary";
 import { TitleInput } from "@/components/title-input";
 import { Transcript } from "@/components/transcript";
@@ -45,7 +48,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Library, type Format, type Meeting, type Progress, type Speaker, type Step } from "@/mygo";
+import { Library, type Format, type Meeting, type Speaker } from "@/mygo";
 import { copyText } from "@/lib/clipboard";
 import { useControls } from "@/lib/controls";
 import { clock, meetingDate, minutes, systemLabel } from "@/lib/format";
@@ -289,7 +292,12 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
         <ExportMenu meetingId={meeting.id} onError={setError} />
         <MoreMenu meeting={meeting} onError={setError} />
       </HeaderActions>
-      {processing && <ProgressBand meeting={meeting} progress={progress} />}
+      <ProcessingBand
+        key={meeting.id}
+        meeting={meeting}
+        progress={progress}
+        onRetry={() => void reprocess(meeting.id, setError)}
+      />
       <Workspace
         cards={{
           transcript: (
@@ -309,23 +317,6 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
               ) : undefined
             }
           />
-          {meeting.status === "failed" && (
-            <Notice
-              testId="meeting-failed"
-              message={meeting.error || "转写失败"}
-              className="mx-8 mt-4"
-              action={
-                <button
-                  type="button"
-                  data-testid="reprocess"
-                  onClick={() => void reprocess(meeting.id, setError)}
-                  className="-my-0.5 inline-flex h-[22px] shrink-0 items-center rounded-xs px-2 text-label font-semibold text-warning transition-colors hover:bg-warning-border/50"
-                >
-                  重新转写
-                </button>
-              }
-            />
-          )}
           <Notice testId="meeting-error" message={error} onDismiss={() => setError(null)} className="mx-8 mt-4" />
           {video && (
             <VideoStage
@@ -336,26 +327,32 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
               spaceDisabled={tab === "board"}
             />
           )}
-          <Transcript
-            meetingId={meeting.id}
-            live={false}
-            variant="main"
-            paddingEnd={28}
-            activeSeq={activeSeq}
-            revealSeq={shown?.seq ?? revealSeq}
-            revealKey={shown?.key}
-            query={search.query}
-            findSeq={search.current}
-            playhead={playhead}
-            onSeek={
-              playable
-                ? (ms) => {
-                    quoted.current = null;
-                    seek(ms, true);
-                  }
-                : undefined
-            }
-          />
+          {lines.length > 0 ? (
+            <Transcript
+              meetingId={meeting.id}
+              live={false}
+              variant="main"
+              paddingEnd={28}
+              activeSeq={activeSeq}
+              revealSeq={shown?.seq ?? revealSeq}
+              revealKey={shown?.key}
+              query={search.query}
+              findSeq={search.current}
+              playhead={playhead}
+              onSeek={
+                playable
+                  ? (ms) => {
+                      quoted.current = null;
+                      seek(ms, true);
+                    }
+                  : undefined
+              }
+            />
+          ) : processing && (progress?.step === "transcribe" || progress?.step === "speakers") ? (
+            <TranscriptSkeleton />
+          ) : (
+            detail.data && <Empty kind="transcript" text="还没有文字稿" />
+          )}
           {playable && !video && (
             <AudioBar
               meetingId={meeting.id}
@@ -387,7 +384,7 @@ function MeetingBody({ meeting, t, tab, onTabChange }: ViewProps) {
               replace: true,
             });
           }}
-          pending={processing}
+          writing={processing && progress?.step === "summary"}
           onRetry={meeting.status === "done" ? () => void run(setError, () => Library.regenerateNotes(meeting.id)) : undefined}
         />
           ),
@@ -539,55 +536,6 @@ function ExportMenu({ meetingId, onError }: { meetingId: string; onError: (error
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-const stepLabel: Record<Step, string> = {
-  import: "导入",
-  transcribe: "重新转写",
-  speakers: "识别说话人",
-  summary: "生成纪要",
-};
-
-function ProgressBand({ meeting, progress }: { meeting: Meeting; progress: Progress | null }) {
-  const imported = !meeting.microphone && !meeting.system;
-  const steps: Step[] = imported
-    ? ["import", "transcribe", "speakers", "summary"]
-    : ["transcribe", "speakers", "summary"];
-  const current = Math.max(0, progress ? steps.indexOf(progress.step) : 0);
-
-  return (
-    <div className="card flex shrink-0 gap-1.5 px-8 py-3.5" data-testid="processing">
-      {steps.map((step, index) => {
-        const done = index < current;
-        const active = index === current;
-        const width = done ? 100 : active ? (progress?.percent ?? 0) : 0;
-        return (
-          <div key={step} className="flex flex-1 flex-col gap-1.5" data-testid={`processing-${step}`}>
-            <span
-              className={cn(
-                "flex items-center gap-1.5 text-label",
-                active ? "font-semibold text-foreground" : done ? "text-foreground" : "text-muted-foreground",
-              )}
-            >
-              {done && <Check className="size-[13px]" />}
-              {stepLabel[step]}
-              {active && progress && (
-                <span className="font-normal text-muted-foreground tabular-nums" data-testid="processing-percent">
-                  {progress.percent}%
-                </span>
-              )}
-            </span>
-            <span className="h-[3px] overflow-hidden rounded-[2px] bg-line">
-              <span
-                className="block h-full bg-foreground transition-[width] duration-300"
-                style={{ width: `${width}%` }}
-              />
-            </span>
-          </div>
-        );
-      })}
-    </div>
   );
 }
 

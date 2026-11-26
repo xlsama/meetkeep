@@ -2,8 +2,9 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Avatar } from "@/components/avatar";
 import { MeetingMenu, type OnError } from "@/components/meeting-menu";
+import { stages } from "@/components/processing-band";
 import { RecDot } from "@/components/rec-dot";
-import type { Card, Meeting, Speaker, Status } from "@/mygo";
+import type { Card, Speaker, Status } from "@/mygo";
 import { clock, listDate, minutes } from "@/lib/format";
 import { useProgress } from "@/lib/progress";
 import { useElapsed, useRecorder } from "@/lib/recorder";
@@ -43,7 +44,7 @@ export function MeetingCard({ card, now, onError }: { card: Card; now: Date; onE
         )}
         <div className="mt-auto flex items-center gap-2">
           <Speakers speakers={speakers} />
-          <MeetingState meeting={meeting} now={now} className="ml-auto" />
+          <MeetingState card={card} now={now} className="ml-auto" />
         </div>
       </Link>
       <MeetingMenu meeting={meeting} onError={onError} className="absolute top-3 right-2.5" />
@@ -67,11 +68,43 @@ export function Speakers({ speakers }: { speakers: Speaker[] }) {
   );
 }
 
-export function MeetingState({ meeting, now, className }: { meeting: Meeting; now: Date; className?: string }) {
+export function MeetingState({ card, now, className }: { card: Card; now: Date; className?: string }) {
+  const { meeting } = card;
   const status = useRecorder((s) => s.status);
-  const progress = useProgress((s) => s.items[meeting.id]);
+  const progress = useProgress((s) => s.items[meeting.id]) ?? card.progress;
   if (meeting.status === "recording") {
     return <RecordingLabel status={status.meeting?.id === meeting.id ? status : null} className={className} />;
+  }
+  if (meeting.status === "processing") {
+    return (
+      <span
+        className={cn("inline-flex items-center gap-1.5 text-meta leading-normal text-muted-foreground tabular-nums", className)}
+        data-testid={`meeting-state-${meeting.id}`}
+      >
+        {listDate(meeting.startedAt, now)}
+        {progress?.step === "queued" ? (
+          <>
+            <span aria-hidden className="flex items-center gap-[2.5px]">
+              {[0, 150, 300].map((ms) => (
+                <span
+                  key={ms}
+                  className="size-[3px] animate-breathe rounded-full bg-muted-foreground"
+                  style={{ animationDelay: `${ms}ms` }}
+                />
+              ))}
+            </span>
+            待整理
+          </>
+        ) : (
+          <>
+            <Ring percent={progress?.percent ?? 0} />
+            <span className="font-medium text-foreground">
+              {progress ? `${stages[progress.step].label} ${progress.percent}%` : "整理中"}
+            </span>
+          </>
+        )}
+      </span>
+    );
   }
   return (
     <span
@@ -81,15 +114,30 @@ export function MeetingState({ meeting, now, className }: { meeting: Meeting; no
         className,
       )}
     >
-      {listDate(meeting.startedAt, now)} ·{" "}
-      {meeting.status === "processing"
-        ? progress
-          ? `整理中 ${progress.percent}%`
-          : "整理中"
-        : meeting.status === "failed"
-          ? "转写失败"
-          : minutes(meeting.durationMs)}
+      {listDate(meeting.startedAt, now)} · {meeting.status === "failed" ? "转写失败" : minutes(meeting.durationMs)}
     </span>
+  );
+}
+
+const radius = 5.5;
+const around = 2 * Math.PI * radius;
+
+function Ring({ percent }: { percent: number }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden className="shrink-0 -rotate-90">
+      <circle cx="7" cy="7" r={radius} fill="none" strokeWidth="2.4" className="stroke-border" />
+      <circle
+        cx="7"
+        cy="7"
+        r={radius}
+        fill="none"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeDasharray={around}
+        strokeDashoffset={around * (1 - percent / 100)}
+        className="stroke-foreground transition-[stroke-dashoffset] duration-[800ms] ease-out"
+      />
+    </svg>
   );
 }
 

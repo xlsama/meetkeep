@@ -312,10 +312,9 @@ function NameInput({ speaker, onRename }: { speaker: Speaker; onRename: (name: s
         }
       }}
       className={cn(
-        "h-[34px] min-w-0 flex-1 rounded-md border px-2.5 text-body text-foreground outline-none transition-[border-color,box-shadow]",
-        speaker.self
-          ? "border-transparent bg-muted"
-          : "border-input bg-background focus-visible:border-border-strong focus-visible:ring-[3px] focus-visible:ring-black/5",
+        "h-[34px] min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2.5 text-body font-medium text-foreground outline-none transition-[border-color,background-color,box-shadow]",
+        !speaker.self &&
+          "hover:bg-hover focus-visible:border-border-strong focus-visible:bg-background focus-visible:ring-[3px] focus-visible:ring-black/5",
       )}
     />
   );

@@ -53,7 +53,7 @@ export function MeetingMenu({
             aria-label="更多"
             data-testid={`meeting-menu-${meeting.id}`}
             className={cn(
-              "inline-flex size-7 items-center justify-center rounded-[8px] text-muted-foreground opacity-0 transition-[opacity,background-color] outline-none group-hover/meeting:opacity-100 hover:bg-black/[0.06] focus-visible:opacity-100 focus-visible:shadow-[0_0_0_2px_rgba(0,0,0,0.12)] data-[state=open]:bg-black/[0.06] data-[state=open]:opacity-100",
+              "press inline-flex size-7 items-center justify-center rounded-[8px] text-muted-foreground opacity-0 outline-none group-hover/meeting:opacity-100 hover:bg-black/[0.06] focus-visible:opacity-100 focus-visible:shadow-[0_0_0_2px_rgba(0,0,0,0.12)] data-[state=open]:bg-black/[0.06] data-[state=open]:opacity-100",
               className,
             )}
           >

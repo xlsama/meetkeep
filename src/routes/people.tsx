@@ -7,7 +7,7 @@ import {
   tableFeatures,
   useTable,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, Ellipsis, LoaderCircle, Pencil, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Ellipsis, LoaderCircle, Pencil, Trash2, UserRound, UserRoundX } from "lucide-react";
 import { createContext, use, useEffect, useMemo, useRef, useState, type Ref, type RefObject } from "react";
 import { Avatar } from "@/components/avatar";
 import { PageTitle } from "@/components/header-slot";
@@ -30,7 +30,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { People, type Person } from "@/mygo";
+import { People, type Known, type Person } from "@/mygo";
 import { meetingDate } from "@/lib/format";
 import { errorMessage, peopleQuery, queryClient } from "@/lib/queries";
 import { stopSample, toggleSample } from "@/lib/sample";
@@ -39,7 +39,17 @@ import { cn } from "@/lib/utils";
 
 const tones = ["bg-them-2", "bg-them", "bg-them-3"] as const;
 
-type Entry = { id: string; name: string; tone: string; meetings: number; lastAt: number; person: Person | null };
+type Entry = {
+  id: string;
+  name: string;
+  tone: string;
+  meetings: number;
+  lastAt: number;
+  person: Person | null;
+  self: boolean;
+};
+
+const selfTone = "bg-secondary-foreground";
 
 type Editor = {
   editing: number | null;
@@ -102,26 +112,7 @@ export function PeoplePage() {
   const input = useRef<HTMLInputElement>(null);
   const entries = useMemo<Entry[]>(
     () =>
-      known.data
-        ? [
-            {
-              id: "self",
-              name: "我",
-              tone: "bg-secondary-foreground",
-              meetings: known.data.selfMeetings,
-              lastAt: known.data.selfLastAt,
-              person: null,
-            },
-            ...known.data.people.map((person, index) => ({
-              id: String(person.id),
-              name: person.name,
-              tone: tones[index % tones.length] ?? "bg-them",
-              meetings: person.meetings,
-              lastAt: person.lastAt,
-              person,
-            })),
-          ]
-        : [],
+      known.data ? entriesOf(known.data) : [],
     [known.data],
   );
 
@@ -149,6 +140,23 @@ export function PeoplePage() {
       </EditorContext>
     </div>
   );
+}
+
+function entriesOf(known: Known): Entry[] {
+  const mine = { meetings: known.selfMeetings, lastAt: known.selfLastAt, tone: selfTone, self: true };
+  const me = known.people.find((person) => person.self);
+  const others = known.people
+    .filter((person) => !person.self)
+    .map((person, index) => ({
+      id: String(person.id),
+      name: person.name,
+      tone: tones[index % tones.length] ?? "bg-them",
+      meetings: person.meetings,
+      lastAt: person.lastAt,
+      person,
+      self: false,
+    }));
+  return [me ? { ...mine, id: String(me.id), name: me.name, person: me } : { ...mine, id: "self", name: "我", person: null }, ...others];
 }
 
 function PeopleTable({ entries }: { entries: Entry[] }) {
@@ -231,6 +239,14 @@ function NameCell({ entry }: { entry: Entry }) {
       ) : (
         <span className="truncate font-medium text-foreground">{entry.name}</span>
       )}
+      {entry.self && person && (
+        <span
+          className="shrink-0 rounded-[5px] bg-secondary px-1.5 text-micro leading-[18px] font-medium text-secondary-foreground"
+          data-testid="people-self"
+        >
+          我
+        </span>
+      )}
     </span>
   );
 }
@@ -295,7 +311,7 @@ function ActionsCell({ person }: { person: Person }) {
             type="button"
             aria-label="更多"
             data-testid={`person-more-${person.id}`}
-            className="inline-flex size-7 items-center justify-center rounded-[8px] text-muted-foreground opacity-0 transition-[opacity,background-color] outline-none group-hover/person:opacity-100 hover:bg-black/[0.06] focus-visible:opacity-100 focus-visible:shadow-[0_0_0_2px_rgba(0,0,0,0.12)] data-[state=open]:bg-black/[0.06] data-[state=open]:opacity-100"
+            className="press inline-flex size-7 items-center justify-center rounded-[8px] text-muted-foreground opacity-0 outline-none group-hover/person:opacity-100 hover:bg-black/[0.06] focus-visible:opacity-100 focus-visible:shadow-[0_0_0_2px_rgba(0,0,0,0.12)] data-[state=open]:bg-black/[0.06] data-[state=open]:opacity-100"
           >
             <Ellipsis className="size-4" />
           </button>
@@ -318,6 +334,13 @@ function ActionsCell({ person }: { person: Person }) {
           >
             <Pencil />
             改名
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            data-testid={`person-self-${person.id}`}
+            onSelect={() => void act(() => People.setSelf(person.id, !person.self))}
+          >
+            {person.self ? <UserRoundX /> : <UserRound />}
+            {person.self ? "这不是我" : "这是我"}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem

@@ -1,7 +1,8 @@
-import { LoaderCircle } from "lucide-react";
 import { lazy, Suspense, useState } from "react";
 import { Avatar } from "@/components/avatar";
+import { Empty } from "@/components/empty";
 import { Notice } from "@/components/notice";
+import { NotesSkeleton } from "@/components/skeleton";
 import type { NotesState, Speaker } from "@/mygo";
 import type { Jump } from "@/lib/notes";
 import { byTalk, speakerVoice } from "@/lib/speakers";
@@ -13,7 +14,7 @@ export function NotesDoc({
   meetingId,
   state,
   live,
-  pending = false,
+  writing = false,
   speakers,
   onSpeakers,
   onJump,
@@ -22,7 +23,7 @@ export function NotesDoc({
   meetingId: string;
   state: NotesState | null;
   live: boolean;
-  pending?: boolean;
+  writing?: boolean;
   speakers: Speaker[];
   onSpeakers: () => void;
   onJump: (jump: Jump) => void;
@@ -30,11 +31,15 @@ export function NotesDoc({
 }) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const editable = !live && state?.notes?.final === true;
+  const blank = state !== null && state.notes === null && state.doc === "";
 
   return (
     <div
       data-testid="notes"
-      className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-7 pt-6", live ? "pb-[110px]" : "pb-10")}
+      className={cn(
+        "flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-7 pt-6",
+        live ? "pb-[110px]" : "pb-10",
+      )}
     >
       <Notice
         testId="notes-error"
@@ -53,12 +58,6 @@ export function NotesDoc({
           )
         }
       />
-      {pending && state?.notes?.final !== true && (
-        <div className="mb-5 flex items-center gap-2 text-label text-muted-foreground" data-testid="notes-pending">
-          <LoaderCircle className="size-3.5 animate-spin" />
-          正在生成完整纪要
-        </div>
-      )}
       <Notice testId="notes-save-error" message={saveError} onDismiss={() => setSaveError(null)} className="mb-5" />
       {speakers.length > 0 && (
         <button
@@ -76,7 +75,8 @@ export function NotesDoc({
           ))}
         </button>
       )}
-      {state && (state.notes !== null || state.doc !== "") && (
+      {blank && (writing || state.working ? <NotesSkeleton /> : <Empty kind="notes" text="还没有纪要" />)}
+      {state && !blank && (
         <Suspense fallback={null}>
           <NotesEditor
             key={meetingId}

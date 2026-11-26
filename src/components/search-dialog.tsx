@@ -4,6 +4,7 @@ import { AudioLines, FileText, MessageSquareText, Search, type LucideIcon } from
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { useEffect, useState, type ReactNode } from "react";
 import { create } from "zustand";
+import { Empty } from "@/components/empty";
 import { Highlight } from "@/components/highlight";
 import { clock, meetingDate, minutes } from "@/lib/format";
 import { cardsQuery, searchQuery } from "@/lib/queries";
@@ -180,7 +181,7 @@ function SearchBody({ close }: { close: () => void }) {
         {query === "" && items.length > 0 && (
           <div className="px-2.5 pt-1.5 pb-1 text-label text-muted-foreground">最近</div>
         )}
-        {empty && <div className="px-2.5 py-8 text-center text-ui text-muted-foreground">没有找到</div>}
+        {empty && <Empty kind="search" text="没有找到" size="sm" className="py-7" />}
         {items.map((item, index) => (
           <button
             key={item.key}

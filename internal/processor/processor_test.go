@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -433,5 +434,45 @@ func TestFailureKeepsTheLiveTranscript(t *testing.T) {
 	utterances, _ := h.db.Utterances(context.Background(), "a")
 	if len(utterances) != 1 || utterances[0].Text != "会中转写的一句" {
 		t.Errorf("the live transcript is now %+v", utterances)
+	}
+}
+
+func TestAMeetingWaitsForTheOneBeforeIt(t *testing.T) {
+	h := newHarness(t, fakeTranscriber{})
+	h.meeting(t, "a", "mic.opus")
+	h.meeting(t, "b", "mic.opus")
+	var mu sync.Mutex
+	heard := map[string][]Step{}
+	h.p.Progress = func(p Progress) {
+		mu.Lock()
+		heard[p.MeetingID] = append(heard[p.MeetingID], p.Step)
+		mu.Unlock()
+	}
+	reached, held := make(chan struct{}), make(chan struct{})
+	h.p.Summarize = func(_ context.Context, id string) (trace.Detail, error) {
+		if id == "a" {
+			close(reached)
+			<-held
+		}
+		return nil, nil
+	}
+	h.p.Process("a")
+	h.p.Process("b")
+	<-reached
+	if got, ok := h.p.State("a"); !ok || got.Step != Summarizing {
+		t.Errorf("the first meeting is at %+v", got)
+	}
+	if got, ok := h.p.State("b"); !ok || got.Step != Queued {
+		t.Errorf("the second meeting is at %+v, want it to wait", got)
+	}
+	close(held)
+	h.wait(t, "a")
+	h.wait(t, "b")
+	mu.Lock()
+	defer mu.Unlock()
+	for _, id := range []string{"a", "b"} {
+		if steps := heard[id]; len(steps) < 2 || steps[0] != Queued || steps[1] != Transcribing {
+			t.Errorf("%s went through %v, want it to wait and then be transcribed", id, steps)
+		}
 	}
 }

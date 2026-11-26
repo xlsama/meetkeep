@@ -43,7 +43,7 @@ export function useTranscriptSearch(lines: Line[]) {
 type TranscriptSearch = ReturnType<typeof useTranscriptSearch>;
 
 const iconButton =
-  "inline-flex size-7 shrink-0 items-center justify-center rounded-[8px] text-subtle transition-colors outline-none hover:bg-hover hover:text-foreground focus-visible:bg-hover disabled:pointer-events-none disabled:opacity-40";
+  "press inline-flex size-7 shrink-0 items-center justify-center rounded-[8px] text-subtle outline-none hover:bg-hover hover:text-foreground focus-visible:bg-hover disabled:pointer-events-none disabled:opacity-40";
 
 export function TranscriptHeader({
   search,

@@ -16,8 +16,8 @@ function TooltipContent({ className, sideOffset = 6, ...props }: ComponentProps<
         data-slot="tooltip-content"
         sideOffset={sideOffset}
         className={cn(
-          "z-50 rounded-xs bg-primary px-2 py-1 text-meta text-primary-foreground",
-          "animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+          "z-50 origin-(--radix-tooltip-content-transform-origin) rounded-xs bg-primary px-2 py-1 text-meta text-primary-foreground",
+          "animate-in duration-150 fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=instant-open]:animate-none",
           className,
         )}
         {...props}

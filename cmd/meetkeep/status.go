@@ -48,7 +48,7 @@ func follow(ctx context.Context, s *store.Store, m store.Meeting) (progress, err
 			p.State, p.Stalled = "stalled: MeetKeep is not running; it goes on processing once it is opened", true
 		case err != nil:
 			return p, err
-		case answer.Working && answer.Step == "":
+		case answer.Working && answer.Step == "queued":
 			p.State = "queued"
 		case answer.Working:
 			p.Step, p.Percent = answer.Step, answer.Percent

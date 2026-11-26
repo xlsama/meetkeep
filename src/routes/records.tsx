@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ChevronRight, LayoutGrid, List, LoaderCircle, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Empty } from "@/components/empty";
 import { HeaderActions, PageTitle } from "@/components/header-slot";
 import { cardGrid, MeetingCard, MeetingState, Speakers, useNow } from "@/components/meeting-card";
 import { MeetingMenu, type OnError } from "@/components/meeting-menu";
@@ -27,7 +28,8 @@ export function RecordsPage() {
   const setSheetOpen = useSheet((s) => s.setOpen);
   const view = useWorkspace((s) => s.view);
   const setView = useWorkspace((s) => s.setView);
-  const cards = useQuery(cardsQuery).data ?? [];
+  const listed = useQuery(cardsQuery);
+  const cards = listed.data ?? [];
   const now = useNow();
   const [error, setError] = useState<string | null>(null);
 
@@ -59,7 +61,9 @@ export function RecordsPage() {
       )}
       <Capture />
       <Notice testId="records-error" message={error} onDismiss={() => setError(null)} className="mx-4 mt-4" />
-      {cards.length === 0 ? null : view === "list" ? (
+      {cards.length === 0 ? (
+        listed.isSuccess && <Empty kind="meetings" text="还没有会议" />
+      ) : view === "list" ? (
         <Rows cards={cards} now={now} onError={setError} />
       ) : (
         <div className="flex flex-col gap-5 px-4 pt-4 pb-5">
@@ -171,7 +175,7 @@ function Rows({ cards, now, onError }: { cards: Card[]; now: Date; onError: OnEr
                 )}
               </span>
               <Speakers speakers={card.speakers} />
-              <MeetingState meeting={card.meeting} now={now} />
+              <MeetingState card={card} now={now} />
               <span />
             </Link>
             <MeetingMenu

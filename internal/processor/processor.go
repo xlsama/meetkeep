@@ -24,6 +24,9 @@ import (
 type Step string
 
 const (
+	// Queued is a meeting that waits for the ones before it: they are
+	// processed one at a time.
+	Queued       Step = "queued"
 	Importing    Step = "import"
 	Transcribing Step = "transcribe"
 	Separating   Step = "speakers"
@@ -129,9 +132,11 @@ func (p *Processor) enqueue(j job) {
 		kind = "import"
 	}
 	j.record = trace.Begin(p.Store, j.id, kind)
+	progress := Progress{MeetingID: j.id, Step: Queued}
 	p.mu.Lock()
-	p.running[j.id] = &state{progress: Progress{MeetingID: j.id, Step: Transcribing}}
+	p.running[j.id] = &state{progress: progress}
 	p.mu.Unlock()
+	p.Progress(progress)
 	p.jobs <- j
 }
 
@@ -194,9 +199,15 @@ func (p *Processor) run(j job) {
 	var err error
 	if !canceled {
 		j.record.Waited()
-		if j.speakers {
+		switch {
+		case j.speakers:
+			p.report(j.id, Separating, 60)
 			err = p.separate(ctx, j)
-		} else {
+		case j.source != "":
+			p.report(j.id, Importing, 0)
+			err = p.process(ctx, j)
+		default:
+			p.report(j.id, Transcribing, 0)
 			err = p.process(ctx, j)
 		}
 	}
@@ -333,7 +344,6 @@ func (p *Processor) process(ctx context.Context, j job) error {
 	var written <-chan error
 	played := filepath.Join(meeting.Directory, audioFile)
 	if j.source != "" {
-		p.report(j.id, Importing, 0)
 		var sound speech.Sound
 		err := j.record.Step("import", func() (trace.Detail, error) {
 			detail := trace.Detail{"format": strings.TrimPrefix(strings.ToLower(filepath.Ext(j.source)), "."), "bytes": size(j.source)}
@@ -516,7 +526,6 @@ func (p *Processor) separate(ctx context.Context, j job) error {
 			mixed = found[i]
 		}
 	}
-	p.report(j.id, Separating, 60)
 	speakers, err := p.label(ctx, j, found, utterances, func() ([]speech.Segment, error) {
 		return p.tell(ctx, j, mixed.sound)
 	})

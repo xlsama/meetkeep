@@ -50,6 +50,11 @@ export interface Card {
   /** Opening is how the meeting begins. */
   opening: string;
   speakers: Speaker[];
+  /**
+   * Progress is how far processing the meeting got, while it waits or is
+   * processed.
+   */
+  progress: Progress | null;
 }
 
 /**
@@ -261,6 +266,8 @@ export interface Person {
    */
   meetings: number;
   lastAt: number;
+  /** Self tells that the person is the user: the one the microphone hears. */
+  self: boolean;
   /** Samples is how many samples of the voice are kept. */
   samples: number;
   /**
@@ -421,7 +428,7 @@ export interface Status {
   at: number;
 }
 
-export type Step = "import" | "transcribe" | "speakers" | "summary";
+export type Step = "queued" | "import" | "transcribe" | "speakers" | "summary";
 
 /** Term is a word that speech recognition mishears and what it is. */
 export interface Term {
@@ -673,6 +680,8 @@ export const People = {
   list: bind<[], Known>("People.List", () => []),
   /** Rename gives a person another name, in every meeting they talk in. */
   rename: bind<[number, string], void>("People.Rename", (id: number, name: string) => [id, name]),
+  /** SetSelf tells whether a person is the user, as only one person is. */
+  setSelf: bind<[number, boolean], void>("People.SetSelf", (id: number, self: boolean) => [id, self]),
 } as const;
 
 /**

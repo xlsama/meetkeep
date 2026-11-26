@@ -87,6 +87,8 @@ type Person struct {
 	// newest of them began, in Unix milliseconds.
 	Meetings int   `json:"meetings"`
 	LastAt   int64 `json:"lastAt"`
+	// Self tells that the person is the user: the one the microphone hears.
+	Self bool `json:"self"`
 	// Samples is how many samples of the voice are kept.
 	Samples int `json:"samples"`
 	// SampleMeeting, SampleStartMs and SampleEndMs tell where to hear the
@@ -318,6 +320,9 @@ var migrations = [][]string{
 			meant TEXT NOT NULL,
 			PRIMARY KEY (meeting_id, seq, heard)
 		)`,
+	},
+	{
+		`ALTER TABLE people ADD COLUMN self INTEGER NOT NULL DEFAULT 0`,
 	},
 }
 
@@ -700,7 +705,8 @@ func (s *Store) People(ctx context.Context) ([]Person, error) {
 		COALESCE((SELECT MAX(m.started_at) FROM speakers s JOIN meetings m ON m.id = s.meeting_id WHERE s.person_id = p.id), 0),
 		(SELECT COUNT(*) FROM voiceprints v WHERE v.person_id = p.id),
 		COALESCE((SELECT v.meeting_id || ':' || v.start_ms || ':' || v.end_ms FROM voiceprints v
-			WHERE v.person_id = p.id AND v.meeting_id IS NOT NULL ORDER BY v.id DESC LIMIT 1), '')
+			WHERE v.person_id = p.id AND v.meeting_id IS NOT NULL ORDER BY v.id DESC LIMIT 1), ''),
+		p.self
 		FROM people p ORDER BY p.name`)
 	if err != nil {
 		return nil, err
@@ -709,7 +715,7 @@ func (s *Store) People(ctx context.Context) ([]Person, error) {
 	for _, row := range rows.Values {
 		p := Person{
 			ID: int(row[0].(int64)), Name: row[1].(string), Meetings: int(row[2].(int64)), LastAt: row[3].(int64),
-			Samples: int(row[4].(int64)),
+			Samples: int(row[4].(int64)), Self: row[6].(int64) != 0,
 		}
 		if parts := strings.Split(row[5].(string), ":"); len(parts) == 3 {
 			p.SampleMeeting = parts[0]
@@ -770,10 +776,27 @@ func (s *Store) DeletePerson(ctx context.Context, id int) error {
 	return s.changed(s.db.Execute(ctx, "DELETE FROM people WHERE id = ?", id))
 }
 
-// Self returns in how many meetings the user's microphone was recorded,
-// and when the newest of them began.
+// SetSelf tells whether a person is the user. Only one person is.
+func (s *Store) SetSelf(ctx context.Context, id int, self bool) error {
+	if !self {
+		return s.changed(s.db.Execute(ctx, "UPDATE people SET self = 0 WHERE id = ?", id))
+	}
+	if _, _, err := s.Appearances(ctx, id); err != nil {
+		return err
+	}
+	_, err := s.db.Transaction(ctx, []sqlite.Statement{
+		{SQL: "UPDATE people SET self = 0"},
+		{SQL: "UPDATE people SET self = 1 WHERE id = ?", Args: []any{id}},
+	})
+	return err
+}
+
+// Self returns in how many meetings the user talks, and when the newest of
+// them began: those the microphone was recorded in, and those the person
+// who is the user is heard in.
 func (s *Store) Self(ctx context.Context) (meetings int, lastAt int64, err error) {
-	rows, err := s.db.Query(ctx, "SELECT COUNT(*), COALESCE(MAX(started_at), 0) FROM meetings WHERE microphone = 1")
+	rows, err := s.db.Query(ctx, `SELECT COUNT(*), COALESCE(MAX(started_at), 0) FROM meetings WHERE microphone = 1
+		OR id IN (SELECT s.meeting_id FROM speakers s JOIN people p ON p.id = s.person_id WHERE p.self = 1)`)
 	if err != nil {
 		return 0, 0, err
 	}

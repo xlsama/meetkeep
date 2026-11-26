@@ -170,6 +170,24 @@ func TestTranscriptNotesAndBoard(t *testing.T) {
 	if who, _ = s.Speakers(ctx, "a"); who[1].Name != "周老师" {
 		t.Errorf("the person's new name did not reach the meeting: %+v", who)
 	}
+	if err := s.SetSelf(ctx, people[0].ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if n, _, _ := s.Self(ctx); n != 1 {
+		t.Errorf("the user, who is a person now, is heard in %d meetings", n)
+	}
+	if people, _ = s.People(ctx); !people[0].Self {
+		t.Errorf("the person is not the user: %+v", people[0])
+	}
+	if err := s.SetSelf(ctx, people[0].ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if n, _, _ := s.Self(ctx); n != 0 {
+		t.Errorf("the user, who is no person any more, is heard in %d meetings", n)
+	}
+	if err := s.SetSelf(ctx, people[0].ID+1, true); !errors.Is(err, ErrNotFound) {
+		t.Errorf("nobody was made the user: %v", err)
+	}
 	again := []Speaker{{ID: 1, Name: "周老师", PersonID: people[0].ID, Voice: []float32{0.6, 0.8}}}
 	if err := s.ReplaceTranscript(ctx, "a", final[:1], again, "audio.opus"); err != nil {
 		t.Fatal(err)

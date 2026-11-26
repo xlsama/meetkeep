@@ -4,6 +4,7 @@ import { useParams } from "@tanstack/react-router";
 import { ArrowRight, Check, ChevronDown, Copy, LoaderCircle, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { z } from "zod";
+import { Empty } from "@/components/empty";
 import { PageTitle } from "@/components/header-slot";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
@@ -869,7 +870,8 @@ function TestRow({
 }
 
 function TermList() {
-  const { data: terms = [] } = useQuery(termsQuery);
+  const learned = useQuery(termsQuery);
+  const terms = learned.data ?? [];
   const [heard, setHeard] = useState("");
   const [meant, setMeant] = useState("");
   const [error, setError] = useState<string>();
@@ -934,6 +936,11 @@ function TermList() {
       {terms.map((term) => (
         <TermRow key={`${term.heard}\u0000${term.meant}`} term={term} act={act} />
       ))}
+      {learned.isSuccess && terms.length === 0 && (
+        <div className="flex border-t border-border-subtle py-7">
+          <Empty kind="terms" text="还没有学到的词" size="sm" />
+        </div>
+      )}
     </Group>
   );
 }

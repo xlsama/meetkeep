@@ -29,7 +29,7 @@ export function SampleButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full border border-input bg-background text-secondary-foreground transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-black/10 disabled:opacity-40",
+        "press inline-flex shrink-0 items-center justify-center rounded-full border border-input bg-background text-secondary-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-black/10 disabled:opacity-40",
         children
           ? "h-7 gap-1.5 pr-2.5 pl-2 text-label tabular-nums hover:border-border-strong hover:text-foreground aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground"
           : "size-[30px] hover:bg-hover",

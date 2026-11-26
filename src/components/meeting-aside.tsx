@@ -26,7 +26,7 @@ export function MeetingAside({
   tab,
   onTabChange,
   onJump,
-  pending = false,
+  writing = false,
   onRetry,
 }: {
   meeting: Meeting;
@@ -34,7 +34,7 @@ export function MeetingAside({
   tab: AsideTab;
   onTabChange: (tab: AsideTab) => void;
   onJump: (jump: Jump) => void;
-  pending?: boolean;
+  writing?: boolean;
   onRetry?: () => void;
 }) {
   const state = useNotes(meeting.id);
@@ -104,7 +104,7 @@ export function MeetingAside({
                 title="复制摘要和待办"
                 data-testid="notes-copy"
                 onClick={() => void copy()}
-                className="inline-flex size-7 items-center justify-center rounded-[8px] text-subtle transition-colors outline-none hover:bg-hover hover:text-foreground focus-visible:bg-hover"
+                className="press inline-flex size-7 items-center justify-center rounded-[8px] text-subtle outline-none hover:bg-hover hover:text-foreground focus-visible:bg-hover"
               >
                 {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
               </button>
@@ -116,7 +116,7 @@ export function MeetingAside({
             meetingId={meeting.id}
             state={state}
             live={live}
-            pending={pending}
+            writing={writing}
             speakers={withSpeakers ? speakers : []}
             onSpeakers={() => onTabChange("speakers")}
             onJump={onJump}
